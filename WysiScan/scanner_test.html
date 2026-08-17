@@ -310,7 +310,7 @@
                     <div class="input-group">
                         <input type="text" id="groupName" list="groupList" placeholder="Type new name, or select existing" autocomplete="off" style="width: 100%; box-sizing: border-box;" onkeydown="if (event.key === 'Enter') startOrResumeGroup();">
                         <datalist id="groupList"></datalist>
-                        <button id="newGroupBtn" onclick="startOrResumeGroup()" style="white-space: nowrap; margin-right: 0;">Start Group</button>
+                        <button id="newGroupBtn" onclick="startOrResumeGroup(true)" style="white-space: nowrap; margin-right: 0;">Start Group</button>
                         <button onclick="clearGroupAndUI()" title="Clear group name and reset UI" style="white-space: nowrap; background-color: #dc3545; color: white; margin-right: 0;">Clear</button>
                     </div>
                 </div>
@@ -731,8 +731,8 @@
                 showToast("No group selected to refresh.", "warn")
                 return;
             }
-            // This will clear and reload the gallery
-            await startOrResumeGroup();
+            // This will clear and reload the gallery (no autoscan on refresh)
+            await startOrResumeGroup(false);
         }
 
         function updateActionButtonsState() {
@@ -797,7 +797,7 @@
             }
         }
 
-        async function startOrResumeGroup() {
+        async function startOrResumeGroup(allowAutoScan = false) {
             const newGroupName = getGroupName();
 
             if (currentGroupName && currentGroupName !== newGroupName) {
@@ -860,7 +860,7 @@
                 status.innerText = `Starting new group '${groupName}'.`;
             }
 
-            if (document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked) {
+            if (allowAutoScan && document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked && knownGroups[groupName] === undefined) {
                 performScan();
             }
         }
@@ -1722,7 +1722,7 @@
                     }
                     
                     closeRenameModal();
-                    await startOrResumeGroup();
+                    await startOrResumeGroup(false);
                 } else {
                     showToast("Error renaming files: " + (data.message || "Unknown error"), "error");
                 }

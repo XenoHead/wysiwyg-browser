@@ -172,17 +172,19 @@ print(folder)
         valid_exts = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.gif'}
         images = []
         try:
-            for root, _, files in os.walk(folder_path):
-                for f in files:
-                    ext = os.path.splitext(f)[1].lower()
-                    if ext in valid_exts:
-                        full_path = os.path.join(root, f)
-                        sz = os.path.getsize(full_path)
-                        images.append({
-                            "path": full_path,
-                            "name": os.path.relpath(full_path, folder_path),
-                            "size": self._format_bytes(sz)
-                        })
+            # Only scan the root of the selected folder (no subfolders).
+            for f in os.listdir(folder_path):
+                full_path = os.path.join(folder_path, f)
+                if not os.path.isfile(full_path):
+                    continue
+                ext = os.path.splitext(f)[1].lower()
+                if ext in valid_exts:
+                    sz = os.path.getsize(full_path)
+                    images.append({
+                        "path": full_path,
+                        "name": f,
+                        "size": self._format_bytes(sz)
+                    })
         except Exception as e:
             print(f"Error scanning: {e}")
         return images
