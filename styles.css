@@ -253,8 +253,10 @@ select[multiple] { min-height: 60px; }
 .lock-padlock.locked { background: #fff3cd; border-color: #ffc107; }
 .output-button-group { display: flex; flex-direction: column; gap: 0; width: 90px; }
 .counter-button-group { margin-top: 10px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); }
-.counter-button-container { display: flex; gap: 2px; }
-.counter-button { flex: 1; color: white; border: none; padding: 2px 0; border-radius: 2px; cursor: pointer; font-size: 10px; font-weight: bold; line-height: 1.2; }
+.counter-button-container { display: flex; gap: 2px; flex-wrap: wrap; }
+.counter-button { width: 46px; flex: 0 0 46px; box-sizing: border-box; color: white; border: none; padding: 4px 2px; border-radius: 2px; cursor: pointer; font-size: 11px; font-weight: bold; line-height: 1.2; text-align: center; }
+.edit-counters-btn { width: 100%; background: var(--bg-secondary); color: var(--text-color, #333); border: 1px solid var(--border-color); padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; }
+.edit-counters-btn:hover { background: #e9e9e9; }
 .open-folder-button { width: 100%; margin-top: 3px; background: var(--secondary-color); color: white; border: none; padding: 2px 0; border-radius: 2px; cursor: pointer; font-size: 10px; }
 .details-button-row { display: flex; gap: 10px; margin-bottom: 15px; }
 .details-button { flex: 1; color:white; border:none; padding:12px; border-radius:4px; cursor:pointer; font-weight:bold; }

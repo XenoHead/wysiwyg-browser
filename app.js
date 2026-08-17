@@ -180,8 +180,11 @@ function setupEventListeners() {
             if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
         });
 
-        // Close the drawer after any in-drawer action fires (e.g. Refresh, Editor, Shut Down)
+        // Close the drawer after most in-drawer actions fire (e.g. Refresh, Editor, Shut Down).
+        // But NOT the counter +1 buttons or the Edit Counters button — those should keep the
+        // drawer open so you can tap multiple times / edit without reopening.
         drawer.querySelectorAll('button').forEach((btn) => {
+            if (btn.classList.contains('counter-button') || btn.id === 'editCountersBtn') return;
             btn.addEventListener('click', () => {
                 // Defer so the action's own handler runs first
                 setTimeout(closeDrawer, 0);
@@ -297,12 +300,18 @@ function setupEventListeners() {
     addClickListener('copySkuBtn', (e) => copyField('outputSku', e.currentTarget));
     addClickListener('copyDescBtn', (e) => copyField('outputDesc', e.currentTarget));
     addClickListener('copyOurPriceBtn', (e) => copyField('calcOurPrice', e.currentTarget));
-    addClickListener('btnListed', (e) => incrementCounter('L', e.currentTarget));
-    addClickListener('btnAmazon', (e) => incrementCounter('AA', e.currentTarget));
-    addClickListener('btnDiscogs', (e) => incrementCounter('DA', e.currentTarget));
-    addClickListener('btnDupes', (e) => incrementCounter('D', e.currentTarget));
     addClickListener('openListingsFolderBtn', openListingsFolder);
+    addClickListener('editCountersBtn', openCounterEditor);
 
+    // Counter buttons are rendered dynamically (in the hamburger drawer); use event delegation.
+    const counterGroupEl = document.getElementById('drawerCounterGroup');
+    if (counterGroupEl) {
+        counterGroupEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.counter-button');
+            if (!btn) return;
+            incrementCounter(btn.dataset.serverKey, btn);
+        });
+    }
     // --- Details Tab ---
     addClickListener('copyLivePreviewBtn', copyLivePreview);
     addClickListener('copyHtmlBtn', copyGeneratedHtml);
@@ -730,7 +739,66 @@ async function submitRequest() {
     }
 }
 
+// --- Counter buttons (config-driven, editable) ---
+const COUNTER_CONFIG_KEY = 'wysiwyg_counter_config';
+const COUNTER_CONFIG_VERSION = 2; // bump to discard a stale saved config
+const MAX_COUNTERS = 7; // 4 defaults + up to 3 more
+const DEFAULT_COUNTERS = [
+    { id: 'cnt_listed', label: 'LI', serverKey: 'Listed', color: '#28a745', text: 'Listed Items:' },
+    { id: 'cnt_amazon', label: 'AA', serverKey: 'Amazon Adds', color: '#007bff', text: 'Amazon Adds:' },
+    { id: 'cnt_discogs', label: 'DA', serverKey: 'Discogs Adds', color: '#17a2b8', text: 'Discogs Adds:' },
+    { id: 'cnt_dupes', label: 'DU', serverKey: 'Duplicates', color: '#fd7e14', text: 'Duplicates:' }
+];
+
+let counterConfig = [];
+
+function loadCounterConfig() {
+    try {
+        const raw = localStorage.getItem(COUNTER_CONFIG_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            // Discard stale configs (e.g. ones with extraneous "New 2/New 3" entries)
+            // by requiring a matching version.
+            if (parsed && parsed.version === COUNTER_CONFIG_VERSION && Array.isArray(parsed.counters)) {
+                counterConfig = parsed.counters;
+            }
+        }
+    } catch (e) { /* ignore */ }
+    if (!Array.isArray(counterConfig) || counterConfig.length === 0) {
+        counterConfig = JSON.parse(JSON.stringify(DEFAULT_COUNTERS));
+    }
+}
+
+function saveCounterConfig() {
+    try {
+        localStorage.setItem(COUNTER_CONFIG_KEY, JSON.stringify({
+            version: COUNTER_CONFIG_VERSION,
+            counters: counterConfig
+        }));
+    } catch (e) { /* ignore */ }
+}
+
+function renderCounterButtons() {
+    const group = document.getElementById('drawerCounterGroup');
+    if (!group) return;
+    group.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'counter-button-container';
+    counterConfig.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'counter-button';
+        b.dataset.serverKey = c.serverKey;
+        b.style.backgroundColor = c.color;
+        b.title = (c.label ? c.label + ' ' : '') + '+' + c.serverKey + ' (click to +1)';
+        b.innerHTML = `${c.label || '?'}<br>0`;
+        container.appendChild(b);
+    });
+    group.appendChild(container);
+}
+
 async function loadCounters() {
+    loadCounterConfig();
+    renderCounterButtons();
     try {
         const resp = await fetch('/api/get-counters');
         const counts = await resp.json();
@@ -738,18 +806,29 @@ async function loadCounters() {
     } catch (e) { console.error(e); }
 }
 
-async function incrementCounter(type, btn) {
+async function incrementCounter(serverKey, btn) {
+    const cfg = counterConfig.find(c => c.serverKey === serverKey);
     const originalHTML = btn.innerHTML;
     btn.innerText = "⏳";
     try {
         const resp = await fetch('/api/increment-counter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: type })
+            body: JSON.stringify({ type: serverKey, label: serverKey })
         });
         const res = await resp.json();
         if (res.status === 'success') {
             btn.innerText = "✅";
+            // Insert the counter's text into the description box (unless locked).
+            if (cfg && cfg.text) {
+                const descEl = document.getElementById('outputDesc');
+                const locked = document.getElementById('lockDesc')?.checked;
+                if (descEl && !locked) {
+                    const sep = descEl.value && !descEl.value.endsWith('\n') ? '\n' : '';
+                    descEl.value = descEl.value + sep + cfg.text;
+                    descEl.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
             setTimeout(() => {
                 updateCounterUI(res.counts);
             }, 500);
@@ -763,6 +842,77 @@ async function incrementCounter(type, btn) {
     }
 }
 
+function updateCounterUI(counts) {
+    if (!Array.isArray(counterConfig)) return;
+    counterConfig.forEach(c => {
+        const btn = document.querySelector(`#drawerCounterGroup .counter-button[data-server-key="${CSS.escape(c.serverKey)}"]`);
+        if (btn) btn.innerHTML = `${c.label || '?'}<br>${counts[c.serverKey] || 0}`;
+    });
+}
+
+function deleteCounter(idx) {
+    if (counterConfig.length <= 1) return;
+    counterConfig.splice(idx, 1);
+    saveCounterConfig();
+    renderCounterButtons();
+    openCounterEditor();
+}
+
+function moveCounter(idx, dir) {
+    const target = idx + dir;
+    if (target < 0 || target >= counterConfig.length) return;
+    const tmp = counterConfig[idx];
+    counterConfig[idx] = counterConfig[target];
+    counterConfig[target] = tmp;
+    saveCounterConfig();
+    renderCounterButtons();
+    openCounterEditor();
+}
+
+function openCounterEditor() {
+    loadCounterConfig();
+    let body = '<div style="display:flex; flex-direction:column; gap:8px;">';
+    counterConfig.forEach((c, i) => {
+        const upDisabled = i === 0 ? 'disabled' : '';
+        const downDisabled = i === counterConfig.length - 1 ? 'disabled' : '';
+        body += `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="ctr-move" data-idx="${i}" data-dir="-1" ${upDisabled} style="border:none; background:#6c757d; color:#fff; border-radius:4px; cursor:pointer; padding:4px 7px; font-size:11px;" onclick="moveCounter(${i}, -1)" ${upDisabled}>▲</button>
+            <button type="button" class="ctr-move" data-idx="${i}" data-dir="1" ${downDisabled} style="border:none; background:#6c757d; color:#fff; border-radius:4px; cursor:pointer; padding:4px 7px; font-size:11px;" onclick="moveCounter(${i}, 1)" ${downDisabled}>▼</button>
+            <input type="color" value="${c.color}" data-idx="${i}" class="ctr-color" style="width:32px; height:28px; border:none; background:none; cursor:pointer;">
+            <input type="text" value="${c.label}" data-idx="${i}" class="ctr-label" placeholder="Label" style="width:50px; padding:4px; font-size:12px;">
+            <input type="text" value="${c.text || ''}" data-idx="${i}" class="ctr-text" placeholder="Text sent to box" style="width:130px; padding:4px; font-size:12px;">
+            ${counterConfig.length > 1 ? `<button type="button" class="ctr-del" data-idx="${i}" style="border:none; background:#dc3545; color:#fff; background:#dc3545; border-radius:4px; cursor:pointer; padding:4px 8px; font-size:11px;" onclick="deleteCounter(${i})">Delete</button>` : ''}
+        </div>`;
+    });
+    body += '</div>';
+    const canAdd = counterConfig.length < MAX_COUNTERS;
+    showModal('Edit Counters', body, [
+        ...(canAdd ? [{ text: '+ Add Counter', primary: false, onClick: () => {
+            counterConfig.push({ id: 'cnt_' + Date.now(), label: 'NEW', serverKey: 'New ' + (counterConfig.length + 1), color: '#6c757d', text: '' });
+            saveCounterConfig(); renderCounterButtons(); openCounterEditor();
+        } }] : []),
+        { text: 'Cancel', primary: false, onClick: closeModal },
+        { text: 'Save', primary: true, onClick: () => {
+            document.querySelectorAll('.ctr-label').forEach(inp => {
+                const i = parseInt(inp.dataset.idx, 10);
+                if (counterConfig[i]) counterConfig[i].label = inp.value;
+            });
+            document.querySelectorAll('.ctr-color').forEach(inp => {
+                const i = parseInt(inp.dataset.idx, 10);
+                if (counterConfig[i]) counterConfig[i].color = inp.value;
+            });
+            document.querySelectorAll('.ctr-text').forEach(inp => {
+                const i = parseInt(inp.dataset.idx, 10);
+                if (counterConfig[i]) counterConfig[i].text = inp.value;
+            });
+            saveCounterConfig();
+            renderCounterButtons();
+            loadCounters();
+            closeModal();
+        } }
+    ]);
+}
+
 async function openListingsFolder() {
     try {
         await fetch('/open-listings-folder', { method: 'POST' });
@@ -771,7 +921,12 @@ async function openListingsFolder() {
     }
 }
 
-// --- CUSTOM MODAL SYSTEM ---
+function closeModal() {
+    const overlay = document.getElementById('genericModal');
+    if (overlay) overlay.style.display = 'none';
+}
+
+// --- Custom Modal System ---
 function showModal(title, bodyHtml, buttons) {
     const overlay = document.getElementById('genericModal');
     const titleEl = document.getElementById('genericModalTitle');
@@ -2137,17 +2292,7 @@ function resetScraperTab() {
     });
 }
 
-function updateCounterUI(counts) {
-    const btnL = document.getElementById('btnListed');
-    const btnAA = document.getElementById('btnAmazon');
-    const btnDA = document.getElementById('btnDiscogs');
-    const btnD = document.getElementById('btnDupes');
-
-    if (btnL) btnL.innerHTML = `L<br>${counts['Listed'] || 0}`;
-    if (btnAA) btnAA.innerHTML = `AA<br>${counts['Amazon Adds'] || 0}`;
-    if (btnDA) btnDA.innerHTML = `DA<br>${counts['Discogs Adds'] || 0}`;
-    if (btnD) btnD.innerHTML = `D<br>${counts['Duplicates'] || 0}`;
-}
+function updateCounterUIDeprecated() {}
 
 // --- Custom Options Logic ---
 

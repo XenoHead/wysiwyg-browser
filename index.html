@@ -365,27 +365,13 @@
                     <input type="text" id="outputSku" style="font-weight: bold;">
                 </div>
                 <div class="nav-item-group" style="align-items: flex-start;">
-                    <button type="button" class="lock-padlock" id="lockDescBtn" title="Lock Description">🔓</button>
-                    <input type="checkbox" id="lockDesc" style="display:none;">
-                    <div class="output-button-group">
-                        <button id="copyDescBtn" class="copy-button" style="width: 100%; margin-top: 1px;">Copy
+                    <div style="display: flex; align-items: center; gap: 4px; width: 126px; flex: 0 0 126px;">
+                        <button type="button" class="lock-padlock" id="lockDescBtn" title="Lock Description">🔓</button>
+                        <input type="checkbox" id="lockDesc" style="display:none;">
+                        <button id="copyDescBtn" class="copy-button" style="width: 90px; flex: 0 0 90px; margin-top: 1px;">Copy
                             Desc</button>
-                        <div class="counter-button-group">
-                            <div class="counter-button-container">
-                                <button id="btnListed" class="counter-button" style="background: #28a745;"
-                                    title="Listed +1">L<br>...</button>
-                                <button id="btnAmazon" class="counter-button" style="background: #007bff;"
-                                    title="Amazon Add +1">AA<br>...</button>
-                                <button id="btnDiscogs" class="counter-button" style="background: #17a2b8;"
-                                    title="Discogs Add +1">DA<br>...</button>
-                                <button id="btnDupes" class="counter-button" style="background: #fd7e14;"
-                                    title="Duplicate +1">D<br>...</button>
-                            </div>
-                            <button id="openListingsFolderBtn" class="open-folder-button"
-                                title="Open Listings File/Folder">📂 Open</button>
-                        </div>
                     </div>
-                    <textarea id="outputDesc" rows="3" style="flex: 1 1 auto; min-width: 200px;"></textarea>
+                    <textarea id="outputDesc" rows="3" style="flex: 1 1 auto; min-width: 200px; resize: vertical;"></textarea>
                 </div>
             </div>
         </div>
@@ -505,6 +491,13 @@
             <button id="updateMenusBtn" class="drawer-btn"><span class="drawer-ico">🔃</span> Update Menus</button>
             <button id="editorBtn" class="drawer-btn"><span class="drawer-ico">⚙️</span> Settings Editor</button>
             <hr class="drawer-sep">
+            <div class="drawer-section-title">📊 Daily Count</div>
+            <div class="counter-button-group" id="drawerCounterGroup" style="width: 100%;">
+                <!-- Counter buttons rendered dynamically by JS -->
+            </div>
+            <button id="editCountersBtn" class="drawer-btn"><span class="drawer-ico">✏️</span> Edit Counters</button>
+            <button id="openListingsFolderBtn" class="drawer-btn"><span class="drawer-ico">📂</span> Open Listings</button>
+            <hr class="drawer-sep">
             <button id="shutdownBtn" class="drawer-btn shutdown-btn"><span class="drawer-ico">🔌</span> Shut Down</button>
         </div>
     </nav>
@@ -571,6 +564,14 @@
             font-size: 16px;
             width: 22px;
             text-align: center;
+        }
+        .drawer-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted, #888);
+            margin: 10px 4px 4px;
         }
         .drawer-sep {
             border: none;
