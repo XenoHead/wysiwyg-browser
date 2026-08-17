@@ -2041,8 +2041,17 @@ function closeShutdownModal() {
 
 function confirmShutdown() {
     fetch('/shutdown', { method: 'POST' }).then(() => {
-        document.body.innerHTML = "<div style='display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;font-family:Arial;'><h1>🔌 System Offline</h1><p>You can close this tab.</p></div>";
+        // Try to close the tab. This only works for tabs opened by script
+        // (e.g. the Walmart/UberPaste popups). For a user-opened tab the browser
+        // blocks it, so we blank the page instead of leaving "System Offline" up.
         window.close();
+        setTimeout(() => {
+            if (!window.closed) {
+                window.location.replace('about:blank');
+            }
+        }, 300);
+    }).catch(() => {
+        window.location.replace('about:blank');
     });
 }
 
