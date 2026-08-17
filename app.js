@@ -180,6 +180,15 @@ function setupEventListeners() {
             if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
         });
 
+        // Safety net: if the drawer is logically closed but the overlay is somehow left
+        // visible (e.g. an exception during a child-window close in the webview), the next
+        // click anywhere on the page clears it so the UI can never get "locked up".
+        document.addEventListener('click', () => {
+            if (!drawer.classList.contains('open') && overlay.style.display !== 'none') {
+                overlay.style.display = 'none';
+            }
+        }, true);
+
         // Close the drawer after most in-drawer actions fire (e.g. Refresh, Editor, Shut Down).
         // But NOT the counter +1 buttons or the Edit Counters button — those should keep the
         // drawer open so you can tap multiple times / edit without reopening.
@@ -392,22 +401,22 @@ async function runWalmartSheet() {
 }
 
 async function updateServiceStatus() {
-    // 1. Check Walmart Window (Client-side check)
-    const walBtn = document.getElementById('runWalmartSheetBtn');
-    if (walBtn) {
-        if (walmartWindow && !walmartWindow.closed) {
-            walBtn.disabled = true;
-            walBtn.style.opacity = "0.5";
-            walBtn.title = "Walmart Sheet is already open";
-        } else {
-            walBtn.disabled = false;
-            walBtn.style.opacity = "1";
-            walBtn.title = "Open Walmart Spreadsheet Exporter";
-        }
-    }
-
-    // 2. Check Backend Services (Server-side check)
     try {
+        // 1. Check Walmart Window (Client-side check)
+        const walBtn = document.getElementById('runWalmartSheetBtn');
+        if (walBtn) {
+            if (walmartWindow && !walmartWindow.closed) {
+                walBtn.disabled = true;
+                walBtn.style.opacity = "0.5";
+                walBtn.title = "Walmart Sheet is already open";
+            } else {
+                walBtn.disabled = false;
+                walBtn.style.opacity = "1";
+                walBtn.title = "Open Walmart Spreadsheet Exporter";
+            }
+        }
+
+        // 2. Check Backend Services (Server-side check)
         const resp = await fetch('/api/service-status');
         const status = await resp.json();
 
@@ -441,7 +450,7 @@ async function updateServiceStatus() {
             }
         }
     } catch (e) {
-        // Silent fail if server is unreachable
+        // Silent fail if server is unreachable or a transient error occurs
     }
 }
 

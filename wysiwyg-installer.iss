@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.9.30.3"
+#define MyAppVersion "1.12.36.3"
 #define MyAppPublisher "Xeno Head"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -33,7 +33,7 @@ Name: "startupicon"; Description: "Run at Windows Startup"; GroupDescription: "A
 
 [Files]
 ; Main Executable
-Source: "dist\WYSIWYG.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Root Configuration & Assets (only copy data.json if it doesn't already exist to preserve local profiles)
 Source: "index.html"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,10 +52,13 @@ Source: "walmart.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.js"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Subfolders
-Source: "WalmartSheet\*"; DestDir: "{app}\WalmartSheet"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "Uberpaste\*"; DestDir: "{app}\Uberpaste"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "WysiScan\config.json"; DestDir: "{app}\WysiScan"; Flags: ignoreversion onlyifdoesntexist
-Source: "WysiScan\*"; DestDir: "{app}\WysiScan"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config.json,*.log,*.bak*,*.redo,temp\*,scans\*"
+; NOTE: The compiled EXE is a PyInstaller onefile build that bundles Uberpaste,
+; WysiScan and WalmartSheet internally (via --add-data / sys._MEIPASS). At runtime
+; main.py and scanner_server.py read those assets from the bundle, not from on-disk
+; folders, and the scanner self-creates its writable data dirs (WysiScan\scans,
+; WysiScan\temp, config.json) next to the EXE on first launch. So we deliberately do
+; NOT copy these source folders to {app} — that keeps client installs clean (no raw
+; source code visible under C:\FYRTOOLS\WYSIWYG).
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -80,12 +83,31 @@ function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
 begin
-  // Gracefully terminate running instances of the app or its components prior to copying files
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1500); // Give the OS time to release file handles
+  // Terminate running instances BEFORE any files are copied, so a locked/open
+  // WYSIWYG.exe does not block the install. /T kills the whole process TREE.
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Give the OS (and any antivirus) time to release the file handles, then make a
+  // second pass in case anything respawned or was still unloading.
+  Sleep(3000);
+  Exec(ExpandConstant('{sys}	askkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(2000);
   Result := True;
+end;
+
+procedure AddDefenderExclusion(Path: string);
+var
+  ResultCode: Integer;
+begin
+  Exec('powershell.exe', '-NoProfile -Command "Add-MpPreference -ExclusionPath ''' + Path + '''"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure RemoveDefenderExclusion(Path: string);
+var
+  ResultCode: Integer;
+begin
+  Exec('powershell.exe', '-NoProfile -Command "Remove-MpPreference -ExclusionPath ''' + Path + '''"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -96,6 +118,17 @@ begin
   begin
     // Configure network sharing for C:\FYRTOOLS (Read access for Everyone)
     Exec('cmd.exe', '/c net share FYRTOOLS="C:\FYRTOOLS" /GRANT:Everyone,READ', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Add Microsoft Defender exclusions. Defender false-positives on the bundled
+    // Python/cv2/PySide6 as Trojan:Win32/Bearfoos.A!ml and quarantines the app
+    // (this also caused the earlier "decompression -1" and _MEI temp-dir errors).
+    // Exclude the install dir AND every shortcut location Defender scans.
+    AddDefenderExclusion(ExpandConstant('{app}'));
+    AddDefenderExclusion(ExpandConstant('{userstartup}'));
+    AddDefenderExclusion(ExpandConstant('{commonstartup}'));
+    AddDefenderExclusion(ExpandConstant('{group}'));
+    AddDefenderExclusion(ExpandConstant('{autodesktop}'));
+    AddDefenderExclusion(ExpandConstant('{userdesktop}'));
+    AddDefenderExclusion(ExpandConstant('{tmp}'));
   end;
 end;
 
@@ -106,9 +139,17 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     // Terminate processes before deleting files so they are not locked
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Remove the Microsoft Defender exclusions we added at install time.
+    RemoveDefenderExclusion(ExpandConstant('{app}'));
+    RemoveDefenderExclusion(ExpandConstant('{userstartup}'));
+    RemoveDefenderExclusion(ExpandConstant('{commonstartup}'));
+    RemoveDefenderExclusion(ExpandConstant('{group}'));
+    RemoveDefenderExclusion(ExpandConstant('{autodesktop}'));
+    RemoveDefenderExclusion(ExpandConstant('{userdesktop}'));
+    RemoveDefenderExclusion(ExpandConstant('{tmp}'));
     Sleep(1500); // Give the OS time to release file handles
   end;
 end;
