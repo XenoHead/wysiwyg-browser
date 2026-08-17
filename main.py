@@ -305,6 +305,29 @@ async def update_version_endpoint(data: dict = Body(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
+@app.post("/api/add-report")
+async def add_report_endpoint(request: Request):
+    try:
+        data = await request.json()
+        text = (data.get("text") or "").strip()
+        if not text:
+            return JSONResponse(status_code=400, content={"status": "error", "message": "No report text provided."})
+        # Network share path (UNC). Use forward-slashes so Python's pathlib handles it on Windows.
+        report_path = "//192.168.0.108/FYRShare/Tools/reports.txt"
+        report_dir = os.path.dirname(report_path)
+        try:
+            os.makedirs(report_dir, exist_ok=True)
+        except Exception:
+            pass
+        separator = "-" * 47
+        entry = f"{text}\n{separator}\n"
+        # Append; create the file if it doesn't exist.
+        with open(report_path, "a", encoding="utf-8") as f:
+            f.write(entry)
+        return {"status": "success"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
 @app.post("/open-listings-folder")
 async def open_listings_folder_endpoint():
     listings_dir = get_local_path("Listings")

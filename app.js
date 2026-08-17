@@ -301,6 +301,7 @@ function setupEventListeners() {
     addClickListener('copyDescBtn', (e) => copyField('outputDesc', e.currentTarget));
     addClickListener('copyOurPriceBtn', (e) => copyField('calcOurPrice', e.currentTarget));
     addClickListener('openListingsFolderBtn', openListingsFolder);
+    addClickListener('reportsBtn', openReportsModal);
     addClickListener('editCountersBtn', openCounterEditor);
 
     // Counter buttons are rendered dynamically (in the hamburger drawer); use event delegation.
@@ -920,6 +921,41 @@ async function openListingsFolder() {
         console.error(e);
     }
 }
+
+function openReportsModal() {
+    const body = '<textarea id="reportTextArea" rows="6" placeholder="Type your report here..." style="width:100%; box-sizing:border-box; padding:8px; font-size:13px; resize:vertical; border:1px solid var(--border-color,#ccc); border-radius:4px;"></textarea>';
+    showModal('Reports', body, [
+        { text: 'Cancel', primary: false, onClick: closeModal },
+        { text: 'OK', primary: true, onClick: submitReport }
+    ]);
+    setTimeout(() => { const ta = document.getElementById('reportTextArea'); if (ta) ta.focus(); }, 0);
+}
+
+async function submitReport() {
+    const ta = document.getElementById('reportTextArea');
+    const text = ta ? ta.value.trim() : '';
+    if (!text) {
+        customAlert('Please enter some report text.');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/add-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        const res = await resp.json();
+        if (res.status === 'success') {
+            customAlert('Report saved.');
+        } else {
+            customAlert('Error: ' + (res.message || 'Could not save report.'));
+        }
+    } catch (e) {
+        console.error(e);
+        customAlert('Error: could not reach the server.');
+    }
+}
+
 
 function closeModal() {
     const overlay = document.getElementById('genericModal');
