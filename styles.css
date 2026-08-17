@@ -249,6 +249,8 @@ select[multiple] { min-height: 60px; }
 .search-button { flex: 2; background: var(--wysiwyg-blue); color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
 .reset-button { flex: 1; background: var(--secondary-color); color: white; border: none; border-radius: 4px; cursor: pointer; }
 .copy-button { background: var(--secondary-color); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; width: 90px; }
+.lock-padlock { background: var(--bg-secondary); color: #333; border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; width: 32px; flex: 0 0 32px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.lock-padlock.locked { background: #fff3cd; border-color: #ffc107; }
 .output-button-group { display: flex; flex-direction: column; gap: 0; width: 90px; }
 .counter-button-group { margin-top: 10px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); }
 .counter-button-container { display: flex; gap: 2px; }

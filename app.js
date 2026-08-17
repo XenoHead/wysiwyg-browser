@@ -24,6 +24,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup Event Listeners
     setupEventListeners();
 
+    // Hide the "Settings Editor" menu option if the admin file (allpass.json)
+    // is not present in the working directory.
+    fetch('/allpass.json?t=' + new Date().getTime())
+        .then(r => { if (!r.ok) { const b = document.getElementById('editorBtn'); if (b) b.style.display = 'none'; } })
+        .catch(() => { const b = document.getElementById('editorBtn'); if (b) b.style.display = 'none'; });
+
+    // Listen for scrape URLs pushed from the browser extension (SSE bridge).
+    // Works in browser mode without the native PySide6 window.
+    if (typeof EventSource !== 'undefined') {
+        try {
+            const es = new EventSource('/api/extension-scrape/stream');
+            es.onmessage = (e) => {
+                try {
+                    const payload = JSON.parse(e.data);
+                    const targetUrl = payload && payload.url;
+                    if (!targetUrl) return;
+                    const urlInput = document.getElementById('discogsUrlInput');
+                    const scrapeBtn = document.getElementById('scrapeBtn');
+                    if (urlInput && scrapeBtn) {
+                        urlInput.value = targetUrl;
+                        urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        scrapeBtn.click();
+                    }
+                } catch (_) { /* ignore malformed events */ }
+            };
+            es.onerror = () => { /* browser auto-reconnects */ };
+        } catch (_) { /* EventSource unsupported */ }
+    }
+
     // Initialize Theme
     const savedTheme = localStorage.getItem('wysiwyg_theme');
     if (savedTheme === 'dark') {
@@ -49,6 +78,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Wire the padlock buttons to toggle their hidden lock checkboxes and reflect state.
+function setupLockPadlocks() {
+    const pairs = [
+        { btn: 'lockSkuBtn', box: 'lockSku' },
+        { btn: 'lockDescBtn', box: 'lockDesc' }
+    ];
+    pairs.forEach(({ btn, box }) => {
+        const btnEl = document.getElementById(btn);
+        const boxEl = document.getElementById(box);
+        if (!btnEl || !boxEl) return;
+
+        const sync = () => {
+            const locked = boxEl.checked;
+            btnEl.textContent = locked ? '🔒' : '🔓';
+            btnEl.classList.toggle('locked', locked);
+            btnEl.title = locked ? 'Unlock' : 'Lock';
+        };
+
+        // Initialize from the checkbox's current state.
+        sync();
+
+        btnEl.addEventListener('click', () => {
+            boxEl.checked = !boxEl.checked;
+            sync();
+        });
+
+        // Keep the icon in sync if the checkbox is changed elsewhere in code.
+        boxEl.addEventListener('change', sync);
+    });
+}
+
 function setupEventListeners() {
     function addClickListener(id, callback) {
         const el = document.getElementById(id);
@@ -59,63 +119,10 @@ function setupEventListeners() {
         }
     }
 
-    // --- Create and Insert Walmart Button ---
-    const uberPasteBtn = document.getElementById('runUberPasteBtn');
-    if (uberPasteBtn && uberPasteBtn.parentElement) {
-        const parent = uberPasteBtn.parentElement;
-
-        // Create a wrapper for vertical stacking
-        const wrapper = document.createElement('div');
-        wrapper.style.display = 'flex'; // Default direction is 'row'
-        wrapper.style.alignItems = 'center'; // Vertically center items
-        wrapper.style.gap = '5px'; // Add space between button and checkbox
-
-
-        // Create Walmart Button
-        const walmartBtn = document.createElement('button');
-        walmartBtn.id = 'runWalmartSheetBtn';
-        walmartBtn.className = 'nav-btn nav-item-group';
-        walmartBtn.title = 'Open Walmart Spreadsheet Exporter';
-        walmartBtn.style.cssText = 'width: 120px; height: 40px; justify-content: center;';
-
-        const walmartIcon = document.createElement('img');
-        walmartIcon.src = '/WalmartSheet/walmart.png';
-        walmartIcon.className = 'nav-icon';
-        walmartBtn.appendChild(walmartIcon);
-        walmartBtn.appendChild(document.createTextNode(' Walmart'));
-
-        // Create Dock Checkbox and Label
-        const dockLabel = document.createElement('label');
-        dockLabel.style.display = 'none'; // Hide the label
-
-        const dockCheckbox = document.createElement('input');
-        dockCheckbox.type = 'checkbox';
-        dockCheckbox.id = 'dockWalmartSheet';
-        dockCheckbox.checked = true; // Always checked
-
-        // Persist the 'checked' state
-        localStorage.setItem('wysiwyg_dock_walmart', 'true');
-
-        dockLabel.appendChild(dockCheckbox);
-        dockLabel.appendChild(document.createTextNode('Dock'));
-
-        wrapper.appendChild(walmartBtn);
-        wrapper.appendChild(dockLabel);
-
-        // Insert before UberPaste button
-        parent.insertBefore(wrapper, uberPasteBtn);
-
-        // Add event listeners
-        walmartBtn.addEventListener('click', runWalmartSheet);
-        dockCheckbox.addEventListener('change', (e) => {
-            localStorage.setItem('wysiwyg_dock_walmart', e.target.checked);
-        });
-    }
-
-
     // --- Top Nav ---
     addClickListener('runUberPasteBtn', runUberPaste);
     addClickListener('runWysiScanBtn', runWysiScan);
+    addClickListener('runWalmartSheetBtn', runWalmartSheet);
     addClickListener('themeBtn', toggleTheme);
     addClickListener('refreshBtn', () => location.reload(true));
     addClickListener('updateMenusBtn', updateMenus);
@@ -144,6 +151,44 @@ function setupEventListeners() {
     addClickListener('openCalcBtn', openCalcModal);
     addClickListener('closeCalcModalBtn', closeCalcModal);
     addClickListener('calculateBtn', runCalculator);
+
+    setupLockPadlocks();
+
+    // --- Hamburger Drawer Menu ---
+    function setupHamburgerDrawer() {
+        const drawer = document.getElementById('hamburgerDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        const openBtn = document.getElementById('hamburgerBtn');
+        const closeBtn = document.getElementById('drawerCloseBtn');
+        if (!drawer || !overlay) return;
+
+        const openDrawer = () => {
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden', 'false');
+            overlay.style.display = 'block';
+        };
+        const closeDrawer = () => {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden', 'true');
+            overlay.style.display = 'none';
+        };
+
+        openBtn?.addEventListener('click', openDrawer);
+        closeBtn?.addEventListener('click', closeDrawer);
+        overlay.addEventListener('click', closeDrawer);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+        });
+
+        // Close the drawer after any in-drawer action fires (e.g. Refresh, Editor, Shut Down)
+        drawer.querySelectorAll('button').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                // Defer so the action's own handler runs first
+                setTimeout(closeDrawer, 0);
+            });
+        });
+    }
+    setupHamburgerDrawer();
 
     // --- Calculator Live Auto-Populate & Enter Key ---
     ['calcCompPrice', 'calcCompShip'].forEach(id => {
@@ -293,7 +338,7 @@ async function runUberPaste() {
 async function runWalmartSheet() {
     try {
         await clearWalmartCache(); // Clear cache before populating it
-        const dock = document.getElementById('dockWalmartSheet').checked;
+        const dock = document.getElementById('dockWalmartSheet')?.checked ?? true;
 
         // Try to get text from Scratchpad first, then fall back to the hidden scraper result
         const scratchpadEl = document.getElementById('manualInputBox');
@@ -398,7 +443,8 @@ async function runWysiScan() {
 
         if (res.status === 'success') {
             // If launch is successful (or it was already running), open the UI in a popup window.
-            const dock = document.getElementById('dockScanner').checked;
+            // dockScanner checkbox was removed from the header; default to docked (new tab).
+            const dock = document.getElementById('dockScanner')?.checked ?? true;
             let wysiScanWindow;
 
             if (dock) {
@@ -422,54 +468,47 @@ async function runWysiScan() {
 }
 
 async function setupSaveConditionsButton() {
-    // Let's try placing the button somewhere else to ensure it's not a layout issue.
+    // The "Save Variable Conditions" feature requires the admin file (allpass.json)
+    // to be present in the working directory. If it is missing, the button is not
+    // created at all (hidden), and the feature is effectively disabled.
     const anchorElement = document.getElementById('trackTimeInfo');
     if (!anchorElement || document.getElementById('saveVariableConditionsBtn')) return;
 
-    // 1. Create the button by default, but in a disabled state.
+    // Check for the admin file first; only show the button if it exists.
+    let adminFilePresent = false;
+    try {
+        const response = await fetch('/allpass.json?t=' + new Date().getTime());
+        adminFilePresent = response.ok;
+    } catch (e) {
+        adminFilePresent = false;
+    }
+    if (!adminFilePresent) {
+        // No admin file -> feature disabled, button hidden.
+        return;
+    }
+
+    // Create the button (enabled, since the admin file is present).
     const saveBtn = document.createElement('button');
     saveBtn.id = 'saveVariableConditionsBtn';
-    saveBtn.title = 'Save Variable Conditions (Requires Admin File)';
+    saveBtn.title = 'Save Variable Conditions';
     saveBtn.innerHTML = '💾'; // Save icon
-    saveBtn.disabled = true; // Start as disabled
 
-    // Styling for disabled state
     saveBtn.style.marginLeft = '8px';
     saveBtn.style.padding = '0 5px';
     saveBtn.style.fontSize = '1em';
     saveBtn.style.lineHeight = '1';
-    saveBtn.style.cursor = 'not-allowed';
-    saveBtn.style.border = '1px solid #ccc';
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.border = '1px solid #28a745';
     saveBtn.style.borderRadius = '3px';
-    saveBtn.style.opacity = '0.5';
+    saveBtn.style.backgroundColor = '#28a745';
+    saveBtn.style.color = 'white';
 
     anchorElement.insertAdjacentElement('afterend', saveBtn);
 
     saveBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!saveBtn.disabled) {
-            saveVariableConditions();
-        }
+        saveVariableConditions();
     });
-
-    // 2. Try to fetch the admin file to enable it.
-    try {
-        const response = await fetch('/allpass.json?t=' + new Date().getTime());
-        if (response.ok) {
-            // Enable the button on success
-            saveBtn.disabled = false;
-            saveBtn.style.cursor = 'pointer';
-            saveBtn.style.opacity = '1';
-            saveBtn.title = 'Save Variable Conditions';
-            saveBtn.style.backgroundColor = '#28a745';
-            saveBtn.style.borderColor = '#28a745';
-            saveBtn.style.color = 'white';
-        } else {
-            console.warn(`Could not load '/allpass.json' (status: ${response.status}). The 'Save Conditions' button remains disabled.`);
-        }
-    } catch (e) {
-        console.warn("Network error while checking for admin file. The 'Save Conditions' button remains disabled.", e);
-    }
 }
 
 async function loadAppVersion() {
@@ -846,6 +885,14 @@ function saveVariableConditions() {
     const mediaCondition = getVal('conditionOfMedia');
     const isOOP = document.getElementById('oopToggle').checked;
 
+    // Persist to disk via the server (only succeeds when allpass.json is present).
+    fetch('/api/save-variable-conditions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_condition: mediaCondition, is_oop: isOOP })
+    }).catch(e => console.error('Failed to persist variable conditions:', e));
+
+    // Also cache in localStorage for instant client-side restore.
     localStorage.setItem('wysiwyg_variable_media_condition', mediaCondition);
     localStorage.setItem('wysiwyg_variable_is_oop', String(isOOP));
 
@@ -859,19 +906,39 @@ function saveVariableConditions() {
     }
 }
 
-function loadVariableConditions() {
-    const savedMediaCondition = localStorage.getItem('wysiwyg_variable_media_condition');
-    const savedIsOOP = localStorage.getItem('wysiwyg_variable_is_oop');
+async function loadVariableConditions() {
+    // Prefer the persisted server value (allpass.json) when the admin file is present,
+    // otherwise fall back to the localStorage cache.
+    let mediaCondition = localStorage.getItem('wysiwyg_variable_media_condition') || "";
+    let isOOP = localStorage.getItem('wysiwyg_variable_is_oop');
 
-    if (savedMediaCondition) {
+    try {
+        const resp = await fetch('/api/variable-conditions?t=' + new Date().getTime());
+        if (resp.ok) {
+            const data = await resp.json();
+            if (typeof data.media_condition === 'string') {
+                mediaCondition = data.media_condition;
+                // Mirror into localStorage so the cache stays in sync.
+                localStorage.setItem('wysiwyg_variable_media_condition', mediaCondition);
+            }
+            if (typeof data.is_oop === 'boolean') {
+                isOOP = String(data.is_oop);
+                localStorage.setItem('wysiwyg_variable_is_oop', isOOP);
+            }
+        }
+    } catch (e) {
+        // Network error -> just use the localStorage cache.
+    }
+
+    if (mediaCondition) {
         const select = document.getElementById('conditionOfMedia');
         const modifiers = ['+', '-'];
-        let baseValue = savedMediaCondition;
+        let baseValue = mediaCondition;
         let modifierValue = "";
 
-        if (modifiers.includes(savedMediaCondition.slice(-1))) {
-            baseValue = savedMediaCondition.slice(0, -1);
-            modifierValue = savedMediaCondition.slice(-1);
+        if (modifiers.includes(mediaCondition.slice(-1))) {
+            baseValue = mediaCondition.slice(0, -1);
+            modifierValue = mediaCondition.slice(-1);
         }
         select.value = baseValue;
         const radio = document.querySelector(`input[name="media_modifier"][value="${modifierValue}"]`);
@@ -884,8 +951,8 @@ function loadVariableConditions() {
         }
     }
 
-    if (savedIsOOP !== null) {
-        document.getElementById('oopToggle').checked = (savedIsOOP === 'true');
+    if (isOOP !== null) {
+        document.getElementById('oopToggle').checked = (isOOP === 'true');
     }
     updateDynamicColors();
 }

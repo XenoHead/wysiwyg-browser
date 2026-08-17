@@ -30,12 +30,13 @@ import signal
 import subprocess
 import threading
 import time
+import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 import psutil 
 from datetime import datetime
 from fastapi import FastAPI, Form, Body, Request, Response
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from html_format import format_discogs_to_html
 from WalmartSheet.walmart import router as walmart_router
@@ -44,6 +45,9 @@ from WalmartSheet.walmart import router as walmart_router
 app = FastAPI()
 
 # --- Extension Scrape Bridge ---
+# In window mode this uses the PySide6 signal bridge. In browser mode we
+# broadcast the requested URL to any open browser tabs over Server-Sent Events,
+# so the active tab performs the scrape (no native window required).
 try:
     from PySide6.QtCore import QObject, Signal
     class ScrapeBridge(QObject):
@@ -52,15 +56,44 @@ try:
 except ImportError:
     scrape_bridge = None
 
+# Browser-mode subscribers (open tabs listening via EventSource)
+scrape_subscribers = set()
+
 @app.post("/api/extension-scrape")
 async def extension_scrape(data: dict = Body(...)):
     url = data.get("url")
     if not url:
         return {"status": "error", "message": "Missing URL"}
+    # Notify every connected browser tab (browser mode)
+    if scrape_subscribers:
+        for q in list(scrape_subscribers):
+            try:
+                await q.put(url)
+            except Exception:
+                pass
+        return {"status": "success"}
+    # Fall back to the native PySide6 bridge (window mode)
     if scrape_bridge:
         scrape_bridge.trigger_scrape.emit(url)
         return {"status": "success"}
-    return {"status": "error", "message": "Bridge not initialized"}
+    return JSONResponse(status_code=503, content={"status": "error", "message": "No listener connected"})
+
+@app.get("/api/extension-scrape/stream")
+async def extension_scrape_stream():
+    """SSE stream: pushes scrape URLs sent from the browser extension to this tab."""
+    q = asyncio.Queue()
+    scrape_subscribers.add(q)
+    async def event_gen():
+        try:
+            yield "retry: 3000\n\n"
+            while True:
+                url = await q.get()
+                yield f"data: {json.dumps({'url': url})}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            scrape_subscribers.discard(q)
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 # Track child processes to kill on shutdown
 CHILD_PROCESSES = {}
@@ -810,6 +843,44 @@ async def get_password_file():
     if os.path.exists(file_path):
         return FileResponse(file_path)
     return Response(status_code=404)
+
+@app.get("/api/variable-conditions")
+async def get_variable_conditions():
+    """Return the saved MEDIA CONDITION variable conditions from allpass.json.
+    Returns 404 if the admin file is not present (feature disabled)."""
+    file_path = get_local_path("allpass.json")
+    if not os.path.exists(file_path):
+        return Response(status_code=404)
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return {
+            "media_condition": data.get("media_condition", ""),
+            "is_oop": data.get("is_oop", False)
+        }
+    except Exception:
+        return {"media_condition": "", "is_oop": False}
+
+@app.post("/api/save-variable-conditions")
+async def save_variable_conditions(data: dict = Body(...)):
+    """Persist MEDIA CONDITION variable conditions into allpass.json.
+    Only works when the admin file is present."""
+    file_path = get_local_path("allpass.json")
+    if not os.path.exists(file_path):
+        return JSONResponse(status_code=403, content={"status": "error", "message": "Admin file not present"})
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            existing = json.load(f)
+    except Exception:
+        existing = {}
+    existing["media_condition"] = data.get("media_condition", "")
+    existing["is_oop"] = bool(data.get("is_oop", False))
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, indent=2)
+        return {"status": "success"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @app.get("/media_formats.json")
 async def get_media_formats():
@@ -1958,12 +2029,17 @@ if __name__ == "__main__":
     threading.Timer(1.5, auto_start_uberpaste).start()
 
     init_conditions()
-    
+
+    # --- LAUNCH MODE: browser by default, PySide6 window via --window ---
+    # Must be defined BEFORE starting the server thread (it reads BIND_HOST).
+    USE_WINDOW = "--window" in sys.argv
+    BIND_HOST = "0.0.0.0" if "--host" in sys.argv else "127.0.0.1"
+
     # --- SERVER STARTUP ---
     def start_uvicorn():
         try:
             logging.info("Starting Uvicorn server...")
-            uvicorn.run(app, host="127.0.0.1", port=8008, log_config=None, access_log=False)
+            uvicorn.run(app, host=BIND_HOST, port=8008, log_config=None, access_log=False)
         except Exception as e:
             logging.critical(f"SERVER CRASHED: {e}", exc_info=True)
 
@@ -1976,265 +2052,284 @@ if __name__ == "__main__":
             break
         time.sleep(0.1)
 
-    # --- PYSIDE6 GUI STARTUP ---
-    from PySide6.QtCore import QUrl, QTimer, QSettings, Qt
-    from PySide6.QtGui import QIcon, QFontDatabase
-    from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QFormLayout,
-                                 QSlider, QSpinBox, QComboBox, QPushButton,
-                                 QHBoxLayout, QVBoxLayout, QLabel)
-    from PySide6.QtWebEngineWidgets import QWebEngineView
-    from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
+    # --- PYSIDE6 GUI STARTUP (opt-in) ---
+    if USE_WINDOW:
+        from PySide6.QtCore import QUrl, QTimer, QSettings, Qt
+        from PySide6.QtGui import QIcon, QFontDatabase
+        from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QFormLayout,
+                                     QSlider, QSpinBox, QComboBox, QPushButton,
+                                     QHBoxLayout, QVBoxLayout, QLabel)
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 
-    class GuiAdjustDialog(QDialog):
-        def __init__(self, parent, view):
-            super().__init__(parent)
-            self.setWindowTitle("GUI Adjust Settings")
-            self.resize(380, 200)
-            self.view = view
-            self.qsettings = QSettings("FYR", "WYSIWYG")
+        class GuiAdjustDialog(QDialog):
+            def __init__(self, parent, view):
+                super().__init__(parent)
+                self.setWindowTitle("GUI Adjust Settings")
+                self.resize(380, 200)
+                self.view = view
+                self.qsettings = QSettings("FYR", "WYSIWYG")
             
-            layout = QVBoxLayout(self)
-            form = QFormLayout()
+                layout = QVBoxLayout(self)
+                form = QFormLayout()
             
-            # Zoom factor (50% - 200%)
-            self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
-            self.zoom_slider.setRange(50, 200)
-            current_zoom = int(self.qsettings.value("zoom_factor", 100))
-            self.zoom_slider.setValue(current_zoom)
-            self.zoom_label = QLabel(f"{current_zoom}%")
-            self.zoom_slider.valueChanged.connect(self.on_zoom_changed)
-            zoom_row = QHBoxLayout()
-            zoom_row.addWidget(self.zoom_slider)
-            zoom_row.addWidget(self.zoom_label)
-            form.addRow("GUI Zoom:", zoom_row)
+                # Zoom factor (50% - 200%)
+                self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+                self.zoom_slider.setRange(50, 200)
+                current_zoom = int(self.qsettings.value("zoom_factor", 100))
+                self.zoom_slider.setValue(current_zoom)
+                self.zoom_label = QLabel(f"{current_zoom}%")
+                self.zoom_slider.valueChanged.connect(self.on_zoom_changed)
+                zoom_row = QHBoxLayout()
+                zoom_row.addWidget(self.zoom_slider)
+                zoom_row.addWidget(self.zoom_label)
+                form.addRow("GUI Zoom:", zoom_row)
             
-            # Font size (10px - 30px)
-            self.font_size_spin = QSpinBox()
-            self.font_size_spin.setRange(10, 30)
-            current_size = int(self.qsettings.value("font_size", 12))
-            self.font_size_spin.setValue(current_size)
-            self.font_size_spin.valueChanged.connect(self.on_font_size_changed)
-            form.addRow("Font Size (px):", self.font_size_spin)
+                # Font size (10px - 30px)
+                self.font_size_spin = QSpinBox()
+                self.font_size_spin.setRange(10, 30)
+                current_size = int(self.qsettings.value("font_size", 12))
+                self.font_size_spin.setValue(current_size)
+                self.font_size_spin.valueChanged.connect(self.on_font_size_changed)
+                form.addRow("Font Size (px):", self.font_size_spin)
             
-            # Font Family
-            self.font_combo = QComboBox()
-            common_fonts = ["Arial", "Segoe UI", "Inter", "Roboto", "Helvetica", "Times New Roman", "Courier New", "Verdana"]
-            system_fonts = QFontDatabase.families()
-            all_fonts = []
-            for f in common_fonts:
-                if f in system_fonts:
-                    all_fonts.append(f)
-            for f in system_fonts:
-                if f not in all_fonts:
-                    all_fonts.append(f)
-            self.font_combo.addItems(all_fonts)
-            current_font = self.qsettings.value("font_family", "Arial")
-            idx = self.font_combo.findText(current_font)
-            if idx >= 0:
-                self.font_combo.setCurrentIndex(idx)
-            self.font_combo.currentTextChanged.connect(self.on_font_family_changed)
-            form.addRow("Font Family:", self.font_combo)
+                # Font Family
+                self.font_combo = QComboBox()
+                common_fonts = ["Arial", "Segoe UI", "Inter", "Roboto", "Helvetica", "Times New Roman", "Courier New", "Verdana"]
+                system_fonts = QFontDatabase.families()
+                all_fonts = []
+                for f in common_fonts:
+                    if f in system_fonts:
+                        all_fonts.append(f)
+                for f in system_fonts:
+                    if f not in all_fonts:
+                        all_fonts.append(f)
+                self.font_combo.addItems(all_fonts)
+                current_font = self.qsettings.value("font_family", "Arial")
+                idx = self.font_combo.findText(current_font)
+                if idx >= 0:
+                    self.font_combo.setCurrentIndex(idx)
+                self.font_combo.currentTextChanged.connect(self.on_font_family_changed)
+                form.addRow("Font Family:", self.font_combo)
             
-            layout.addLayout(form)
+                layout.addLayout(form)
             
-            btn_box = QHBoxLayout()
-            close_btn = QPushButton("Close")
-            close_btn.clicked.connect(self.accept)
-            btn_box.addStretch()
-            btn_box.addWidget(close_btn)
-            layout.addLayout(btn_box)
+                btn_box = QHBoxLayout()
+                close_btn = QPushButton("Close")
+                close_btn.clicked.connect(self.accept)
+                btn_box.addStretch()
+                btn_box.addWidget(close_btn)
+                layout.addLayout(btn_box)
             
-        def on_zoom_changed(self, val):
-            self.zoom_label.setText(f"{val}%")
-            self.view.setZoomFactor(val / 100.0)
-            self.qsettings.setValue("zoom_factor", val)
+            def on_zoom_changed(self, val):
+                self.zoom_label.setText(f"{val}%")
+                self.view.setZoomFactor(val / 100.0)
+                self.qsettings.setValue("zoom_factor", val)
             
-        def on_font_size_changed(self, val):
-            s = self.view.settings()
-            s.setFontSize(QWebEngineSettings.FontSize.DefaultFontSize, val)
-            self.qsettings.setValue("font_size", val)
+            def on_font_size_changed(self, val):
+                s = self.view.settings()
+                s.setFontSize(QWebEngineSettings.FontSize.DefaultFontSize, val)
+                self.qsettings.setValue("font_size", val)
             
-        def on_font_family_changed(self, family):
-            s = self.view.settings()
-            s.setFontFamily(QWebEngineSettings.FontFamily.StandardFont, family)
-            self.qsettings.setValue("font_family", family)
+            def on_font_family_changed(self, family):
+                s = self.view.settings()
+                s.setFontFamily(QWebEngineSettings.FontFamily.StandardFont, family)
+                self.qsettings.setValue("font_family", family)
 
-    class CustomWebPage(QWebEnginePage):
-        def __init__(self, profile, parent=None):
-            super().__init__(profile, parent)
-            self.windows = []
-            self.permissionRequested.connect(self.handle_permission)
+        class CustomWebPage(QWebEnginePage):
+            def __init__(self, profile, parent=None):
+                super().__init__(profile, parent)
+                self.windows = []
+                self.permissionRequested.connect(self.handle_permission)
 
-        def handle_permission(self, permission):
-            permission.grant()
+            def handle_permission(self, permission):
+                permission.grant()
 
-        def createWindow(self, type_):
-            new_window = QMainWindow()
-            new_window.resize(1200, 900)
+            def createWindow(self, type_):
+                new_window = QMainWindow()
+                new_window.resize(1200, 900)
             
-            icon_path = resource_path("fyr-logo.ico")
-            if os.path.exists(icon_path):
-                new_window.setWindowIcon(QIcon(icon_path))
+                icon_path = resource_path("fyr-logo.ico")
+                if os.path.exists(icon_path):
+                    new_window.setWindowIcon(QIcon(icon_path))
                 
-            new_view = QWebEngineView(new_window)
-            new_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
-            new_page = CustomWebPage(self.profile(), new_view)
-            new_view.setPage(new_page)
-            new_window.setCentralWidget(new_view)
-            new_page.windowCloseRequested.connect(new_window.close)
+                new_view = QWebEngineView(new_window)
+                new_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+                new_page = CustomWebPage(self.profile(), new_view)
+                new_view.setPage(new_page)
+                new_window.setCentralWidget(new_view)
+                new_page.windowCloseRequested.connect(new_window.close)
             
-            self.windows.append(new_window)
+                self.windows.append(new_window)
             
-            original_close = new_window.closeEvent
-            def close_event(event):
-                if new_window in self.windows:
-                    self.windows.remove(new_window)
-                if original_close:
-                    original_close(event)
-            new_window.closeEvent = close_event
+                original_close = new_window.closeEvent
+                def close_event(event):
+                    if new_window in self.windows:
+                        self.windows.remove(new_window)
+                    if original_close:
+                        original_close(event)
+                new_window.closeEvent = close_event
 
-            new_window.show()
-            return new_page
+                new_window.show()
+                return new_page
 
-    qt_app = QApplication(sys.argv)
-    profile = QWebEngineProfile("wysiwyg_profile")
+        qt_app = QApplication(sys.argv)
+        profile = QWebEngineProfile("wysiwyg_profile")
     
-    main_window = QMainWindow()
-    version_str = get_current_version_str()
-    main_window.setWindowTitle(f"WYSIWYG - v{version_str}")
-    main_window.resize(1400, 950)
+        main_window = QMainWindow()
+        version_str = get_current_version_str()
+        main_window.setWindowTitle(f"WYSIWYG - v{version_str}")
+        main_window.resize(1400, 950)
     
-    icon_path = resource_path("fyr-logo.ico")
-    if os.path.exists(icon_path):
-        main_window.setWindowIcon(QIcon(icon_path))
+        icon_path = resource_path("fyr-logo.ico")
+        if os.path.exists(icon_path):
+            main_window.setWindowIcon(QIcon(icon_path))
         
-    main_view = QWebEngineView(main_window)
-    main_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
-    main_page = CustomWebPage(profile, main_view)
-    main_view.setPage(main_page)
-    main_view.setUrl(QUrl("http://127.0.0.1:8008"))
+        main_view = QWebEngineView(main_window)
+        main_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        main_page = CustomWebPage(profile, main_view)
+        main_view.setPage(main_page)
+        main_view.setUrl(QUrl("http://127.0.0.1:8008"))
     
-    main_window.setCentralWidget(main_view)
+        main_window.setCentralWidget(main_view)
     
-    # Apply stored GUI settings
-    qsettings = QSettings("FYR", "WYSIWYG")
-    zoom = int(qsettings.value("zoom_factor", 100))
-    main_view.setZoomFactor(zoom / 100.0)
-    font_size = int(qsettings.value("font_size", 12))
-    main_view.settings().setFontSize(QWebEngineSettings.FontSize.DefaultFontSize, font_size)
-    font_family = qsettings.value("font_family", "Arial")
-    main_view.settings().setFontFamily(QWebEngineSettings.FontFamily.StandardFont, font_family)
-    main_page.windowCloseRequested.connect(main_window.close)
+        # Apply stored GUI settings
+        qsettings = QSettings("FYR", "WYSIWYG")
+        zoom = int(qsettings.value("zoom_factor", 100))
+        main_view.setZoomFactor(zoom / 100.0)
+        font_size = int(qsettings.value("font_size", 12))
+        main_view.settings().setFontSize(QWebEngineSettings.FontSize.DefaultFontSize, font_size)
+        font_family = qsettings.value("font_family", "Arial")
+        main_view.settings().setFontFamily(QWebEngineSettings.FontFamily.StandardFont, font_family)
+        main_page.windowCloseRequested.connect(main_window.close)
     
-    # --- Native Windows Menu Bar ---
-    menu_bar = main_window.menuBar()
+        # --- Native Windows Menu Bar ---
+        menu_bar = main_window.menuBar()
     
-    # File Menu
-    file_menu = menu_bar.addMenu("&File")
-    refresh_action = file_menu.addAction("&Refresh")
-    refresh_action.triggered.connect(lambda: main_view.reload())
-    update_menus_action = file_menu.addAction("&Update Menus")
-    update_menus_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('updateMenusBtn')?.click();"))
-    file_menu.addSeparator()
-    quit_action = file_menu.addAction("&Quit")
-    quit_action.triggered.connect(main_window.close)
+        # File Menu
+        file_menu = menu_bar.addMenu("&File")
+        refresh_action = file_menu.addAction("&Refresh")
+        refresh_action.triggered.connect(lambda: main_view.reload())
+        update_menus_action = file_menu.addAction("&Update Menus")
+        update_menus_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('updateMenusBtn')?.click();"))
+        file_menu.addSeparator()
+        quit_action = file_menu.addAction("&Quit")
+        quit_action.triggered.connect(main_window.close)
     
-    # Tools Menu
-    tools_menu = menu_bar.addMenu("&Tools")
-    wysiscan_action = tools_menu.addAction("&Wysiscan")
-    wysiscan_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWysiScanBtn')?.click();"))
-    walmart_action = tools_menu.addAction("&Walmart")
-    walmart_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWalmartSheetBtn')?.click();"))
-    price_calc_action = tools_menu.addAction("&Price Calc")
-    price_calc_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('openCalcBtn')?.click();"))
-    uberpaste_action = tools_menu.addAction("&UberPaste")
-    uberpaste_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runUberPasteBtn')?.click();"))
+        # Tools Menu
+        tools_menu = menu_bar.addMenu("&Tools")
+        wysiscan_action = tools_menu.addAction("&Wysiscan")
+        wysiscan_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWysiScanBtn')?.click();"))
+        walmart_action = tools_menu.addAction("&Walmart")
+        walmart_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWalmartSheetBtn')?.click();"))
+        price_calc_action = tools_menu.addAction("&Price Calc")
+        price_calc_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('openCalcBtn')?.click();"))
+        uberpaste_action = tools_menu.addAction("&UberPaste")
+        uberpaste_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runUberPasteBtn')?.click();"))
     
-    # View Menu
-    view_menu = menu_bar.addMenu("&View")
-    darkmode_action = view_menu.addAction("&Darkmode on/off")
-    darkmode_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('themeBtn')?.click();"))
-    gui_adjust_action = view_menu.addAction("&Gui Adjust")
-    gui_adjust_action.triggered.connect(lambda: GuiAdjustDialog(main_window, main_view).exec())
+        # View Menu
+        view_menu = menu_bar.addMenu("&View")
+        darkmode_action = view_menu.addAction("&Darkmode on/off")
+        darkmode_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('themeBtn')?.click();"))
+        gui_adjust_action = view_menu.addAction("&Gui Adjust")
+        gui_adjust_action.triggered.connect(lambda: GuiAdjustDialog(main_window, main_view).exec())
     
-    # Admin Menu
-    admin_menu = menu_bar.addMenu("&Admin")
-    editor_action = admin_menu.addAction("&Editor")
-    editor_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('editorBtn')?.click();"))
+        # Admin Menu
+        admin_menu = menu_bar.addMenu("&Admin")
+        editor_action = admin_menu.addAction("&Editor")
+        editor_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('editorBtn')?.click();"))
     
-    # Help Menu
-    help_menu = menu_bar.addMenu("&Help")
-    help_menu.addAction("&Change Log")
-    help_menu.addAction("&About")
+        # Help Menu
+        help_menu = menu_bar.addMenu("&Help")
+        help_menu.addAction("&Change Log")
+        help_menu.addAction("&About")
     
-    # Periodic synchronization of button states
-    def update_menu_states():
-        js = """
-        (function() {
-            return {
-                wysiscan: !!document.getElementById('runWysiScanBtn')?.disabled,
-                uberpaste: !!document.getElementById('runUberPasteBtn')?.disabled,
-                walmart: !!document.getElementById('runWalmartSheetBtn')?.disabled
-            };
-        })()
-        """
-        def on_result(res):
-            if res:
-                wysiscan_action.setDisabled(res.get("wysiscan", False))
-                uberpaste_action.setDisabled(res.get("uberpaste", False))
-                walmart_action.setDisabled(res.get("walmart", False))
-        main_view.page().runJavaScript(js, on_result)
-        
-    menu_timer = QTimer(main_window)
-    menu_timer.setInterval(1000)
-    menu_timer.timeout.connect(update_menu_states)
-    menu_timer.start()
-    
-    if scrape_bridge:
-        def on_scrape_triggered(url):
-            main_window.showNormal()
-            main_window.activateWindow()
-            main_window.raise_()
-            js = f"""
-            (function() {{
-                const urlInput = document.getElementById('discogsUrlInput');
-                const scrapeBtn = document.getElementById('scrapeBtn');
-                if (urlInput && scrapeBtn) {{
-                    urlInput.value = {json.dumps(url)};
-                    urlInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    scrapeBtn.click();
-                }}
-            }})();
+        # Periodic synchronization of button states
+        def update_menu_states():
+            js = """
+            (function() {
+                return {
+                    wysiscan: !!document.getElementById('runWysiScanBtn')?.disabled,
+                    uberpaste: !!document.getElementById('runUberPasteBtn')?.disabled,
+                    walmart: !!document.getElementById('runWalmartSheetBtn')?.disabled
+                };
+            })()
             """
-            main_view.page().runJavaScript(js)
-        scrape_bridge.trigger_scrape.connect(on_scrape_triggered)
-    
-    def main_close_event(event):
-        for name, proc in CHILD_PROCESSES.items():
-            if proc and proc.poll() is None:
-                try:
-                    logging.info(f"Terminating child process: {name}")
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=2.0)
-                    except subprocess.TimeoutExpired:
-                        logging.warning(f"Process {name} did not exit on terminate. Killing it.")
-                        proc.kill()
-                        proc.wait()
-                except Exception as e:
-                    logging.error(f"Error terminating {name}: {e}")
-        event.accept()
+            def on_result(res):
+                if res:
+                    wysiscan_action.setDisabled(res.get("wysiscan", False))
+                    uberpaste_action.setDisabled(res.get("uberpaste", False))
+                    walmart_action.setDisabled(res.get("walmart", False))
+            main_view.page().runJavaScript(js, on_result)
         
-    main_window.closeEvent = main_close_event
-    main_window.show()
+        menu_timer = QTimer(main_window)
+        menu_timer.setInterval(1000)
+        menu_timer.timeout.connect(update_menu_states)
+        menu_timer.start()
     
-    exit_code = qt_app.exec()
+        if scrape_bridge:
+            def on_scrape_triggered(url):
+                main_window.showNormal()
+                main_window.activateWindow()
+                main_window.raise_()
+                js = f"""
+                (function() {{
+                    const urlInput = document.getElementById('discogsUrlInput');
+                    const scrapeBtn = document.getElementById('scrapeBtn');
+                    if (urlInput && scrapeBtn) {{
+                        urlInput.value = {json.dumps(url)};
+                        urlInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        scrapeBtn.click();
+                    }}
+                }})();
+                """
+                main_view.page().runJavaScript(js)
+            scrape_bridge.trigger_scrape.connect(on_scrape_triggered)
     
-    # Explicit cleanup to prevent profile deletion warnings
-    main_view.setPage(None)
-    main_page.setParent(None)
-    del main_page
-    del main_view
-    del profile
+        def main_close_event(event):
+            for name, proc in CHILD_PROCESSES.items():
+                if proc and proc.poll() is None:
+                    try:
+                        logging.info(f"Terminating child process: {name}")
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=2.0)
+                        except subprocess.TimeoutExpired:
+                            logging.warning(f"Process {name} did not exit on terminate. Killing it.")
+                            proc.kill()
+                            proc.wait()
+                    except Exception as e:
+                        logging.error(f"Error terminating {name}: {e}")
+            event.accept()
+        
+        main_window.closeEvent = main_close_event
+        main_window.show()
     
-    sys.exit(exit_code)
+        exit_code = qt_app.exec()
+    
+        # Explicit cleanup to prevent profile deletion warnings
+        main_view.setPage(None)
+        main_page.setParent(None)
+        del main_page
+        del main_view
+        del profile
+    
+        sys.exit(exit_code)
+
+    else:
+        # --- BROWSER MODE (default) ---
+        # Server is already running on a daemon thread. Point a real browser at it.
+        import webbrowser
+        view_host = '127.0.0.1' if BIND_HOST == '0.0.0.0' else BIND_HOST
+        url = f"http://{view_host}:8008"
+        logging.info(f"Opening WYSIWYG in default browser at {url}")
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            logging.warning(f"Could not auto-open browser ({e}). Open {url} manually.")
+        # Keep the process alive so the server thread keeps serving.
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            logging.info("Shutdown requested via keyboard interrupt.")

@@ -154,45 +154,14 @@
     <div class="container">
         <div class="sticky-header">
             <div class="nav-item-group"
-                style="justify-content: space-between; padding: 5px 10px; margin-bottom: 5px; align-items: center;">
-                <div class="nav-item-group" style="align-items: flex-start; gap: 5px;">
-                    <button id="runUberPasteBtn" class="nav-btn nav-item-group" title="Launch UberPaste"
-                        style="width: 120px; height: 40px; justify-content: center;"><img src="/UberPaste/UberPaste.png"
-                            class="nav-icon">
-                        UberPaste</button>
-                    <div style="display: flex; flex-direction: column; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <button id="runWysiScanBtn" class="nav-btn nav-item-group" title="Open WysiScan"
-                                style="width: 120px; height: 40px; justify-content: center;"><img
-                                    src="/WysiScan/WysiScan.png" class="nav-icon"> WysiScan</button>
-                            <label style="display: none;"
-                                title="Docking opens the tool in a new browser tab instead of a floating popup window;">
-                                <input type="checkbox" id="dockScanner" checked> Dock
-                            </label>
-                        </div>
+                <div class="nav-item-group" style="justify-content: space-between; padding: 5px 10px; margin-bottom: 5px; align-items: center;">
+                    <button id="hamburgerBtn" class="nav-btn nav-item-group" title="Open Menu"
+                        style="width: 44px; height: 40px; justify-content: center; font-size: 20px;">&#9776;</button>
+                    <div class="logo-container">
+                        <img src="/wysiwyglogo.png" alt="WYSIWYG Logo" class="logo">
                     </div>
-                    <button id="openCalcBtn" class="nav-btn" title="Cost Calculator"
-                        style="width: 120px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 14px;">💲
-                        Calc</button>
+                    <div style="width: 44px; height: 40px;"></div>
                 </div>
-                <div class="logo-container">
-                    <img src="/wysiwyglogo.png" alt="WYSIWYG Logo" class="logo">
-                </div>
-                <div class="nav-item-group" style="justify-content: flex-end; gap: 5px;">
-                    <button id="themeBtn" class="nav-btn nav-item-group" title="Toggle Dark/Light Mode"
-                        style="width: 40px; height: 40px; justify-content: center;">🌓</button>
-                    <button id="refreshBtn" class="nav-btn nav-item-group refresh-btn"
-                        title="Force refresh to get the latest version"
-                        style="width: 120px; height: 40px; justify-content: center;">🔄 Refresh</button>
-                    <button id="updateMenusBtn" class="nav-btn nav-item-group" title="Pull latest menus from server"
-                        style="width: 120px; height: 40px; justify-content: center;">Update
-                        Menus</button>
-                    <button id="editorBtn" class="nav-btn nav-item-group" title="Open Settings Editor"
-                        style="width: 120px; height: 40px; justify-content: center;">⚙️ Editor</button>
-                    <button id="shutdownBtn" class="nav-btn nav-item-group shutdown-btn" title="Shut Down Server"
-                        style="width: 120px; height: 40px; justify-content: center;">Shut Down</button>
-                </div>
-            </div>
 
             <div id="updateBanner" class="blink-update" style="display:none;">
                 ⚠️ NEW VERSION AVAILABLE! CLICK HERE TO UPDATE ⚠️
@@ -390,14 +359,14 @@
             <div class="form-group">
                 <label>Generated Listing Data</label>
                 <div class="nav-item-group" style="margin-bottom: 5px;">
+                    <button type="button" class="lock-padlock" id="lockSkuBtn" title="Lock SKU">🔓</button>
+                    <input type="checkbox" id="lockSku" style="display:none;">
                     <button id="copySkuBtn" class="copy-button">Copy SKU</button>
-                    <label
-                        style="display: flex; align-items: center; gap: 3px; font-size: 11px; cursor: pointer; white-space: nowrap;">
-                        <input type="checkbox" id="lockSku">Lock
-                    </label>
                     <input type="text" id="outputSku" style="font-weight: bold;">
                 </div>
                 <div class="nav-item-group" style="align-items: flex-start;">
+                    <button type="button" class="lock-padlock" id="lockDescBtn" title="Lock Description">🔓</button>
+                    <input type="checkbox" id="lockDesc" style="display:none;">
                     <div class="output-button-group">
                         <button id="copyDescBtn" class="copy-button" style="width: 100%; margin-top: 1px;">Copy
                             Desc</button>
@@ -416,11 +385,7 @@
                                 title="Open Listings File/Folder">📂 Open</button>
                         </div>
                     </div>
-                    <label
-                        style="display: flex; align-items: center; gap: 3px; margin-top: 5px; font-size: 11px; cursor: pointer; white-space: nowrap;">
-                        <input type="checkbox" id="lockDesc">Lock
-                    </label>
-                    <textarea id="outputDesc" rows="6"></textarea>
+                    <textarea id="outputDesc" rows="3" style="flex: 1 1 auto; min-width: 200px;"></textarea>
                 </div>
             </div>
         </div>
@@ -522,6 +487,97 @@
             }
         });
     </script>
+    <!-- Hamburger Drawer (replaces the old header button row) -->
+    <div id="drawerOverlay" class="drawer-overlay"></div>
+    <nav id="hamburgerDrawer" class="drawer" aria-label="Main menu" aria-hidden="true">
+        <div class="drawer-header">
+            <span>Menu</span>
+            <button id="drawerCloseBtn" class="close-btn" title="Close">&times;</button>
+        </div>
+        <div class="drawer-actions">
+            <button id="runUberPasteBtn" class="drawer-btn"><span class="drawer-ico">📋</span> UberPaste</button>
+            <button id="runWysiScanBtn" class="drawer-btn"><span class="drawer-ico">🔍</span> WysiScan</button>
+            <button id="runWalmartSheetBtn" class="drawer-btn"><span class="drawer-ico">🛒</span> Walmart Sheet</button>
+            <button id="openCalcBtn" class="drawer-btn"><span class="drawer-ico">💲</span> Cost Calculator</button>
+            <hr class="drawer-sep">
+            <button id="themeBtn" class="drawer-btn"><span class="drawer-ico">🌓</span> Toggle Dark/Light</button>
+            <button id="refreshBtn" class="drawer-btn refresh-btn"><span class="drawer-ico">🔄</span> Refresh</button>
+            <button id="updateMenusBtn" class="drawer-btn"><span class="drawer-ico">🔃</span> Update Menus</button>
+            <button id="editorBtn" class="drawer-btn"><span class="drawer-ico">⚙️</span> Settings Editor</button>
+            <hr class="drawer-sep">
+            <button id="shutdownBtn" class="drawer-btn shutdown-btn"><span class="drawer-ico">🔌</span> Shut Down</button>
+        </div>
+    </nav>
+    <style>
+        .drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 9990;
+        }
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 280px;
+            max-width: 85vw;
+            background: var(--background-color, #fff);
+            color: var(--text-main, #333);
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            z-index: 9991;
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.open {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            font-weight: bold;
+            font-size: 16px;
+            border-bottom: 1px solid var(--border-color, #ccc);
+        }
+        .drawer-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px;
+        }
+        .drawer-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+        }
+        .drawer-btn:hover {
+            background: var(--wysiwyg-blue-soft, #eef3fb);
+        }
+        .drawer-btn .drawer-ico {
+            font-size: 16px;
+            width: 22px;
+            text-align: center;
+        }
+        .drawer-sep {
+            border: none;
+            border-top: 1px solid var(--border-color, #eee);
+            margin: 4px 0;
+        }
+    </style>
     <script src="app.js" defer></script>
 </body>
 
