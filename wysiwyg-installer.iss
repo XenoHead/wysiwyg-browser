@@ -82,17 +82,26 @@ Type: filesandordirs; Name: "{app}\WysiScan"
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
+  KillBat, KillCmds: string;
 begin
-  // Terminate running instances BEFORE any files are copied, so a locked/open
-  // WYSIWYG.exe does not block the install. /T kills the whole process TREE.
+  // Kill any running instance BEFORE any files are copied, so a locked/open
+  // WYSIWYG.exe cannot block the install. We write a small batch file to {tmp}
+  // and run it through cmd.exe -- this terminates the whole process tree
+  // (including child processes like the scanner subprocess) more reliably than
+  // an in-process Exec call. /F=force, /T=kill tree.
+  KillCmds :=
+    '@echo off' + #13#10 +
+    'taskkill /F /T /IM WYSIWYG.exe >nul 2>&1' + #13#10 +
+    'taskkill /F /T /IM WysiScan.exe >nul 2>&1' + #13#10 +
+    'taskkill /F /T /IM XDevHubX.exe >nul 2>&1' + #13#10 +
+    'timeout /t 3 /nobreak >nul' + #13#10 +
+    'taskkill /F /T /IM WYSIWYG.exe >nul 2>&1' + #13#10 +
+    'timeout /t 2 /nobreak >nul' + #13#10;
+  KillBat := ExpandConstant('{tmp}\kill_wysiwyg.bat');
+  SaveStringToFile(KillBat, KillCmds, False);
+  Exec('cmd.exe', '/C "' + KillBat + '"', ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Belt-and-suspenders: inline kill in case the batch step was blocked.
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  // Give the OS (and any antivirus) time to release the file handles, then make a
-  // second pass in case anything respawned or was still unloading.
-  Sleep(3000);
-  Exec(ExpandConstant('{sys}	askkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(2000);
   Result := True;
 end;
 

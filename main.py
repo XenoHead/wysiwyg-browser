@@ -744,6 +744,22 @@ async def get_ready_status():
 async def serve_index(): 
     return FileResponse(resource_path("index.html"))
 
+@app.get("/opener")
+async def serve_opener():
+    # Opens the app in a fixed-named browser window ("_wysiwyg_app") and then
+    # closes this opener tab. Because the target name is fixed, every subsequent
+    # open REUSES the same tab instead of spawning a new one -- so relaunching the
+    # app (e.g. after an install) focuses the existing tab rather than leaving a
+    # pile of duplicate tabs for less-technical clients.
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<title>WYSIWYG</title></head><body>"
+        "<script>window.open('/', '_wysiwyg_app');"
+        "setTimeout(function(){window.close();}, 800);</script>"
+        "<p>Opening WYSIWYG&hellip;</p></body></html>"
+    )
+    return HTMLResponse(html)
+
 @app.get("/editor")
 async def serve_editor():
     return FileResponse(resource_path("editor.html"))
@@ -2011,7 +2027,15 @@ if __name__ == "__main__":
         _instance_mutex = kernel32.CreateMutexW(None, False, "Local\\WYSIWYG_SINGLE_INSTANCE_MUTEX")
         last_error = ctypes.get_last_error()
         if last_error in (5, 183):  # ERROR_ACCESS_DENIED (5) or ERROR_ALREADY_EXISTS (183)
-            logging.info(f"Another instance is already running (error {last_error}). Exiting.")
+            # Another instance owns the mutex. Rather than silently exit, re-open
+            # the app's named browser window so the existing tab is focused (the
+            # /opener route reuses the same tab instead of spawning a duplicate).
+            logging.info(f"Another instance is already running (error {last_error}). Focusing existing tab.")
+            try:
+                import webbrowser
+                webbrowser.open("http://127.0.0.1:8008/opener")
+            except Exception:
+                pass
             sys.exit(0)
 
     logging.info("--- APPLICATION STARTING ---")
@@ -2352,7 +2376,7 @@ if __name__ == "__main__":
         # Server is already running on a daemon thread. Point a real browser at it.
         import webbrowser
         view_host = '127.0.0.1' if BIND_HOST == '0.0.0.0' else BIND_HOST
-        url = f"http://{view_host}:8008"
+        url = f"http://{view_host}:8008/opener"
         logging.info(f"Opening WYSIWYG in default browser at {url}")
         try:
             webbrowser.open(url)
