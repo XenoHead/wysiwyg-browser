@@ -1942,7 +1942,9 @@ if __name__ == "__main__":
     if getattr(sys, 'frozen', False):
         if "-c" in sys.argv:
             try:
-                sys.path.append(sys._MEIPASS)
+                if hasattr(sys, '_MEIPASS'):
+
+                    sys.path.append(sys._MEIPASS)
                 c_index = sys.argv.index("-c")
                 code_to_run = sys.argv[c_index + 1]
                 exec(code_to_run)
@@ -1956,7 +1958,9 @@ if __name__ == "__main__":
 
         if "--uberpaste" in sys.argv:
             # Add sys._MEIPASS to path so we can import the bundled modules
-            sys.path.append(sys._MEIPASS)
+            if hasattr(sys, '_MEIPASS'):
+
+                sys.path.append(sys._MEIPASS)
             # Import and run UberPaste
             from Uberpaste.UberPaste import main as run_uberpaste
             run_uberpaste()
@@ -1964,7 +1968,9 @@ if __name__ == "__main__":
             
         if "--wysiscan" in sys.argv:
             try:
-                sys.path.append(sys._MEIPASS)
+                if hasattr(sys, '_MEIPASS'):
+
+                    sys.path.append(sys._MEIPASS)
                 # Import and run WysiScan
                 from WysiScan.scanner_server import run_server as run_wysiscan
                 run_wysiscan()
@@ -1978,7 +1984,9 @@ if __name__ == "__main__":
 
         if "--imageconvert" in sys.argv:
             try:
-                sys.path.append(sys._MEIPASS)
+                if hasattr(sys, '_MEIPASS'):
+
+                    sys.path.append(sys._MEIPASS)
                 sys.argv.remove("--imageconvert")
                 from WysiScan.imageconvert.app import main as run_imageconvert
                 run_imageconvert()
