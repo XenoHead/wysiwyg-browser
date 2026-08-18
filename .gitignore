@@ -3,6 +3,7 @@
 Thumbs.db
 desktop.ini
 *.swp
+nul
 
 # Continuity
 /.cursorrules
@@ -21,6 +22,8 @@ __pycache__/
 .mypy_cache/
 node_modules/
 venv/
+.venv/
+.venv311/
 ENV/
 
 # Installer/Compiled files

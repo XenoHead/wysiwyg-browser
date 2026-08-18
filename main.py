@@ -36,7 +36,7 @@ from logging.handlers import RotatingFileHandler
 import psutil 
 from datetime import datetime
 from fastapi import FastAPI, Form, Body, Request, Response
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from html_format import format_discogs_to_html
 from WalmartSheet.walmart import router as walmart_router
@@ -746,19 +746,7 @@ async def serve_index():
 
 @app.get("/opener")
 async def serve_opener():
-    # Opens the app in a fixed-named browser window ("_wysiwyg_app") and then
-    # closes this opener tab. Because the target name is fixed, every subsequent
-    # open REUSES the same tab instead of spawning a new one -- so relaunching the
-    # app (e.g. after an install) focuses the existing tab rather than leaving a
-    # pile of duplicate tabs for less-technical clients.
-    html = (
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        "<title>WYSIWYG</title></head><body>"
-        "<script>window.open('/', '_wysiwyg_app');"
-        "setTimeout(function(){window.close();}, 800);</script>"
-        "<p>Opening WYSIWYG&hellip;</p></body></html>"
-    )
-    return HTMLResponse(html)
+    return RedirectResponse(url="/")
 
 @app.get("/editor")
 async def serve_editor():
@@ -848,6 +836,10 @@ async def serve_logo_typo():
 @app.get("/wysiwyglogo.png")
 async def serve_logo_wysiwyg():
     return FileResponse(resource_path("fyrlogo.png"))
+
+@app.get("/fyr-sign-front.png")
+async def serve_fyr_sign_front():
+    return FileResponse(resource_path("fyr-sign-front.png"))
 
 @app.get("/styles.css")
 async def serve_css():
@@ -2024,19 +2016,21 @@ if __name__ == "__main__":
         
         global _instance_mutex
         # Use Local namespace (no "Global\" prefix) to avoid ERROR_ACCESS_DENIED when run as non-admin
+        ctypes.set_last_error(0)
         _instance_mutex = kernel32.CreateMutexW(None, False, "Local\\WYSIWYG_SINGLE_INSTANCE_MUTEX")
         last_error = ctypes.get_last_error()
-        if last_error in (5, 183):  # ERROR_ACCESS_DENIED (5) or ERROR_ALREADY_EXISTS (183)
-            # Another instance owns the mutex. Rather than silently exit, re-open
-            # the app's named browser window so the existing tab is focused (the
-            # /opener route reuses the same tab instead of spawning a duplicate).
-            logging.info(f"Another instance is already running (error {last_error}). Focusing existing tab.")
-            try:
-                import webbrowser
-                webbrowser.open("http://127.0.0.1:8008/opener")
-            except Exception:
-                pass
-            sys.exit(0)
+        if last_error == 183 or (not _instance_mutex and last_error == 5):  # ERROR_ALREADY_EXISTS (183) or ERROR_ACCESS_DENIED (5)
+            if is_port_in_use(8008):
+                # Another instance owns the mutex and is serving on port 8008. Re-open existing tab.
+                logging.info(f"Another instance is already running (error {last_error}). Focusing existing tab.")
+                try:
+                    import webbrowser
+                    webbrowser.open("http://127.0.0.1:8008/opener")
+                except Exception:
+                    pass
+                sys.exit(0)
+            else:
+                logging.warning(f"Single instance mutex exists (error {last_error}) but port 8008 is not in use. Continuing startup.")
 
     logging.info("--- APPLICATION STARTING ---")
 
@@ -2072,12 +2066,13 @@ if __name__ == "__main__":
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         try:
+            flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
             if getattr(sys, 'frozen', False):
-                subprocess.Popen([sys.executable, "--uberpaste"])
+                subprocess.Popen([sys.executable, "--uberpaste"], creationflags=flags)
             else:
                 up_path = resource_path(os.path.join("Uberpaste", "UberPaste.py"))
                 if os.path.exists(up_path):
-                    subprocess.Popen([sys.executable, up_path])
+                    subprocess.Popen([sys.executable, up_path], creationflags=flags)
         except Exception as e:
             logging.error(f"Auto-start UberPaste failed: {e}")
 
@@ -2383,8 +2378,11 @@ if __name__ == "__main__":
         except Exception as e:
             logging.warning(f"Could not auto-open browser ({e}). Open {url} manually.")
         # Keep the process alive so the server thread keeps serving.
-        try:
-            while True:
+        while True:
+            try:
                 time.sleep(3600)
-        except KeyboardInterrupt:
-            logging.info("Shutdown requested via keyboard interrupt.")
+            except KeyboardInterrupt:
+                logging.info("Shutdown requested via keyboard interrupt.")
+                break
+            except Exception as e:
+                logging.error(f"Error in keep-alive loop: {e}")

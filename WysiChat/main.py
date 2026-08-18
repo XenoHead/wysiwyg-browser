@@ -41,7 +41,7 @@ parser.add_argument("--name", type=str, default=socket.gethostname(), help="Uniq
 args, _ = parser.parse_known_args()
 PORT = args.port
 MY_NAME = args.name
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 
 # --- USER & SETTINGS MANAGEMENT ---
 # Determine the actual folder where the app/script is running
@@ -85,7 +85,7 @@ cipher = Fernet(SECRET_KEY)
 
 # Fix Taskbar Icon: Tells Windows this is a distinct app, not just "Python"
 try:
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('WysiChat.App.1.0')
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('WysiChat.App.2.0')
 except AttributeError:
     pass
 
@@ -833,6 +833,24 @@ def launch_wysiwyg():
             
     return False
 
+def launch_wysiscan():
+    exe_path = r"C:\FYRTOOLS\WysiScan\WysiScan.exe"
+    if os.path.exists(exe_path):
+        try:
+            subprocess.Popen(exe_path, cwd=os.path.dirname(exe_path))
+            return True
+        except Exception as e:
+            logging.error(f"Failed to launch WysiScan EXE: {e}")
+    dev_script = os.path.abspath(os.path.join(script_dir, "..", "WysiScan", "scanner_server.py"))
+    if os.path.exists(dev_script):
+        try:
+            subprocess.Popen([sys.executable, dev_script], cwd=os.path.dirname(dev_script))
+            return True
+        except Exception as e:
+            logging.error(f"Failed to launch WysiScan script: {e}")
+    return False
+
+
 # --- MAIN LOOP ---
 def main():
     global sent_col, recv_col, f_size
@@ -922,10 +940,10 @@ def main():
         [sg.MenubarCustom(get_menu_def(f_size), key='-MENU-')],
         [sg.Text(f"Chatting as: {my_alias}", font=(f_family, 10, "bold")), sg.Push(), sg.Checkbox("AFK", key='-AFK-', enable_events=True), sg.Checkbox("Start Minimized", default=start_minimized, key='-START-MIN-', enable_events=True)],
         [sg.Col([[sg.Text("Contacts")],
-                 [sg.Listbox(list(contacts.keys()), size=(15, 15), key="-USERS-", enable_events=True, expand_y=True, right_click_menu=contact_rc_menu)]], expand_y=True),
+                 [sg.Listbox(list(contacts.keys()), size=(15, 15), key="-USERS-", enable_events=True, expand_y=True, right_click_menu=contact_rc_menu)]], key='-COL-USERS-', expand_y=True, expand_x=False, pad=((5, 5), (0, 5))),
          sg.Col([[sg.Text("Chatting with: "), sg.Text("None", key="-TARGET-", text_color="yellow")],
                  [sg.Multiline(size=(50, 15), key="-CHAT-", disabled=True, font=(f_family, f_size), expand_x=True, expand_y=True, right_click_menu=right_click_menu)],
-                 [sg.Input(key="-IN-", size=(30, 1), expand_x=True, right_click_menu=right_click_menu), sg.Button("Send", bind_return_key=True), sg.Button("Attach"), sg.Button("Clear")]], expand_x=True, expand_y=True)]
+                 [sg.Input(key="-IN-", size=(30, 1), expand_x=True, right_click_menu=right_click_menu), sg.Button("Send", bind_return_key=True), sg.Button("Attach"), sg.Button("Clear")]], key='-COL-CHAT-', expand_x=True, expand_y=True, pad=((0, 5), (0, 5)))]
     ]
 
     # --- Icon Loading ---
@@ -969,32 +987,20 @@ def main():
     chat_widget.tag_bind("URL", "<Leave>", lambda e: chat_widget.config(cursor=""))
     chat_widget.bind("<Button-3>", on_chat_right_click)
 
-    # Configure grid weights recursively up the hierarchy to support expansion when maximized or resized
+    # Configure element expansion for resizing
     try:
-        def enable_expansion(widget, expand_x=True, expand_y=True):
-            curr = widget
-            while curr and curr != window.TKroot:
-                parent = curr.master
-                if parent:
-                    try:
-                        info = curr.grid_info()
-                        if info:
-                            if expand_y:
-                                row = int(info.get('row', 0))
-                                parent.rowconfigure(row, weight=1)
-                            if expand_x:
-                                col = int(info.get('column', 0))
-                                parent.columnconfigure(col, weight=1)
-                    except:
-                        pass
-                curr = parent
-
-        # Contacts column: expand vertically only
-        enable_expansion(window["-USERS-"].Widget, expand_x=False, expand_y=True)
-        # Chat column: expand both horizontally and vertically
-        enable_expansion(window["-CHAT-"].Widget, expand_x=True, expand_y=True)
+        if "-COL-USERS-" in window.AllKeysDict:
+            window["-COL-USERS-"].expand(expand_x=False, expand_y=True)
+        if "-USERS-" in window.AllKeysDict:
+            window["-USERS-"].expand(expand_x=True, expand_y=True)
+        if "-COL-CHAT-" in window.AllKeysDict:
+            window["-COL-CHAT-"].expand(expand_x=True, expand_y=True)
+        if "-CHAT-" in window.AllKeysDict:
+            window["-CHAT-"].expand(expand_x=True, expand_y=True)
+        if "-IN-" in window.AllKeysDict:
+            window["-IN-"].expand(expand_x=True, expand_y=False)
     except Exception as e:
-        logging.error(f"Error configuring resize weights: {e}")
+        logging.error(f"Error configuring element expansion: {e}")
 
 
     # Auto-refresh the list immediately after window creation
@@ -1059,7 +1065,7 @@ def main():
     # --- TRAY REPLACEMENT (Floating Window) ---
     def create_tray_window():
         loc = sg.user_settings_get_entry('-TRAY-LOC-', (None, None))
-        menu = ['', ['Restore', 'Run Wysiwyg', 'Update Apps', 'Exit']]
+        menu = ['', ['Restore', 'Run Wysiwyg', 'Wysiscanner', 'Update Apps', 'Exit']]
         
         # Use Magenta as transparency key to hide the window background
         bg_col = '#ff00ff'
@@ -1242,6 +1248,8 @@ def main():
             break
         if tray_event == 'Run Wysiwyg':
             launch_wysiwyg()
+        if tray_event == 'Wysiscanner':
+            launch_wysiscan()
 
 
 
@@ -1249,6 +1257,7 @@ def main():
             layout = [
                 [sg.Text("Select application to update:")],
                 [sg.Radio("Wysiwyg", "RADIO1", default=True, key="-UPDATE-WYSIWYG-")],
+                [sg.Radio("WysiScan", "RADIO1", key="-UPDATE-WYSISCAN-")],
                 [sg.Radio("WysiChat", "RADIO1", key="-UPDATE-WYSICHAT-")],
                 [sg.Button("Ok"), sg.Button("Cancel")]
             ]
@@ -1260,6 +1269,8 @@ def main():
                 installer_path = None
                 if u_values.get("-UPDATE-WYSIWYG-"):
                     installer_path = os.path.join(FYRTOOLS_ROOT, "WYSIWYG", "INSTALL_WYSIWYG.exe")
+                elif u_values.get("-UPDATE-WYSISCAN-"):
+                    installer_path = os.path.join(FYRTOOLS_ROOT, "WysiScan", "INSTALL_WYSISCAN.exe")
                 elif u_values.get("-UPDATE-WYSICHAT-"):
                     installer_path = os.path.join(SHARED_PATH, "INSTALL_WYSICHAT.exe")
                     # Check version from shared drive

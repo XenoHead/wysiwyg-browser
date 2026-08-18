@@ -1,1 +1,0 @@
-start "Laptop B" cmd /k "python main.py --name LaptopB --port 5556"

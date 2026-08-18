@@ -1,0 +1,1 @@
+ONEFILE_EXIT=1

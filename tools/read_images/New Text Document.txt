@@ -1,0 +1,5 @@
+https://hermes-agent.nousresearch.com/docs/user-guide/messaging/email
+https://colab.research.google.com/drive/1eRTPn37ltBbYsISy9Aw2NuI2Aq5CQrD9?usp=sharing#scrollTo=YLsdS6V5yUMy
+
+https://console.agentmail.to/dashboard/api-keys
+am_us_5ac34983ff3617f6186762808ccd30fb9d109eb3e2cb9b028947509429ba39b2

@@ -25,6 +25,7 @@ def build_exe():
         "--noconsole",
         f"--name={exe_name}",
         f"--icon={icon_path}",
+        "--hidden-import=tkinter",
         "--clean",
     ]
 
@@ -33,6 +34,11 @@ def build_exe():
         full_src = os.path.join(base_dir, src)
         if os.path.exists(full_src):
             params.append(f"--add-data={full_src}{os.pathsep}{dst}")
+
+    # Bundle config.json so the standalone behaves like the integrated version
+    config_path = os.path.join(base_dir, "config.json")
+    if os.path.exists(config_path):
+        params.append(f"--add-data={config_path}{os.pathsep}.")
 
     PyInstaller.__main__.run(params)
 

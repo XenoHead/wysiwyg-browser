@@ -31,6 +31,16 @@ except ImportError:
 if sys.platform == "win32":
     import winreg
 
+# --- DIALOG MODE (frozen exe subprocess) ---
+# _run_py_dialog() launches [sys.executable, "-c", script] with the
+# WYSIWYG_DIALOG_MODE env var set. In SOURCE mode, `python -c` runs the script
+# directly. In a FROZEN exe, the bootloader ignores `-c` and would instead start
+# the server -- so we must explicitly exec the script here and exit, BEFORE any
+# server startup, otherwise the folder/file browse dialogs break.
+if os.environ.get("WYSIWYG_DIALOG_MODE") == "true" and len(sys.argv) > 2 and sys.argv[1] == "-c":
+    exec(sys.argv[2])
+    sys.exit(0)
+
 # Determine paths for frozen (exe) vs script execution
 if getattr(sys, 'frozen', False):
     # Running as a compiled exe (onefile or onedir)

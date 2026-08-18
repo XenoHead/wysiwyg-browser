@@ -1,0 +1,9 @@
+from agentmail import AgentMail
+
+client = AgentMail(api_key=os.environ["AGENTMAIL_API_KEY"])
+
+# List
+client.api_keys.list()
+
+# Create
+client.api_keys.create(name="My key")

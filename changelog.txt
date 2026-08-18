@@ -155,22 +155,3 @@ Walmart Tab:
 
 ### v1.9.28.4 - 2026-05-12 15:32
 -- Fixed: The word 'with' was being omitted before the sleeve description/flaws when a sleeve condition was specified.
-### v1.10.33.3 - 2026-07-14 15:28
-* button / ui fixes
-* Auto Scan after group creation
-lock sku and desc checks (resets)
-save sku flags 
-auto generate check
-calculator saves last price
-same size all the buttons
-move logo to very top row - add right click to open chat
-UberPaste move by click hold and change color
-copy un highlighted text
-link to uploaded files
-stay on top after unminimizing
-middle click
-repaint after maximize
-only let it run one copy - exe done
-create groups by anyone
-make sure update works
-favorite editing in edit menu

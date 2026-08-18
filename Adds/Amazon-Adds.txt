@@ -1,0 +1,37 @@
+Item Name - artist-album
+Product Type - 
+Brand Name - Label
+External Product ID - UPC Discog's API
+Product Description - HTML tab
+Bullet Point -
+Images -
+Manufacture - Label
+Number - 
+Part Number - 
+Subject Key Word - 
+Publication Date - 
+Number Of Disks - 
+Genre - Discog's API
+Binding - 
+Artist/Composer/Performer - 
+SKU - 
+Fulfillment Channel Code - Merchant Fulfilled
+Quantity - 
+Price - Discog's API
+Item Condition - 
+Offer Condition Note - Desc.
+List Price - Discog's API
+Product Tax Code - A_GEN_TAX
+Shipping Template - 
+Images - 
+Country/Region of Origin - United States
+Dangerous Goods Regulations - Not Applicable
+
+
+
+
+
+
+
+
+
