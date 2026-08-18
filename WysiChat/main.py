@@ -987,14 +987,16 @@ def main():
     chat_widget.tag_bind("URL", "<Leave>", lambda e: chat_widget.config(cursor=""))
     chat_widget.bind("<Button-3>", on_chat_right_click)
 
-    # Configure element expansion for resizing
+    # Configure element expansion and pack geometry for resizing and far-left alignment
     try:
         if "-COL-USERS-" in window.AllKeysDict:
-            window["-COL-USERS-"].expand(expand_x=False, expand_y=True)
+            window["-COL-USERS-"].Widget.pack_configure(expand=False, fill='y', side='left')
+        if "-COL-CHAT-" in window.AllKeysDict:
+            window["-COL-CHAT-"].Widget.pack_configure(expand=True, fill='both', side='left')
+        if "-COL-USERS-" in window.AllKeysDict:
+            window["-COL-USERS-"].Widget.master.pack_configure(expand=True, fill='both', side='top')
         if "-USERS-" in window.AllKeysDict:
             window["-USERS-"].expand(expand_x=True, expand_y=True)
-        if "-COL-CHAT-" in window.AllKeysDict:
-            window["-COL-CHAT-"].expand(expand_x=True, expand_y=True)
         if "-CHAT-" in window.AllKeysDict:
             window["-CHAT-"].expand(expand_x=True, expand_y=True)
         if "-IN-" in window.AllKeysDict:
