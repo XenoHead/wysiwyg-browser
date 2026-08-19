@@ -16,7 +16,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=dist
 OutputBaseFilename=INSTALL_WYSIWYG
-SetupIconFile=fyr-logo.ico
+SetupIconFile=fyrlogo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
@@ -42,7 +42,7 @@ Source: "admin.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "search.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "data.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 Source: "fyrlogo.png"; DestDir: "{app}"; Flags: ignoreversion
-Source: "fyr-logo.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "fyrlogo.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "changelog.txt"; DestDir: "{app}"; Flags: ignoreversion
