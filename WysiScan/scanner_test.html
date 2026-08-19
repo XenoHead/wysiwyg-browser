@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,9 +32,23 @@
             /* Keep high contrast buttons in dark mode too */
         }
 
-        body { font-family: sans-serif; padding: 20px; background: var(--bg-body); color: var(--text-main); transition: background 0.3s, color 0.3s; }
-        .container { max-width: 1200px; margin: 0 auto; background: var(--bg-container); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: var(--bg-body);
+            color: var(--text-main);
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--bg-container);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
         h1 {
             background-color: var(--primary-color);
             color: var(--accent-color);
@@ -46,34 +61,87 @@
             letter-spacing: 1px;
         }
 
-        button { padding: 10px 20px; font-size: 16px; background: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; margin-right: 10px; font-weight: bold; }
-        button:disabled { background: #ccc; color: #666; border-color: #999; cursor: not-allowed; }
-        input[type="text"], input[type="number"] { padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 10px; width: calc(100% - 22px); background: var(--input-bg); color: var(--text-main); }
-        .controls { margin-bottom: 20px; }
-        .result-area { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 20px; }
-        img { max-width: 100%; border: 1px solid var(--border-color); }
-        .status { margin-top: 10px; font-weight: bold; }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--accent-color);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        button:disabled {
+            background: #ccc;
+            color: #666;
+            border-color: #999;
+            cursor: not-allowed;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
+            width: calc(100% - 22px);
+            background: var(--input-bg);
+            color: var(--text-main);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .result-area {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        img {
+            max-width: 100%;
+            border: 1px solid var(--border-color);
+        }
+
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
         .form-group {
             margin-bottom: 15px;
         }
+
         .form-group label {
             display: block;
             margin-bottom: 5px;
         }
+
         .input-group {
             display: flex;
             gap: 10px;
         }
+
         .input-group input {
             flex-grow: 1;
-            margin-bottom: 0; /* Override */
+            margin-bottom: 0;
+            /* Override */
         }
+
         #scan-gallery {
             margin-top: 20px;
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
         }
+
         .gallery-item {
             display: flex;
             gap: 5px;
@@ -81,11 +149,21 @@
             border: 1px solid var(--border-color);
             padding: 5px;
         }
-        .gallery-item > div { flex: 1; text-align: center; }
-        .gallery-item h4 { margin: 0 0 5px 0; font-size: 12px; }
+
+        .gallery-item>div {
+            flex: 1;
+            text-align: center;
+        }
+
+        .gallery-item h4 {
+            margin: 0 0 5px 0;
+            font-size: 12px;
+        }
+
         .image-controls {
             margin-bottom: 5px;
         }
+
         .image-controls button {
             font-size: 18px;
             padding: 0 8px;
@@ -96,17 +174,21 @@
             color: #333;
             border: 1px solid #ccc;
         }
+
         /* Cropper Modal Styles */
         .crop-modal {
             display: none;
             position: fixed;
             z-index: 1000;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.7);
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
             justify-content: center;
             align-items: center;
         }
+
         .crop-modal-content {
             background-color: var(--bg-container);
             color: var(--text-main);
@@ -115,16 +197,23 @@
             max-width: 90vw;
             max-height: 90vh;
         }
+
         #cropImage {
             max-width: 100%;
         }
+
         .crop-container {
             width: 100%;
             height: 60vh;
             background-color: #333;
             overflow: hidden;
         }
-        .crop-modal-buttons { margin-top: 15px; text-align: right; }
+
+        .crop-modal-buttons {
+            margin-top: 15px;
+            text-align: right;
+        }
+
         #import-queue {
             margin-top: 20px;
             display: flex;
@@ -133,6 +222,7 @@
             border-top: 2px solid var(--border-color);
             padding-top: 10px;
         }
+
         .import-item {
             width: 100px;
             height: 100px;
@@ -141,25 +231,31 @@
             position: relative;
             overflow: hidden;
         }
+
         .import-item img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
+
         .import-item:hover:not(.processing) {
             border-color: #007bff;
         }
+
         .import-item.processing {
             border-color: #ffc107;
             cursor: wait;
         }
+
         .import-item.processed {
             border-color: #28a745;
             opacity: 0.8;
         }
+
         .import-item.error {
             border-color: #dc3545;
         }
+
         .import-overlay {
             position: absolute;
             inset: 0;
@@ -171,22 +267,30 @@
             font-weight: bold;
             pointer-events: none;
         }
+
         .import-overlay.loading {
-            background: rgba(0,0,0,0.55);
+            background: rgba(0, 0, 0, 0.55);
             color: #fff;
         }
+
         .import-overlay.loading::before {
             content: '';
             display: block;
             width: 22px;
             height: 22px;
-            border: 3px solid rgba(255,255,255,0.3);
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-top-color: #ffc107;
             border-radius: 50%;
             animation: spin 0.7s linear infinite;
             margin-bottom: 4px;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         .checkmark {
             position: absolute;
             top: 2px;
@@ -200,12 +304,13 @@
             line-height: 20px;
             font-size: 14px;
             font-weight: bold;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
+
         .image-loading-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -216,15 +321,17 @@
             border-radius: 4px;
             pointer-events: none;
         }
+
         .spinner-main {
             width: 40px;
             height: 40px;
-            border: 4px solid rgba(255,255,255,0.3);
+            border: 4px solid rgba(255, 255, 255, 0.3);
             border-top: 4px solid #fff;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             margin-bottom: 10px;
         }
+
         .error-mark {
             position: absolute;
             top: 2px;
@@ -238,27 +345,65 @@
             line-height: 20px;
             font-size: 14px;
             font-weight: bold;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
+
         .ocr-modal {
             display: none;
             position: fixed;
-            z-index: 1001; /* Above crop modal */
+            z-index: 1001;
+            /* Above crop modal */
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
             background-color: var(--bg-container);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            width: 680px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: 500px;
         }
-        .ocr-modal.stay-on-top { z-index: 2000; }
-        .ocr-modal-content { padding: 15px; }
-        .ocr-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; cursor: grab; background: var(--bg-body); padding: 5px; border-radius: 4px; }
-        .ocr-modal-header .close-btn { font-size: 24px; background: none; border: none; cursor: pointer; padding: 0 5px; color: var(--text-main); }
-        .ocr-modal-footer { text-align: right; margin-top: 10px; }
-        #ocrResultText { width: calc(100% - 12px); height: 200px; font-family: monospace; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); }
+
+        .ocr-modal.stay-on-top {
+            z-index: 2000;
+        }
+
+        .ocr-modal-content {
+            padding: 15px;
+        }
+
+        .ocr-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            cursor: grab;
+            background: var(--bg-body);
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .ocr-modal-header .close-btn {
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0 5px;
+            color: var(--text-main);
+        }
+
+        .ocr-modal-footer {
+            text-align: right;
+            margin-top: 10px;
+        }
+
+        #ocrResultText {
+            width: calc(100% - 12px);
+            height: 200px;
+            font-family: monospace;
+            background: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
 
         #tilt-ui {
             background: var(--bg-container);
@@ -272,32 +417,43 @@
             min-width: 130px;
             flex-shrink: 0;
         }
-        #tilt-ui button { margin: 0; min-width: 45px; }
+
+        #tilt-ui button {
+            margin: 0;
+            min-width: 45px;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: flex-start; align-items: center; position: relative;">
-            <button onclick="toggleScannerDrawer()" style="padding: 6px 12px; font-size: 18px; background: #6c757d; border: 1px solid #6c757d; color: #ffffff; border-radius: 4px; cursor: pointer;" title="Menu">☰</button>
-        </div>
-
-        <div id="scannerDrawerOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9980;" onclick="toggleScannerDrawer()"></div>
-        <nav id="scannerDrawer" style="position:fixed; top:0; left:0; height:100%; width:240px; max-width:240px; overflow:hidden; background:var(--bg-container); border-right:1px solid var(--border-color); box-shadow:2px 0 8px rgba(0,0,0,0.2); transform:translateX(-100%); transition:transform 0.2s ease; z-index:9990; padding:16px; box-sizing:border-box; display:flex; flex-direction:column; gap:10px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <strong style="font-size:15px;">Menu</strong>
-                <button onclick="toggleScannerDrawer()" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--text-main);">&times;</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; position: relative;">
+            <h1 style="margin: 0;">WysiScan</h1>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="openHelpModal()"
+                    style="padding: 5px 10px; font-size: 12px; background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color); border-radius: 4px; cursor: pointer;">❓
+                    Hot Keys</button>
+                <button onclick="toggleTheme()"
+                    style="padding: 5px 10px; font-size: 12px; background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color); border-radius: 4px; cursor: pointer;">🌓
+                    Theme</button>
+                <button onclick="exitApp()"
+                    style="background-color: #dc3545; color: white; padding: 5px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">EXIT</button>
+                <button onclick="openCliModal()" title="Process Selected with AI"
+                    style="background-color: #6f42c1; color: white; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🤖
+                    AI Prompt</button>
             </div>
-            <button onclick="openHelpModal(); toggleScannerDrawer();" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; background:transparent; border:none; color:var(--text-main); border-radius:4px; cursor:pointer; text-align:left;">❓ Hot Keys</button>
-            <button onclick="toggleTheme(); toggleScannerDrawer();" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; background:transparent; border:none; color:var(--text-main); border-radius:4px; cursor:pointer; text-align:left;">🌓 Theme</button>
-            <button onclick="exitApp(); toggleScannerDrawer();" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; text-align:left;">EXIT</button>
-        </nav>
+        </div>
+        <p>Ensure your scanner is connected and drivers are installed.</p>
 
         <div class="top-row-layout" style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
             <!-- Left Panel: Scanner Settings (Shortened) -->
-            <div class="scanner-settings-left" style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px;">
+            <div class="scanner-settings-left"
+                style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="scannerSelect" style="font-weight: bold;">Scanner:</label>
-                    <select id="scannerSelect" style="padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); width: 100%;" onchange="updateScannerPreference()">
+                    <select id="scannerSelect"
+                        style="padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); width: 100%;"
+                        onchange="updateScannerPreference()">
                         <option value="">(Detecting...)</option>
                     </select>
                 </div>
@@ -305,32 +461,46 @@
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="saveLocation" style="font-weight: bold;">Save Location:</label>
                     <div class="input-group">
-                        <input type="text" id="saveLocation" placeholder="Default: (app folder)/scans" onchange="fetchGroups(); updateConverterDefaultSource();" style="width: 100%; box-sizing: border-box;">
-                        <button id="browseBtn" onclick="browseForFolder()" style="white-space: nowrap;">Browse...</button>
+                        <input type="text" id="saveLocation" placeholder="Default: (app folder)/scans"
+                            onchange="fetchGroups(); updateConverterDefaultSource();"
+                            style="width: 100%; box-sizing: border-box;">
+                        <button id="browseBtn" onclick="browseForFolder()"
+                            style="white-space: nowrap;">Browse...</button>
                     </div>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="groupName" style="font-weight: bold;">Group Name:</label>
                     <div class="input-group">
-                        <input type="text" id="groupName" list="groupList" placeholder="Type new name, or select existing" autocomplete="off" style="width: 100%; box-sizing: border-box;" onkeydown="if (event.key === 'Enter') startOrResumeGroup();">
+                        <input type="text" id="groupName" list="groupList"
+                            placeholder="Type new name, or select existing" autocomplete="off"
+                            style="width: 100%; box-sizing: border-box;"
+                            onkeydown="if (event.key === 'Enter') startOrResumeGroup();">
                         <datalist id="groupList"></datalist>
-                        <button id="newGroupBtn" onclick="startOrResumeGroup(true)" style="white-space: nowrap; margin-right: 0;">Start Group</button>
-                        <button onclick="clearGroupAndUI()" title="Clear group name and reset UI" style="white-space: nowrap; background-color: #dc3545; color: white; margin-right: 0;">Clear</button>
+                        <button id="newGroupBtn" onclick="startOrResumeGroup()"
+                            style="white-space: nowrap; margin-right: 0;">Start Group</button>
+                        <button onclick="clearGroupAndUI()" title="Clear group name and reset UI"
+                            style="white-space: nowrap; background-color: #dc3545; color: white; margin-right: 0;">Clear</button>
                     </div>
                 </div>
             </div>
 
             <!-- Right Panel: Image Convert Panel (Square/Rectangular box) -->
-            <div class="converter-panel-right" style="flex: 1.2; min-width: 400px; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; background: var(--bg-container); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box;">
-                <div style="font-weight: bold; font-size: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--primary-color);">📦 Image Convert</div>
-                
+            <div class="converter-panel-right"
+                style="flex: 1.2; min-width: 400px; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; background: var(--bg-container); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box;">
+                <div
+                    style="font-weight: bold; font-size: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--primary-color);">
+                    📦 Image Convert</div>
+
                 <!-- 1. Save Location of Converted Images -->
                 <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label for="convSaveLocation" style="font-size: 13px; font-weight: 500;">Save Location (Converted):</label>
+                    <label for="convSaveLocation" style="font-size: 13px; font-weight: 500;">Save Location
+                        (Converted):</label>
                     <div class="input-group">
-                        <input type="text" id="convSaveLocation" placeholder="Default: Same as Source" style="width: 100%; font-size: 14px; padding: 6px 10px; box-sizing: border-box;">
-                        <button id="convBrowseBtn" onclick="browseForFolderConv()" style="font-size: 13px; padding: 6px 12px; white-space: nowrap;">Browse...</button>
+                        <input type="text" id="convSaveLocation" placeholder="Default: Same as Source"
+                            style="width: 100%; font-size: 14px; padding: 6px 10px; box-sizing: border-box;">
+                        <button id="convBrowseBtn" onclick="browseForFolderConv()"
+                            style="font-size: 13px; padding: 6px 12px; white-space: nowrap;">Browse...</button>
                     </div>
                 </div>
 
@@ -338,27 +508,38 @@
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="convSourceLocation" style="font-size: 13px; font-weight: 500;">Source Folder:</label>
                     <div class="input-group">
-                        <input type="text" id="convSourceLocation" placeholder="Default: Same as Scanner Save Location" style="width: 100%; font-size: 14px; padding: 6px 10px; box-sizing: border-box;">
-                        <button id="convSrcBrowseBtn" onclick="browseForFolderConvSrc()" style="font-size: 13px; padding: 6px 12px; white-space: nowrap;">Browse...</button>
+                        <input type="text" id="convSourceLocation" placeholder="Default: Same as Scanner Save Location"
+                            style="width: 100%; font-size: 14px; padding: 6px 10px; box-sizing: border-box;">
+                        <button id="convSrcBrowseBtn" onclick="browseForFolderConvSrc()"
+                            style="font-size: 13px; padding: 6px 12px; white-space: nowrap;">Browse...</button>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                <div
+                    style="display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
                     <!-- 3. Two Resize Options -->
                     <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
                         <span style="font-size: 13px; font-weight: 500;">Size Option:</span>
                         <div style="display: flex; gap: 15px; align-items: center; margin-top: 2px;">
-                            <label style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
-                                <input type="radio" name="convSizeOpt" value="2200" checked onchange="toggleConvCustomSize()"> 2200x2200
+                            <label
+                                style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                                <input type="radio" name="convSizeOpt" value="2200" checked
+                                    onchange="toggleConvCustomSize()"> 2200x2200
                             </label>
-                            <label style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
-                                <input type="radio" name="convSizeOpt" value="custom" onchange="toggleConvCustomSize()"> Custom
+                            <label
+                                style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                                <input type="radio" name="convSizeOpt" value="custom" onchange="toggleConvCustomSize()">
+                                Custom
                             </label>
                         </div>
                         <div id="convCustomDims" style="display: none; align-items: center; gap: 6px; margin-top: 6px;">
-                            <input type="number" id="convWidth" value="1920" style="width: 70px; padding: 5px; font-size: 13px; margin-bottom: 0; box-sizing: border-box;" placeholder="W">
+                            <input type="number" id="convWidth" value="1920"
+                                style="width: 70px; padding: 5px; font-size: 13px; margin-bottom: 0; box-sizing: border-box;"
+                                placeholder="W">
                             <span style="font-size: 12px; color: var(--text-main);">×</span>
-                            <input type="number" id="convHeight" value="1080" style="width: 70px; padding: 5px; font-size: 13px; margin-bottom: 0; box-sizing: border-box;" placeholder="H">
+                            <input type="number" id="convHeight" value="1080"
+                                style="width: 70px; padding: 5px; font-size: 13px; margin-bottom: 0; box-sizing: border-box;"
+                                placeholder="H">
                         </div>
                     </div>
 
@@ -366,10 +547,12 @@
                     <div style="display: flex; flex-direction: column; gap: 4px; flex: 0.8;">
                         <span style="font-size: 13px; font-weight: 500;">Format:</span>
                         <div style="display: flex; gap: 15px; align-items: center; margin-top: 2px;">
-                            <label style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                            <label
+                                style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
                                 <input type="radio" name="convFormat" value="jpg" checked> JPG
                             </label>
-                            <label style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                            <label
+                                style="cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px;">
                                 <input type="radio" name="convFormat" value="png"> PNG
                             </label>
                         </div>
@@ -378,41 +561,56 @@
 
                 <!-- 5. Two More Buttons: Batch Convert and Open GUI -->
                 <div style="display: flex; gap: 10px; margin-top: 4px;">
-                    <button id="btnBatchConvert" onclick="runBatchConvert()" style="flex: 1; padding: 10px; background-color: #28a745; color: white; border: none; font-size: 14px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-right: 0;">
+                    <button id="btnBatchConvert" onclick="runBatchConvert()"
+                        style="flex: 1; padding: 10px; background-color: #28a745; color: white; border: none; font-size: 14px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-right: 0;">
                         ⚡ Batch Convert
                     </button>
-                    <button id="btnOpenGUI" onclick="runOpenGUI()" style="flex: 1; padding: 10px; background-color: #17a2b8; color: white; border: none; font-size: 14px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-right: 0;">
+                    <button id="btnOpenGUI" onclick="runOpenGUI()"
+                        style="flex: 1; padding: 10px; background-color: #17a2b8; color: white; border: none; font-size: 14px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-right: 0;">
                         🖥️ Open GUI
                     </button>
                 </div>
             </div>
         </div>
 
-        <div class="controls" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); padding: 15px 0;">
+        <div class="controls"
+            style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); padding: 15px 0;">
             <button id="addToGroupBtn" onclick="addToGroup()" disabled>Scan</button>
             <button id="importBtn" onclick="importImage()" disabled>Import</button>
-            <button id="revertCropBtn" onclick="recropLast(true)" title="Start over and crop from original image" disabled>Crop</button>
+            <button id="revertCropBtn" onclick="recropLast(true)" title="Start over and crop from original image"
+                disabled>Crop</button>
             <span style="border-left: 1px solid var(--border-color); height: 24px; margin: 0 5px;"></span>
-            
+
             <label style="font-weight: 500;" for="cropPadding">Padding:</label>
-            <input type="number" id="cropPadding" value="5" style="width: 60px; padding: 6px; font-size: 14px; margin-bottom: 0; box-sizing: border-box;" title="Pixels to pad (can be negative)">
-            <button onclick="openPaddingModal()" title="Edit Padding Options" style="padding: 6px 10px; background-color: #6c757d; color: white; border: none; min-width: auto; margin-right: 0;">⚙️</button>
-            <button id="recropBtn" onclick="recropLast(false)" title="Apply new padding to the active cropped image" disabled>Adjust Pad</button>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 14px;">
+            <input type="number" id="cropPadding" value="5"
+                style="width: 60px; padding: 6px; font-size: 14px; margin-bottom: 0; box-sizing: border-box;"
+                title="Pixels to pad (can be negative)">
+            <button onclick="openPaddingModal()" title="Edit Padding Options"
+                style="padding: 6px 10px; background-color: #6c757d; color: white; border: none; min-width: auto; margin-right: 0;">⚙️</button>
+            <button id="recropBtn" onclick="recropLast(false)" title="Apply new padding to the active cropped image"
+                disabled>Adjust Pad</button>
+            <label
+                style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 14px;">
                 <input type="checkbox" id="autoDeleteOriginal"> Auto Delete Original
             </label>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 14px;">
+            <label
+                style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 14px;">
                 <input type="checkbox" id="autoScanCheckbox"> Autoscan
             </label>
-            
+
             <span style="border-left: 1px solid var(--border-color); height: 24px; margin: 0 5px;"></span>
-            
-            <div style="display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; width: fit-content; font-size: 14px;">
+
+            <div
+                style="display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; width: fit-content; font-size: 14px;">
                 <strong>Crop Mode:</strong>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio" name="mediaType" value="auto" checked onchange="handleCropModeChange()"> Auto</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio" name="mediaType" value="cd" onchange="handleCropModeChange()"> Custom1</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio" name="mediaType" value="tape" onchange="handleCropModeChange()"> Custom2</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio" name="mediaType" value="lp" onchange="handleCropModeChange()"> Custom3</label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
+                        name="mediaType" value="auto" checked onchange="handleCropModeChange()"> Auto</label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
+                        name="mediaType" value="cd" onchange="handleCropModeChange()"> Custom1</label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
+                        name="mediaType" value="tape" onchange="handleCropModeChange()"> Custom2</label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
+                        name="mediaType" value="lp" onchange="handleCropModeChange()"> Custom3</label>
             </div>
         </div>
 
@@ -422,25 +620,35 @@
             <!-- Manual Tilt UI vertically aligned on the left -->
             <div id="tilt-ui">
                 <div style="font-weight: bold; font-size: 13px; margin-bottom: 2px;">📐 Tilt Correction</div>
-                
-                <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
-                    <button onclick="adjustTilt(-5)" title="Tilt Left 5°" style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;&lt;</button>
-                    <button onclick="adjustTilt(-1)" title="Tilt Left 1°" style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;</button>
-                </div>
-
-                <input type="number" id="tiltAngle" value="0" step="0.1" style="width: 70px; text-align: center; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: var(--input-bg); color: var(--text-main);" title="Manual degree input">
 
                 <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
-                    <button onclick="adjustTilt(5)" title="Tilt Right 5°" style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;&gt;</button>
-                    <button onclick="adjustTilt(1)" title="Tilt Right 1°" style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;</button>
+                    <button onclick="adjustTilt(-5)" title="Tilt Left 5°"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;&lt;</button>
+                    <button onclick="adjustTilt(-1)" title="Tilt Left 1°"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;</button>
                 </div>
-                
+
+                <input type="number" id="tiltAngle" value="0" step="0.1"
+                    style="width: 70px; text-align: center; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: var(--input-bg); color: var(--text-main);"
+                    title="Manual degree input">
+
+                <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
+                    <button onclick="adjustTilt(5)" title="Tilt Right 5°"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;&gt;</button>
+                    <button onclick="adjustTilt(1)" title="Tilt Right 1°"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;</button>
+                </div>
+
                 <div style="width: 100%; display: flex; gap: 5px;">
-                    <button onclick="applyTilt()" style="flex: 1; padding: 8px 4px; background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Apply</button>
-                    <button onclick="document.getElementById('tiltAngle').value = 0" style="flex: 1; padding: 8px 4px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer; font-size: 12px;">Reset</button>
+                    <button onclick="applyTilt()"
+                        style="flex: 1; padding: 8px 4px; background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Apply</button>
+                    <button onclick="document.getElementById('tiltAngle').value = 0"
+                        style="flex: 1; padding: 8px 4px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer; font-size: 12px;">Reset</button>
                 </div>
-                
-                <button onclick="autoDeskew()" style="width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">✨ Auto-Align</button>
+
+                <button onclick="autoDeskew()"
+                    style="width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">✨
+                    Auto-Align</button>
             </div>
 
             <div class="main-previews" style="flex: 2;">
@@ -448,32 +656,45 @@
                     <div>
                         <h3>Last Scan (Original)</h3>
                         <div class="image-controls">
-                            <button onclick="rotateImage(document.getElementById('originalImg'), 'left')" title="Rotate Left 90°">⟲</button>
-                            <button onclick="rotateImage(document.getElementById('originalImg'), 'right')" title="Rotate Right 90°">⟳</button>
+                            <button onclick="rotateImage(document.getElementById('originalImg'), 'left')"
+                                title="Rotate Left 90°">⟲</button>
+                            <button onclick="rotateImage(document.getElementById('originalImg'), 'right')"
+                                title="Rotate Right 90°">⟳</button>
                             <button onclick="undoLastAction()" title="Undo Last Action (Ctrl+Z)">↩️</button>
                             <button onclick="redoLastAction()" title="Redo Last Undo (Ctrl+Y)">↪️</button>
-                            <button onclick="openCropper(document.getElementById('originalImg'))" title="Manual Crop">✂️</button>
+                            <button onclick="openCropper(document.getElementById('originalImg'))"
+                                title="Manual Crop">✂️</button>
                             <button onclick="openCropToReplace()" title="Crop Original to Replace Output">✂️➜</button>
                         </div>
-                        <img id="originalImg" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg==" alt="Original Scan will appear here" data-path="">
+                        <img id="originalImg"
+                            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg=="
+                            alt="Original Scan will appear here" data-path="">
                     </div>
                     <div>
                         <h3>Last Scan (Cropped)</h3>
                         <div class="image-controls">
-                            <button onclick="rotateImage(document.getElementById('croppedImg'), 'left')" title="Rotate Left 90°">⟲</button>
-                            <button onclick="rotateImage(document.getElementById('croppedImg'), 'right')" title="Rotate Right 90°">⟳</button>
+                            <button onclick="rotateImage(document.getElementById('croppedImg'), 'left')"
+                                title="Rotate Left 90°">⟲</button>
+                            <button onclick="rotateImage(document.getElementById('croppedImg'), 'right')"
+                                title="Rotate Right 90°">⟳</button>
                             <button onclick="undoLastAction()" title="Undo Last Action (Ctrl+Z)">↩️</button>
                             <button onclick="redoLastAction()" title="Redo Last Undo (Ctrl+Y)">↪️</button>
-                            <button onclick="openCropper(document.getElementById('croppedImg'))" title="Manual Crop (Overwrite)">✂️</button>
+                            <button onclick="openCropper(document.getElementById('croppedImg'))"
+                                title="Manual Crop (Overwrite)">✂️</button>
                             <button onclick="openCropAsNew()" title="Crop From This Image as New">✂️+</button>
                         </div>
                         <div id="croppedImgContainer" style="position: relative;">
-                            <img id="croppedImg" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg==" alt="Cropped version will appear here" data-path="">
+                            <img id="croppedImg"
+                                src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg=="
+                                alt="Cropped version will appear here" data-path="">
                         </div>
                         <div style="margin-top: 10px; display: flex; gap: 8px;">
-                            <button onclick="resetCropToOriginal()" title="Reset to Full Original Scan" style="flex: 1; margin-right: 0;">Full</button>
-                            <button type="button" onclick="openImageExternal(document.getElementById('croppedImg'))" title="Open in Default Application" style="flex: 1; margin-right: 0;">Open</button>
-                            <button onclick="saveCurrentCropped()" style="background-color: #28a745; flex: 1; margin-right: 0;">Save</button>
+                            <button onclick="resetCropToOriginal()" title="Reset to Full Original Scan"
+                                style="flex: 1; margin-right: 0;">Full</button>
+                            <button type="button" onclick="openImageExternal(document.getElementById('croppedImg'))"
+                                title="Open in Default Application" style="flex: 1; margin-right: 0;">Open</button>
+                            <button onclick="saveCurrentCropped()"
+                                style="background-color: #28a745; flex: 1; margin-right: 0;">Save</button>
                         </div>
                     </div>
                 </div>
@@ -482,20 +703,30 @@
                     <div id="import-queue"></div>
                 </div>
             </div>
-            <div class="sidebar" style="flex: 1; border-left: 1px solid var(--border-color); padding-left: 20px; height: 75vh; display: flex; flex-direction: column;">
-                <div style="padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; flex-shrink: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="sidebar"
+                style="flex: 1; border-left: 1px solid var(--border-color); padding-left: 20px; height: 75vh; display: flex; flex-direction: column;">
+                <div
+                    style="padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; flex-shrink: 0;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <h3 style="margin: 0;">Group Actions</h3>
-                        <label style="font-size: 12px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 5px;">
-                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"> Select All
+                        <label
+                            style="font-size: 12px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)">
+                            Select All
                         </label>
                     </div>
                     <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
-                        <button onclick="refreshGroupGallery()" title="Refresh Gallery" style="padding: 4px 8px; font-size: 12px; background-color: #6c757d; color: white; min-width: auto; margin-right: 0;">🔄</button>
-                        <button onclick="handleFiles('save')" title="Save Marked" style="background-color: #28a745; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">💾</button>
-                        <button onclick="openRenameModal()" title="Rename Marked" style="background-color: #ffc107; color: black; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">✏️</button>
-                        <button onclick="handleFiles('delete')" title="Delete Marked" style="background-color: #dc3545; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🗑️</button>
-                        <button onclick="openSaveFolder()" title="Open Folder" style="background-color: #17a2b8; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">📂</button>
+                        <button onclick="refreshGroupGallery()" title="Refresh Gallery"
+                            style="padding: 4px 8px; font-size: 12px; background-color: #6c757d; color: white; min-width: auto; margin-right: 0;">🔄</button>
+                        <button onclick="handleFiles('save')" title="Save Marked"
+                            style="background-color: #28a745; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">💾</button>
+                        <button onclick="openRenameModal()" title="Rename Marked"
+                            style="background-color: #ffc107; color: black; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">✏️</button>
+                        <button onclick="handleFiles('delete')" title="Delete Marked"
+                            style="background-color: #dc3545; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🗑️</button>
+                        <button onclick="openSaveFolder()" title="Open Folder"
+                            style="background-color: #17a2b8; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">📂</button>
                     </div>
                 </div>
                 <div id="scan-gallery" style="overflow-y: auto; flex: 1; margin-top: 0;">
@@ -528,7 +759,8 @@
                 <button onclick="closeHelpModal()" class="close-btn" title="Close">&times;</button>
             </div>
             <div id="hotkey-help-content" style="max-height: 400px; overflow-y: auto;">
-                <h4>Keyboard Shortcuts <span id="hotkey-capture-status" style="font-size: 0.8em; color: #007bff; margin-left: 10px;"></span></h4>
+                <h4>Keyboard Shortcuts <span id="hotkey-capture-status"
+                        style="font-size: 0.8em; color: #007bff; margin-left: 10px;"></span></h4>
                 <ul id="hotkey-list"></ul>
             </div>
             <div class="ocr-modal-footer">
@@ -543,9 +775,14 @@
                 <h3 style="margin: 0;">Manual Crop</h3>
                 <div style="font-size: 12px; color: #666;">Use the mouse wheel to zoom in and out</div>
                 <div>
-                    <label style="margin-right: 10px; cursor: pointer; user-select: none;"><input type="checkbox" id="autoFocusCrop"> Auto-Focus</label>
-                    <button onclick="clearCropSelection()" style="padding: 5px 10px; font-size: 14px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 5px;">Clear Selection</button>
-                    <button onclick="fitToScreen()" style="padding: 5px 10px; font-size: 14px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset View</button>
+                    <label style="margin-right: 10px; cursor: pointer; user-select: none;"><input type="checkbox"
+                            id="autoFocusCrop"> Auto-Focus</label>
+                    <button onclick="clearCropSelection()"
+                        style="padding: 5px 10px; font-size: 14px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 5px;">Clear
+                        Selection</button>
+                    <button onclick="fitToScreen()"
+                        style="padding: 5px 10px; font-size: 14px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset
+                        View</button>
                 </div>
             </div>
             <div class="crop-container">
@@ -568,7 +805,9 @@
                 <input type="number" id="newPaddingVal" placeholder="New Value" style="flex: 1; margin-bottom: 0;">
                 <button onclick="addPaddingOption()" style="background-color: #28a745; margin-right: 0;">Add</button>
             </div>
-            <div id="paddingListContainer" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; background: var(--input-bg);"></div>
+            <div id="paddingListContainer"
+                style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; background: var(--input-bg);">
+            </div>
             <div class="ocr-modal-footer">
                 <button onclick="closePaddingModal()">Close</button>
             </div>
@@ -581,20 +820,99 @@
                 <button onclick="closeRenameModal()" class="close-btn" title="Close">&times;</button>
             </div>
             <div style="margin-bottom: 15px;">
-                <label for="newFileNameInput" style="font-weight: bold; display: block; margin-bottom: 5px;" id="renameModalLabel">New Name:</label>
-                <input type="text" id="newFileNameInput" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); border-radius: 4px;" onkeydown="if (event.key === 'Enter') submitRename();">
+                <label for="newFileNameInput" style="font-weight: bold; display: block; margin-bottom: 5px;"
+                    id="renameModalLabel">New Name:</label>
+                <input type="text" id="newFileNameInput"
+                    style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); border-radius: 4px;"
+                    onkeydown="if (event.key === 'Enter') submitRename();">
             </div>
             <div class="ocr-modal-footer">
-                <button onclick="closeRenameModal()" style="padding: 6px 12px; font-size: 14px; background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; margin-right: 5px;">Cancel</button>
-                <button onclick="submitRename()" style="padding: 6px 12px; font-size: 14px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 0;">Rename</button>
+                <button onclick="closeRenameModal()"
+                    style="padding: 6px 12px; font-size: 14px; background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; margin-right: 5px;">Cancel</button>
+                <button onclick="submitRename()"
+                    style="padding: 6px 12px; font-size: 14px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 0;">Rename</button>
             </div>
         </div>
     </div>
 
     <script>
         // Heartbeat keep-alive to notify scanner_server.py that the frontend is active
+        async function openCliModal() {
+            const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
+
+            if (checked.length < 1 || checked.length > 5) {
+                showToast("Please select between 1 and 5 images to process.", "warn");
+                return;
+            }
+
+            const listDiv = document.getElementById('cliSelectedList');
+            listDiv.innerHTML = checked.map(p => `<div>📄 ${p.split(/[\\/]/).pop()}</div>`).join('');
+            document.getElementById('cliSelectedCount').innerText = checked.length;
+            document.getElementById('cliResultText').value = '';
+            document.getElementById('cliStatusMsg').innerText = '';
+
+            // Load default prompt from json
+            try {
+                const res = await fetch('/get-default-prompt');
+                const data = await res.json();
+                if (data.status === 'success' && data.prompt) {
+                    if (typeof data.prompt === 'string') {
+                        document.getElementById('cliPromptText').value = data.prompt;
+                    } else if (typeof data.prompt === 'object') {
+                        document.getElementById('cliPromptText').value = data.prompt.default_prompt || data.prompt.prompt || JSON.stringify(data.prompt, null, 2);
+                    }
+                }
+            } catch (e) {
+                console.error("Could not load default prompt:", e);
+            }
+
+            document.getElementById('cliModal').style.display = 'block';
+        }
+
+        function closeCliModal() {
+            document.getElementById('cliModal').style.display = 'none';
+        }
+
+        async function submitCliPrompt() {
+            const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
+            const prompt = document.getElementById('cliPromptText').value.trim();
+            const btn = document.getElementById('btnRunCli');
+            const statusMsg = document.getElementById('cliStatusMsg');
+            const resultBox = document.getElementById('cliResultText');
+
+            if (!prompt) {
+                showToast("Prompt text cannot be empty.", "warn");
+                return;
+            }
+
+            btn.disabled = true;
+            statusMsg.innerText = "Processing CLI prompt...";
+            resultBox.value = "Executing command via backend CLI...";
+
+            try {
+                const response = await fetch('/run-cli-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt, files: checked })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    resultBox.value = data.output;
+                    statusMsg.innerText = "Completed successfully!";
+                } else {
+                    resultBox.value = "Error: " + data.message;
+                    statusMsg.innerText = "Failed.";
+                }
+            } catch (e) {
+                resultBox.value = "Network Error: " + e;
+                statusMsg.innerText = "Error.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
         function sendHeartbeat() {
-            fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+            fetch('/api/heartbeat', { method: 'POST' }).catch(() => { });
         }
         sendHeartbeat();
         setInterval(sendHeartbeat, 3000);
@@ -637,20 +955,6 @@
         function openHelpModal() { document.getElementById('helpModal').style.display = 'block'; }
         function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
 
-        function toggleScannerDrawer() {
-            const drawer = document.getElementById('scannerDrawer');
-            const overlay = document.getElementById('scannerDrawerOverlay');
-            if (!drawer || !overlay) return;
-            const isOpen = drawer.style.transform === 'translateX(0%)';
-            if (isOpen) {
-                drawer.style.transform = 'translateX(-100%)';
-                overlay.style.display = 'none';
-            } else {
-                drawer.style.transform = 'translateX(0%)';
-                overlay.style.display = 'block';
-            }
-        }
-
         // Theme Logic
         function toggleTheme() {
             const body = document.body;
@@ -674,12 +978,12 @@
             const checkboxes = document.querySelectorAll('#scan-gallery .file-checkbox');
             const selectAll = document.getElementById('selectAllCheckbox');
             if (!selectAll) return;
-            
+
             if (checkboxes.length === 0) {
                 selectAll.checked = false;
                 return;
             }
-            
+
             const allChecked = Array.from(checkboxes).every(cb => cb.checked);
             selectAll.checked = allChecked;
         }
@@ -750,23 +1054,23 @@
                 showToast("No group selected to refresh.", "warn")
                 return;
             }
-            // This will clear and reload the gallery (no autoscan on refresh)
-            await startOrResumeGroup(false);
+            // This will clear and reload the gallery
+            await startOrResumeGroup();
         }
 
         function updateActionButtonsState() {
             const currentInput = document.getElementById('groupName').value.trim();
             const groupMatches = groupStarted && (currentInput === currentGroupName);
-            
+
             document.getElementById('addToGroupBtn').disabled = !groupMatches;
             document.getElementById('importBtn').disabled = !groupMatches;
-            
+
             updateCropButtonsState();
         }
 
         function setButtonsDisabled(disabled) {
             document.getElementById('newGroupBtn').disabled = disabled;
-            
+
             if (disabled) {
                 document.getElementById('addToGroupBtn').disabled = true;
                 document.getElementById('importBtn').disabled = true;
@@ -780,7 +1084,7 @@
         function updateCropButtonsState() {
             const currentInput = document.getElementById('groupName').value.trim();
             const groupMatches = groupStarted && (currentInput === currentGroupName);
-            
+
             document.getElementById('recropBtn').disabled = !groupMatches || !lastCroppedPath;
             document.getElementById('revertCropBtn').disabled = !groupMatches || !lastOriginalPath;
         }
@@ -791,12 +1095,12 @@
             if (saveLocation) {
                 url += `?path=${encodeURIComponent(saveLocation)}`;
             }
-            
+
             try {
                 const response = await fetch(url);
                 const data = await response.json();
                 knownGroups = data.groups || {};
-                
+
                 const dataList = document.getElementById('groupList');
                 dataList.innerHTML = '';
 
@@ -816,7 +1120,7 @@
             }
         }
 
-        async function startOrResumeGroup(allowAutoScan = false) {
+        async function startOrResumeGroup() {
             const newGroupName = getGroupName();
 
             if (currentGroupName && currentGroupName !== newGroupName) {
@@ -843,7 +1147,7 @@
             const queue = document.getElementById('import-queue');
             queue.innerHTML = '';
             queueContainer.style.display = 'none';
-            
+
             // Refresh groups to ensure we have latest state
             await fetchGroups();
 
@@ -879,7 +1183,7 @@
                 status.innerText = `Starting new group '${groupName}'.`;
             }
 
-            if (allowAutoScan && document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked && knownGroups[groupName] === undefined) {
+            if (document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked) {
                 performScan();
             }
         }
@@ -936,7 +1240,7 @@
                 showToast("Please start a 'New Group' before importing.", "warn")
                 return;
             }
-            
+
             const importBtn = document.getElementById('importBtn');
             setButtonsDisabled(true);
             importBtn.innerText = "Browsing...";
@@ -944,7 +1248,7 @@
             try {
                 const browseResponse = await fetch('/browse-file', { method: 'POST' });
                 const browseData = await browseResponse.json();
-                
+
                 if (browseData.status !== 'success' || !browseData.paths || browseData.paths.length === 0) {
                     if (browseData.status !== 'cancelled') {
                         showToast("Error selecting file: " + (browseData.message || "No files selected."), "error")
@@ -953,24 +1257,24 @@
                     importBtn.innerText = "Import";
                     return;
                 }
-                
+
                 const paths = browseData.paths;
                 const queueContainer = document.getElementById('import-queue-container');
                 const queue = document.getElementById('import-queue');
-                
+
                 queueContainer.style.display = 'block';
                 queue.innerHTML = '';
-                
+
                 paths.forEach(path => {
                     const div = document.createElement('div');
                     div.className = 'import-item';
                     div.title = path;
                     div.dataset.path = path;
                     div.onclick = () => processImportedFile(path);
-                    
+
                     const img = document.createElement('img');
                     img.src = `/view-image?path=${encodeURIComponent(path)}`;
-                    
+
                     div.appendChild(img);
                     queue.appendChild(div);
                 });
@@ -1027,7 +1331,7 @@
                         media_type: mediaType
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.status === 'success') {
                     handleScanSuccess(data, currentCounter, status);
@@ -1092,11 +1396,11 @@
             }
             croppedImg.src = data.cropped;
             croppedImg.dataset.path = data.cropped_path;
-            
+
             // If original was deleted, we can't "Revert" to it, but we can still "Adjust Pad" the cropped one
             lastOriginalPath = data.original_deleted ? "" : data.original_path;
             lastCroppedPath = data.cropped_path;
-            
+
             status.innerText = `Scan Complete!`;
 
             // Add to gallery at the bottom and refresh groups
@@ -1138,7 +1442,7 @@
             const originalImg = document.getElementById('originalImg');
             const croppedImg = document.getElementById('croppedImg');
             const placeholderSvg = PLACEHOLDER_SVG;
-            
+
             lastOriginalPath = originalPath || "";
             if (originalPath) {
                 originalImg.src = originalSrc || placeholderSvg;
@@ -1153,9 +1457,9 @@
             lastCroppedPath = croppedPath || "";
             croppedImg.src = croppedSrc;
             croppedImg.dataset.path = lastCroppedPath;
-            
+
             updateCropButtonsState();
-            
+
             // Scroll to top to see the loaded image
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -1169,13 +1473,13 @@
 
             const itemDiv = document.createElement('div');
             itemDiv.className = 'gallery-item';
-            
+
             // Store paths for loading into main view
             itemDiv.dataset.originalSrc = originalSrc || "";
             itemDiv.dataset.croppedSrc = croppedSrc || "";
             itemDiv.dataset.originalPath = originalPath || "";
             itemDiv.dataset.croppedPath = croppedPath || "";
-            
+
             const croppedName = getFilename(croppedPath);
 
             itemDiv.innerHTML = `
@@ -1191,7 +1495,7 @@
                     <img id="${croppedImgId}" src="${croppedSrc}" alt="Cropped Scan ${itemNumber}" data-path="${croppedPath}" style="cursor: pointer;" title="Click to edit in main view">
                 </div>
             `;
-            
+
             // Add click handler to load into main view
             const img = itemDiv.querySelector('img');
             img.onclick = () => loadIntoMainView(
@@ -1250,10 +1554,10 @@
                     background: false,
                     autoCrop: false, // Start with no selection box
                     zoomOnWheel: true,
-                    ready: function() {
+                    ready: function () {
                         // Opened with a clean canvas, no auto crop box
                     },
-                    cropend: function() {
+                    cropend: function () {
                         if (document.getElementById('autoFocusCrop').checked) {
                             autoFocusSelection();
                         }
@@ -1286,7 +1590,7 @@
                 availableW / cropData.width,
                 availableH / cropData.height
             );
-            
+
             const cropCenterX = cropData.x + cropData.width / 2;
             const cropCenterY = cropData.y + cropData.height / 2;
             const containerCenterX = containerData.width / 2;
@@ -1419,7 +1723,7 @@
         async function resetCropToOriginal() {
             const originalImg = document.getElementById('originalImg');
             const croppedImg = document.getElementById('croppedImg');
-            
+
             const originalPath = originalImg.dataset.path;
             const croppedPath = croppedImg.dataset.path;
 
@@ -1447,7 +1751,7 @@
                     const timestamp = new Date().getTime();
                     // Update main view
                     croppedImg.src = `${croppedImg.src.split('&t=')[0]}&t=${timestamp}`;
-                    
+
                     // Update gallery
                     document.querySelectorAll('img').forEach(img => {
                         if (img.dataset.path === croppedPath) {
@@ -1482,10 +1786,10 @@
             const revertCropBtn = document.getElementById('revertCropBtn');
             recropBtn.disabled = true;
             revertCropBtn.disabled = true;
-            
+
             recropBtn.innerText = "Processing...";
             revertCropBtn.innerText = "Processing...";
-            
+
             const container = document.getElementById('croppedImgContainer');
             let overlay = null;
             if (container) {
@@ -1522,10 +1826,10 @@
             } catch (e) {
                 console.error("Recrop error:", e);
                 showToast("Network error: " + e.message, "error")
-            } finally { 
+            } finally {
                 if (overlay) overlay.remove();
                 setButtonsDisabled(false);
-                recropBtn.innerText = "Adjust Pad"; 
+                recropBtn.innerText = "Adjust Pad";
                 revertCropBtn.innerText = "Crop";
             }
         }
@@ -1597,7 +1901,7 @@
                     body: JSON.stringify({ action, files, save_location: saveLocation })
                 });
                 const data = await response.json();
-                
+
                 if (data.status === 'success') {
                     if (action === 'save') {
                         showToast(`Successfully processed ${data.processed} files.`, "success")
@@ -1607,10 +1911,10 @@
                         checkboxes.forEach(cb => {
                             const container = cb.closest('div'); // The div inside gallery-item
                             const galleryItem = container.closest('.gallery-item');
-                            
+
                             // Remove the specific image container
                             container.remove();
-                            
+
                             // If gallery item is empty, remove it entirely
                             if (galleryItem.children.length === 0) {
                                 galleryItem.remove();
@@ -1725,7 +2029,7 @@
                     } else {
                         showToast(`Successfully renamed ${data.processed} files.`, "success");
                     }
-                    
+
                     let targetGroupName = safeNewName;
                     const lastUnderscore = safeNewName.lastIndexOf('_');
                     if (lastUnderscore !== -1) {
@@ -1739,9 +2043,9 @@
                         currentGroupName = targetGroupName;
                         document.getElementById('groupName').value = targetGroupName;
                     }
-                    
+
                     closeRenameModal();
-                    await startOrResumeGroup(false);
+                    await startOrResumeGroup();
                 } else {
                     showToast("Error renaming files: " + (data.message || "Unknown error"), "error");
                 }
@@ -1852,7 +2156,7 @@
                             img.src = data.new_url;
                         });
                     } else if (data.message !== 'No undo history found for this file.') {
-                       showToast(`Undo failed for ${path.split(/[\\/]/).pop()}: ${data.message}`, "error")
+                        showToast(`Undo failed for ${path.split(/[\\/]/).pop()}: ${data.message}`, "error")
                     }
                 } catch (e) { showToast(`A network error occurred during undo: ${e}`, "error") }
             }
@@ -1975,7 +2279,7 @@
                     document.getElementById('saveLocation').value = config.save_location;
                     lastScanSaveLoc = config.save_location;
                 }
-                
+
                 // Load Image Convert Panel settings
                 if (config.conv_save_location) {
                     document.getElementById('convSaveLocation').value = config.conv_save_location;
@@ -2037,13 +2341,13 @@
 
             document.getElementById('saveCropBtn').addEventListener('click', saveCrop);
             document.getElementById('cancelCropBtn').addEventListener('click', closeCropper);
-            
+
             // Save padding setting when changed
             document.getElementById('cropPadding').addEventListener('change', async (e) => {
                 const newPadding = parseInt(e.target.value) || 0;
                 const selectedMode = document.querySelector('input[name="mediaType"]:checked').value;
                 paddingByMode[selectedMode] = newPadding;
-                
+
                 try {
                     await fetch('/update-config', {
                         method: 'POST',
@@ -2081,7 +2385,7 @@
         });
 
         // Auto-load group when selected from datalist or disable action buttons if manually modified
-        document.getElementById('groupName').addEventListener('input', function(event) {
+        document.getElementById('groupName').addEventListener('input', function (event) {
             const selectedGroup = event.target.value.trim();
             if (knownGroups[selectedGroup] !== undefined) {
                 startOrResumeGroup();
@@ -2141,7 +2445,7 @@
                 const data = await response.json();
                 const select = document.getElementById('scannerSelect');
                 select.innerHTML = '<option value="">(Default Scanner)</option>';
-                
+
                 if (data.status === 'success' && data.scanners) {
                     data.scanners.forEach(s => {
                         const opt = document.createElement('option');
@@ -2184,7 +2488,7 @@
             const status = document.getElementById('status');
             const btn = document.getElementById('extractAndLookupBtn');
             const originalText = btn.innerText;
-            
+
             btn.disabled = true;
             btn.innerText = 'Working...';
             status.innerText = 'Performing OCR and web lookup... This may take a moment.';
@@ -2219,7 +2523,7 @@
             const checkbox = document.getElementById('ocrStayOnTop');
 
             textarea.value = text;
-            
+
             const stayOnTop = localStorage.getItem('wysiscan_ocr_stay_on_top') === 'true';
             checkbox.checked = stayOnTop;
             modal.classList.toggle('stay-on-top', stayOnTop);
@@ -2228,7 +2532,7 @@
         }
 
         // --- Draggable Modal Logic ---
-        (function() {
+        (function () {
             const modal = document.getElementById('ocrResultModal');
             const header = modal.querySelector('.ocr-modal-header');
             let isDragging = false;
@@ -2238,13 +2542,13 @@
                 isDragging = true;
                 startX = e.clientX;
                 startY = e.clientY;
-                
+
                 // Switch from transform centering to absolute positioning for dragging
                 const rect = modal.getBoundingClientRect();
                 modal.style.transform = 'none';
                 modal.style.left = rect.left + 'px';
                 modal.style.top = rect.top + 'px';
-                
+
                 initialLeft = rect.left;
                 initialTop = rect.top;
                 header.style.cursor = 'grabbing';
@@ -2285,7 +2589,7 @@
                     const effectivePadding = isOriginal ? 0 : padding;
                     const resp = await fetch('/deskew-image', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ path: path, angle: angle, padding: effectivePadding, skip_crop: isOriginal })
                     });
                     const res = await resp.json();
@@ -2322,14 +2626,14 @@
             const oldText = btn.innerText;
             btn.innerText = "Aligning...";
             btn.disabled = true;
-            
+
             for (const path of pathsToDeskew) {
                 try {
                     const isOriginal = (path === lastOriginalPath);
                     const effectivePadding = isOriginal ? 0 : padding;
                     const resp = await fetch('/auto-deskew', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ path: path, padding: effectivePadding })
                     });
                     const res = await resp.json();
@@ -2368,10 +2672,10 @@
             if (hotkeyObj.ctrl) parts.push('Ctrl');
             if (hotkeyObj.alt) parts.push('Alt');
             if (hotkeyObj.shift) parts.push('Shift');
-            
+
             let displayKey = hotkeyObj.key;
             if (displayKey === ' ') displayKey = 'Space';
-            
+
             parts.push(displayKey);
             return parts.join(' + ');
         }
@@ -2389,10 +2693,10 @@
                 li.style.marginBottom = '8px';
 
                 li.innerHTML = `
-                    <span style="flex: 1; margin-right: 12px;">${hotkey.description}</span>
-                    <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>${hotkey.description}</span>
+                    <div>
                         <span style="display: inline-block; min-width: 120px; text-align: center; padding: 2px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">${formatHotkey(hotkey)}</span>
-                        <button onclick="changeHotkey('${action}')" style="padding: 2px 6px; font-size: 12px; margin: 0;">Change</button>
+                        <button onclick="changeHotkey('${action}')" style="padding: 2px 6px; font-size: 12px; margin: 0 0 0 5px;">Change</button>
                     </div>
                 `;
                 list.appendChild(li);
@@ -2521,24 +2825,24 @@
             const outputFolder = document.getElementById('convSaveLocation').value.trim();
             const sizeOpt = document.querySelector('input[name="convSizeOpt"]:checked').value;
             const formatType = document.querySelector('input[name="convFormat"]:checked').value;
-            
+
             let width = 2200;
             let height = 2200;
-            
+
             if (sizeOpt === 'custom') {
                 width = parseInt(document.getElementById('convWidth').value) || 1920;
                 height = parseInt(document.getElementById('convHeight').value) || 1080;
             }
-            
+
             if (!sourceFolder) {
                 showToast("Please select a Source Folder first.", "warn");
                 return;
             }
-            
+
             btn.disabled = true;
             btn.innerText = "⏳ Converting...";
             showToast("Batch conversion started...", "info");
-            
+
             try {
                 // Save inputs to WysiScan config
                 await fetch('/update-config', {
@@ -2605,7 +2909,7 @@
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             if (!container) return;
-            
+
             const toast = document.createElement('div');
             toast.style.pointerEvents = 'auto';
             toast.style.minWidth = '250px';
@@ -2621,7 +2925,7 @@
             toast.style.display = 'flex';
             toast.style.alignItems = 'center';
             toast.style.gap = '10px';
-            
+
             if (type === 'success') {
                 toast.style.background = '#28a745';
             } else if (type === 'error') {
@@ -2632,17 +2936,17 @@
             } else {
                 toast.style.background = '#007bff';
             }
-            
+
             toast.innerHTML = `<span>${message}</span>`;
             container.appendChild(toast);
-            
+
             // Force a reflow
             toast.offsetHeight;
-            
+
             // Animate in
             toast.style.transform = 'translateY(0)';
             toast.style.opacity = '1';
-            
+
             // Auto-remove after 4 seconds
             setTimeout(() => {
                 toast.style.transform = 'translateY(-20px)';
@@ -2706,6 +3010,51 @@
             }
         });
     </script>
-    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
+    <div id="toast-container"
+        style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;">
+    </div>
+    <!-- CLI Prompt Modal -->
+    <div id="cliModal" class="ocr-modal" style="width: 600px; max-width: 90vw;">
+        <div class="ocr-modal-content">
+            <div class="ocr-modal-header">
+                <h3 style="margin: 0;">🤖 Run Gemini CLI Prompt</h3>
+                <button onclick="closeCliModal()" class="close-btn" title="Close">&times;</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Selected Images
+                    (<span id="cliSelectedCount">0</span>/5):</label>
+                <div id="cliSelectedList"
+                    style="font-size: 12px; max-height: 80px; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label for="cliPromptText"
+                    style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Prompt:</label>
+                <textarea id="cliPromptText"
+                    style="width: calc(100% - 12px); height: 90px; font-family: sans-serif; padding: 6px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;"></textarea>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">CLI
+                    Response:</label>
+                <textarea id="cliResultText" readonly
+                    style="width: calc(100% - 12px); height: 160px; font-family: monospace; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;"
+                    placeholder="Output from CLI will appear here..."></textarea>
+            </div>
+
+            <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-color);"></span>
+                <div>
+                    <button onclick="closeCliModal()"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main);">Cancel</button>
+                    <button id="btnRunCli" onclick="submitCliPrompt()"
+                        style="background-color: #6f42c1; color: white;">🚀 Run Prompt</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
+
 </html>

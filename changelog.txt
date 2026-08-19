@@ -1,3 +1,11 @@
+### v1.12.36.3 - 2026-08-19
+-- All buttons moved to menu items in WYSIWYG and WysiScan
+-- Added hot keys
+-- Removed and oops save setting for non admin users
+-- General GUI updates: removed footer, remove image
+-- Removed market lookup tab
+-- Re-added bug report/requests ability
+
 
 ### v1.4.7.2 - 2026-02-02
 -- Final release preparations: port reverted to 8008 and BETA identifiers removed from GUI.

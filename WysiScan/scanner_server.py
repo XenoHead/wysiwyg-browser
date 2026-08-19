@@ -31,16 +31,6 @@ except ImportError:
 if sys.platform == "win32":
     import winreg
 
-# --- DIALOG MODE (frozen exe subprocess) ---
-# _run_py_dialog() launches [sys.executable, "-c", script] with the
-# WYSIWYG_DIALOG_MODE env var set. In SOURCE mode, `python -c` runs the script
-# directly. In a FROZEN exe, the bootloader ignores `-c` and would instead start
-# the server -- so we must explicitly exec the script here and exit, BEFORE any
-# server startup, otherwise the folder/file browse dialogs break.
-if os.environ.get("WYSIWYG_DIALOG_MODE") == "true" and len(sys.argv) > 2 and sys.argv[1] == "-c":
-    exec(sys.argv[2])
-    sys.exit(0)
-
 # Determine paths for frozen (exe) vs script execution
 if getattr(sys, 'frozen', False):
     # Running as a compiled exe (onefile or onedir)
@@ -199,6 +189,120 @@ def create_backup(file_path):
         logging.error(f"Failed to create backup for {file_path}: {e}")
 
 app = FastAPI(lifespan=lifespan)
+
+def get_prompt_file_path():
+    candidates = [
+        os.path.join(APP_DIR, "default_prompt.json"),
+        os.path.join(ASSET_DIR, "default_prompt.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_prompt.json"),
+        os.path.join(os.getcwd(), "WysiScan", "default_prompt.json")
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return None
+
+# 1. Endpoint to retrieve default prompt JSON
+@app.get('/get-default-prompt')
+async def get_default_prompt():
+    prompt_file = get_prompt_file_path()
+    if prompt_file and os.path.exists(prompt_file):
+        try:
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                try:
+                    data = json.loads(content)
+                except Exception:
+                    data = {"default_prompt": content}
+            return {'status': 'success', 'prompt': data}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+    return {'status': 'error', 'message': 'default_prompt.json not found'}
+
+# 2. Endpoint to run CLI command with prompt and images
+@app.post('/run-cli-prompt')
+async def run_cli_prompt(data: dict = Body(default={})):
+    prompt = data.get('prompt', '')
+    files = data.get('files', [])
+
+    if not prompt:
+        return {'status': 'error', 'message': 'No prompt provided.'}
+    if not files or len(files) < 1 or len(files) > 5:
+        return {'status': 'error', 'message': 'Select between 1 and 5 files.'}
+
+    # Determine model from default_prompt.json if available
+    model_name = "gemini-3.6-flash"
+    prompt_file = get_prompt_file_path()
+    if prompt_file and os.path.exists(prompt_file):
+        try:
+            with open(prompt_file, 'r', encoding='utf-8') as pf:
+                pj = json.load(pf)
+                if isinstance(pj, dict) and pj.get("model"):
+                    model_name = pj["model"]
+        except Exception:
+            pass
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            cfg = load_config()
+            api_key = cfg.get("gemini_api_key") or cfg.get("google_api_key")
+        except Exception:
+            pass
+    if not api_key:
+        api_key = "AQ.Ab8RN6KirWmtZULtGEwUy2PyvUHsQQKESNAwSaDFTCHnN5BWug"
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key) if api_key else genai.Client()
+        
+        contents = [prompt]
+        for f in files:
+            if os.path.exists(f):
+                contents.append(Image.open(f))
+
+        # Retry setup for temporary 503 capacity spikes
+        max_retries = 3
+        base_delay = 2  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                print(f"Attempt {attempt + 1}/{max_retries} using model: {model_name}")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents
+                )
+                return {'status': 'success', 'output': response.text or ""}
+            except Exception as err:
+                err_msg = str(err)
+                print(f"DEBUG - Attempt {attempt + 1} failed: {err_msg}")
+
+                # If it's a 503 high-demand spike, wait and retry
+                if "503" in err_msg and attempt < max_retries - 1:
+                    wait_time = base_delay * (2 ** attempt)
+                    print(f"Server busy (503). Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise err
+    except Exception as sdk_err:
+        print(f"DEBUG - Python SDK Error (Final): {sdk_err}")
+        try:
+            cmd = ["npx", "-y", "@google/gemini-cli", prompt] + files
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                shell=True,
+                timeout=120
+            )
+            output = result.stdout if result.stdout else result.stderr
+            if output:
+                return {'status': 'success', 'output': output}
+        except Exception:
+            pass
+        return {'status': 'error', 'message': f'AI prompt failed: {str(sdk_err)}'}
+
+
 
 DISCOGS_TOKEN = "PzJscAOAJKspsQFlsvQTDChKjbnaWypCetHnoyGK" 
 HEADERS = {"User-Agent": "WysiScan-OCR/1.0", "Authorization": f"Discogs token={DISCOGS_TOKEN}"}

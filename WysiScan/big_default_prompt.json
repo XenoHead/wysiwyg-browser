@@ -1,0 +1,27 @@
+{
+    "default_prompt": "GLOBAĻ RULE: a] Always place each labeled item in the images on to its own separate line. b] List all attributes on consecutive lines without empty line returns between them.
+Example: 
+Band Name: AAAA
+Album Title: BBBB
+Catalog Number: CCCC
+
+
+** SINGLE SPACED PRINTING **
+
+1] Give me all the text and song names in the image
+2] Separate the band name, album name, release date, label, catalogue number into it's own sub group called "Release:"
+	a] capitalize the first letter of every word.
+3] Separate the song titles into it's own sub group called "Tracks:"
+	a] capitalize the first letter of every word.
+4] Separate any other data into it's own sub group. "Extra:"
+	a] capitalize the first letter of every word.
+    	b] List all Media attributes on consecutive lines without empty line returns between them.
+
+5] separate shell data into it's own sub group. "Media Description:"
+	- For CASSETTE SHELL images: get the following: Shell Type/Style, Shell Texture, Timing Window, Shell Color, Ink Color, Binding (screws or sonic weld), Stamps
+	- For CD images get Matrix, Runout, IFPF, etc.
+	a] capitalize the first letter of every word.
+	b] List all Media attributes on consecutive lines without empty line returns between them.
+6] Include all labels for the data. Do no include "Category names",
+    "model": "gemini-2.5-flash"
+}
