@@ -758,10 +758,10 @@ const COUNTER_CONFIG_KEY = 'wysiwyg_counter_config';
 const COUNTER_CONFIG_VERSION = 2; // bump to discard a stale saved config
 const MAX_COUNTERS = 7; // 4 defaults + up to 3 more
 const DEFAULT_COUNTERS = [
-    { id: 'cnt_listed', label: 'LI', serverKey: 'Listed', color: '#28a745', text: 'Listed Items:' },
-    { id: 'cnt_amazon', label: 'AA', serverKey: 'Amazon Adds', color: '#007bff', text: 'Amazon Adds:' },
-    { id: 'cnt_discogs', label: 'DA', serverKey: 'Discogs Adds', color: '#17a2b8', text: 'Discogs Adds:' },
-    { id: 'cnt_dupes', label: 'DU', serverKey: 'Duplicates', color: '#fd7e14', text: 'Duplicates:' }
+    { id: 'cnt_listed', label: 'LI', serverKey: 'Listed', color: '#28a745' },
+    { id: 'cnt_amazon', label: 'AA', serverKey: 'Amazon Adds', color: '#007bff' },
+    { id: 'cnt_discogs', label: 'DA', serverKey: 'Discogs Adds', color: '#17a2b8' },
+    { id: 'cnt_dupes', label: 'DU', serverKey: 'Duplicates', color: '#fd7e14' }
 ];
 
 let counterConfig = [];
@@ -821,7 +821,6 @@ async function loadCounters() {
 }
 
 async function incrementCounter(serverKey, btn) {
-    const cfg = counterConfig.find(c => c.serverKey === serverKey);
     const originalHTML = btn.innerHTML;
     btn.innerText = "⏳";
     try {
@@ -833,16 +832,8 @@ async function incrementCounter(serverKey, btn) {
         const res = await resp.json();
         if (res.status === 'success') {
             btn.innerText = "✅";
-            // Insert the counter's text into the description box (unless locked).
-            if (cfg && cfg.text) {
-                const descEl = document.getElementById('outputDesc');
-                const locked = document.getElementById('lockDesc')?.checked;
-                if (descEl && !locked) {
-                    const sep = descEl.value && !descEl.value.endsWith('\n') ? '\n' : '';
-                    descEl.value = descEl.value + sep + cfg.text;
-                    descEl.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
+            // Daily count only updates the server tally + the button's own
+            // number. It must NOT touch the description field.
             setTimeout(() => {
                 updateCounterUI(res.counts);
             }, 500);
@@ -894,7 +885,6 @@ function openCounterEditor() {
             <button type="button" class="ctr-move" data-idx="${i}" data-dir="1" ${downDisabled} style="border:none; background:#6c757d; color:#fff; border-radius:4px; cursor:pointer; padding:4px 7px; font-size:11px;" onclick="moveCounter(${i}, 1)" ${downDisabled}>▼</button>
             <input type="color" value="${c.color}" data-idx="${i}" class="ctr-color" style="width:32px; height:28px; border:none; background:none; cursor:pointer;">
             <input type="text" value="${c.label}" data-idx="${i}" class="ctr-label" placeholder="Label" style="width:50px; padding:4px; font-size:12px;">
-            <input type="text" value="${c.text || ''}" data-idx="${i}" class="ctr-text" placeholder="Text sent to box" style="width:130px; padding:4px; font-size:12px;">
             ${counterConfig.length > 1 ? `<button type="button" class="ctr-del" data-idx="${i}" style="border:none; background:#dc3545; color:#fff; background:#dc3545; border-radius:4px; cursor:pointer; padding:4px 8px; font-size:11px;" onclick="deleteCounter(${i})">Delete</button>` : ''}
         </div>`;
     });
@@ -914,10 +904,6 @@ function openCounterEditor() {
             document.querySelectorAll('.ctr-color').forEach(inp => {
                 const i = parseInt(inp.dataset.idx, 10);
                 if (counterConfig[i]) counterConfig[i].color = inp.value;
-            });
-            document.querySelectorAll('.ctr-text').forEach(inp => {
-                const i = parseInt(inp.dataset.idx, 10);
-                if (counterConfig[i]) counterConfig[i].text = inp.value;
             });
             saveCounterConfig();
             renderCounterButtons();
