@@ -249,8 +249,8 @@ async def run_cli_prompt(data: dict = Body(default={})):
             api_key = cfg.get("gemini_api_key") or cfg.get("google_api_key")
         except Exception:
             pass
-    if not api_key:
-        api_key = "AQ.Ab8RN6KirWmtZULtGEwUy2PyvUHsQQKESNAwSaDFTCHnN5BWug"
+#   -------------------------
+#   -------------------------
 
     try:
         from google import genai
