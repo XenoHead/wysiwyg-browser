@@ -47,6 +47,25 @@
         </div>
     </div>
 
+    <!-- Hot Keys Modal -->
+    <div id="hotkeysModal" class="modal" style="display:none; align-items:center; justify-content:center;">
+        <div class="modal-content" style="width: 420px; max-width: 92%; text-align: left;">
+            <span id="closeHotkeysBtn" class="close-btn" title="Close">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">⌨️ Hot Keys</h3>
+            <p style="font-size: 12px; margin: 0 0 10px; color: var(--text-muted, #666);">
+                Click a key box, then press the shortcut you want. Combos like Ctrl+Shift+K work.
+            </p>
+            <div id="hotkeysList" style="margin-bottom: 12px;"></div>
+            <p id="hotkeysHint" style="display:none; font-size: 12px; color: var(--danger-color, #dc3545); margin: 0 0 10px;">
+                Press the keys for this action… (Esc to cancel)
+            </p>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <button id="resetHotkeysBtn" class="nav-btn" style="padding: 8px 15px;">Reset to Defaults</button>
+                <button id="closeHotkeysDoneBtn" class="btn-search" style="padding: 8px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
     <div id="requestModal" class="modal">
         <div class="modal-content modal-content-narrow">
             <span id="closeRequestModalBtn" class="close-btn">&times;</span>
@@ -153,21 +172,14 @@
 
     <div class="container">
         <div class="sticky-header">
-            <div class="nav-item-group"
-                <div class="nav-item-group" style="justify-content: space-between; padding: 5px 10px; margin-bottom: 5px; align-items: center;">
-                    <button id="hamburgerBtn" class="nav-btn nav-item-group" title="Open Menu"
-                        style="width: 44px; height: 40px; justify-content: center; font-size: 20px;">&#9776;</button>
-                    <div class="logo-container">
-                        <img src="/fyr-sign-front.png" alt="FYR Logo" class="logo">
-                    </div>
-                    <div style="width: 44px; height: 40px;"></div>
-                </div>
-
             <div id="updateBanner" class="blink-update" style="display:none;">
                 ⚠️ NEW VERSION AVAILABLE! CLICK HERE TO UPDATE ⚠️
             </div>
 
-            <h2 id="appTitle" style="cursor: pointer;" title="Click to view Changelog">WYSIWYG</h2>
+            <h2 id="appTitle" style="cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative;" title="Click to view Changelog">
+                <button id="hamburgerBtn" class="nav-btn" title="Open Menu" style="position: absolute; left: 2px; background: var(--wysiwyg-yellow, #FFFF00); color: var(--wysiwyg-blue, #0000FF); border: 1px solid #0000FF; border-radius: 4px; padding: 4px 12px; font-weight: bold; cursor: pointer;">☰ Menu</button>
+                <span id="appTitleText">WYSIWYG</span>
+            </h2>
 
             <div class="tab-container">
                 <button class="tab-btn active" data-tab="listingTool">Builder</button>
@@ -439,10 +451,7 @@
             </div>
         </div>
 
-        <div class="footer">
-            &copy; <span id="footerYear"></span> (c) <a href="https://xenohead.com" class="footer-link"
-                target="_blank">Xeno Head</a> 2025
-        </div>
+    </div>
     </div>
 
     <div id="customContextMenu"
@@ -482,6 +491,7 @@
             <button id="runWalmartSheetBtn" class="drawer-btn"><span class="drawer-ico">🛒</span> Walmart Sheet</button>
             <button id="openCalcBtn" class="drawer-btn"><span class="drawer-ico">💲</span> Cost Calculator</button>
             <hr class="drawer-sep">
+            <button id="hotkeysBtn" class="drawer-btn"><span class="drawer-ico">⌨️</span> Hot Keys</button>
             <button id="themeBtn" class="drawer-btn"><span class="drawer-ico">🌓</span> Toggle Dark/Light</button>
             <button id="refreshBtn" class="drawer-btn refresh-btn"><span class="drawer-ico">🔄</span> Refresh</button>
             <button id="updateMenusBtn" class="drawer-btn"><span class="drawer-ico">🔃</span> Update Menus</button>
@@ -494,6 +504,7 @@
             <button id="editCountersBtn" class="drawer-btn"><span class="drawer-ico">✏️</span> Edit Counters</button>
             <button id="openListingsFolderBtn" class="drawer-btn"><span class="drawer-ico">📂</span> Open Listings</button>
             <hr class="drawer-sep">
+            <button id="aboutBtn" class="drawer-btn"><span class="drawer-ico">ℹ️</span> About</button>
             <button id="reportsBtn" class="drawer-btn"><span class="drawer-ico">📝</span> Reports</button>
             <button id="shutdownBtn" class="drawer-btn shutdown-btn"><span class="drawer-ico">🔌</span> Shut Down</button>
         </div>

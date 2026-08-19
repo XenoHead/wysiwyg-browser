@@ -19,10 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCounters();
     loadVariableConditions(); // Load saved persistent conditions
     setupSaveConditionsButton(); // Create save button and enable if admin file is present
-    document.getElementById('footerYear').textContent = new Date().getFullYear();
+    const footerYear = document.getElementById('footerYear');
+    if (footerYear) footerYear.textContent = new Date().getFullYear();
 
     // Setup Event Listeners
     setupEventListeners();
+    initHotkeys();
 
     // Hide the "Settings Editor" menu option if the admin file (allpass.json)
     // is not present in the working directory.
@@ -123,6 +125,7 @@ function setupEventListeners() {
     addClickListener('runUberPasteBtn', runUberPaste);
     addClickListener('runWysiScanBtn', runWysiScan);
     addClickListener('runWalmartSheetBtn', runWalmartSheet);
+    addClickListener('hotkeysBtn', openHotkeysModal);
     addClickListener('themeBtn', toggleTheme);
     addClickListener('refreshBtn', () => location.reload(true));
     addClickListener('updateMenusBtn', updateMenus);
@@ -173,7 +176,7 @@ function setupEventListeners() {
             overlay.style.display = 'none';
         };
 
-        openBtn?.addEventListener('click', openDrawer);
+        openBtn?.addEventListener('click', (e) => { e.stopPropagation(); openDrawer(); });
         closeBtn?.addEventListener('click', closeDrawer);
         overlay.addEventListener('click', closeDrawer);
         document.addEventListener('keydown', (e) => {
@@ -311,6 +314,7 @@ function setupEventListeners() {
     addClickListener('copyOurPriceBtn', (e) => copyField('calcOurPrice', e.currentTarget));
     addClickListener('openListingsFolderBtn', openListingsFolder);
     addClickListener('reportsBtn', openReportsModal);
+    addClickListener('aboutBtn', () => fetch('/show-about', { method: 'POST' }));
     addClickListener('editCountersBtn', openCounterEditor);
 
     // Counter buttons are rendered dynamically (in the hamburger drawer); use event delegation.
@@ -548,7 +552,7 @@ async function loadAppVersion() {
         }
 
         document.title = `${appName} - ${vStr}`;
-        const titleEl = document.getElementById('appTitle');
+        const titleEl = document.getElementById('appTitleText');
 
         let titleHtml = `${appName} - v${vStr}`;
         if (isDev) {
@@ -966,10 +970,174 @@ async function submitReport() {
 }
 
 
-function closeModal() {
-    const overlay = document.getElementById('genericModal');
-    if (overlay) overlay.style.display = 'none';
+// --- Hot Keys System ---
+const HOTKEY_ACTIONS = [
+    { id: 'menu', label: 'Open Menu', run: () => { const b = document.getElementById('hamburgerBtn'); if (b) b.click(); } },
+    { id: 'wysiscan', label: 'WysiScan', run: () => runWysiScan() },
+    { id: 'walmart', label: 'Walmart Sheet', run: () => runWalmartSheet() },
+    { id: 'calc', label: 'Cost Calculator', run: () => openCalcModal() },
+    { id: 'refresh', label: 'Refresh', run: () => location.reload(true) },
+    { id: 'reports', label: 'Reports', run: () => openReportsModal() },
+    { id: 'shutdown', label: 'Shut Down', run: () => shutdownApp() }
+];
+const HOTKEY_DEFAULTS = {
+    menu: 'Ctrl+Shift+M',
+    wysiscan: 'Ctrl+Shift+W',
+    walmart: 'Ctrl+Shift+B',
+    calc: 'Ctrl+Shift+C',
+    refresh: 'F5',
+    reports: 'Ctrl+Shift+R',
+    shutdown: 'Ctrl+Shift+X'
+};
+const HOTKEY_STORAGE = 'wysiwyg_hotkeys';
+let hotkeyCapture = null; // { id, btnEl } when capturing
+
+function loadHotkeys() {
+    try {
+        const saved = localStorage.getItem(HOTKEY_STORAGE);
+        if (saved) return Object.assign({}, HOTKEY_DEFAULTS, JSON.parse(saved));
+    } catch (e) { /* ignore */ }
+    return Object.assign({}, HOTKEY_DEFAULTS);
 }
+
+function saveHotkeys(map) {
+    try { localStorage.setItem(HOTKEY_STORAGE, JSON.stringify(map)); } catch (e) { /* ignore */ }
+}
+
+function formatHotkey(parts) {
+    if (!parts || !parts.length) return '—';
+    const mods = [];
+    if (parts.includes('Ctrl')) mods.push('Ctrl');
+    if (parts.includes('Alt')) mods.push('Alt');
+    if (parts.includes('Shift')) mods.push('Shift');
+    const key = parts.find(p => !['Ctrl', 'Alt', 'Shift'].includes(p));
+    return [...mods, key].filter(Boolean).join('+');
+}
+
+function hotkeyMatches(parts, e) {
+    const combo = new Set(parts);
+    const pressed = new Set();
+    if (e.ctrlKey || e.metaKey) pressed.add('Ctrl');
+    if (e.altKey) pressed.add('Alt');
+    if (e.shiftKey) pressed.add('Shift');
+    let key = e.key;
+    if (key === ' ') key = 'Space';
+    else if (key.length === 1) key = key.toUpperCase();
+    pressed.add(key);
+    // Must match exactly (same modifiers + key), ignoring extra modifiers.
+    const reqMods = ['Ctrl', 'Alt', 'Shift'].filter(m => combo.has(m));
+    const hasCtrl = combo.has('Ctrl');
+    const hasAlt = combo.has('Alt');
+    const hasShift = combo.has('Shift');
+    if (e.ctrlKey !== hasCtrl) return false;
+    if (e.altKey !== hasAlt) return false;
+    if (e.shiftKey !== hasShift) return false;
+    const comboKey = [...combo].find(p => !['Ctrl', 'Alt', 'Shift'].includes(p));
+    let eKey = e.key;
+    if (eKey === ' ') eKey = 'Space';
+    else if (eKey.length === 1) eKey = eKey.toUpperCase();
+    return eKey === comboKey;
+}
+
+function openHotkeysModal() {
+    const modal = document.getElementById('hotkeysModal');
+    const list = document.getElementById('hotkeysList');
+    const map = loadHotkeys();
+    list.innerHTML = '';
+    HOTKEY_ACTIONS.forEach(action => {
+        const row = document.createElement('div');
+        row.className = 'hk-row';
+        const label = document.createElement('span');
+        label.className = 'hk-label';
+        label.textContent = action.label;
+        const btn = document.createElement('button');
+        btn.className = 'hk-key-btn';
+        btn.textContent = formatHotkey((map[action.id] || '').split('+'));
+        btn.addEventListener('click', () => startHotkeyCapture(action.id, btn));
+        row.appendChild(label);
+        row.appendChild(btn);
+        list.appendChild(row);
+    });
+    modal.style.display = 'flex';
+}
+
+function startHotkeyCapture(id, btnEl) {
+    if (hotkeyCapture) cancelCapture();
+    hotkeyCapture = { id, btnEl };
+    document.querySelectorAll('.hk-key-btn.capturing').forEach(b => b.classList.remove('capturing'));
+    btnEl.classList.add('capturing');
+    btnEl.textContent = '…';
+    const hint = document.getElementById('hotkeysHint');
+    if (hint) hint.style.display = 'block';
+}
+
+function cancelCapture() {
+    if (!hotkeyCapture) return;
+    hotkeyCapture.btnEl.classList.remove('capturing');
+    hotkeyCapture = null;
+    const hint = document.getElementById('hotkeysHint');
+    if (hint) hint.style.display = 'none';
+    // Refresh the displayed keys
+    const map = loadHotkeys();
+    openHotkeysModal();
+}
+
+function commitCapture(e) {
+    e.preventDefault();
+    if (!hotkeyCapture) return;
+    let key = e.key;
+    if (key === ' ') key = 'Space';
+    else if (key.length === 1) key = key.toUpperCase();
+    // Ignore bare modifier presses
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+    const parts = [];
+    if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    parts.push(key);
+    const combo = parts.join('+');
+    const map = loadHotkeys();
+    map[hotkeyCapture.id] = combo;
+    saveHotkeys(map);
+    cancelCapture();
+}
+
+function closeHotkeysModal() {
+    if (hotkeyCapture) cancelCapture();
+    const modal = document.getElementById('hotkeysModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function initHotkeys() {
+    // Close buttons
+    document.getElementById('closeHotkeysBtn')?.addEventListener('click', closeHotkeysModal);
+    document.getElementById('closeHotkeysDoneBtn')?.addEventListener('click', closeHotkeysModal);
+    document.getElementById('resetHotkeysBtn')?.addEventListener('click', () => {
+        saveHotkeys(Object.assign({}, HOTKEY_DEFAULTS));
+        openHotkeysModal();
+    });
+    // Global key handler
+    document.addEventListener('keydown', (e) => {
+        if (hotkeyCapture) {
+            if (e.key === 'Escape') { cancelCapture(); return; }
+            commitCapture(e);
+            return;
+        }
+        // Don't fire hotkeys while typing in a form field (avoid misfires).
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+        const map = loadHotkeys();
+        for (const action of HOTKEY_ACTIONS) {
+            const combo = map[action.id];
+            if (combo && hotkeyMatches(combo.split('+'), e)) {
+                e.preventDefault();
+                action.run();
+                return;
+            }
+        }
+    });
+}
+
 
 // --- Custom Modal System ---
 function showModal(title, bodyHtml, buttons) {

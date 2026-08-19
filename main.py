@@ -3,6 +3,12 @@ import sys
 import tkinter
 import tkinter.filedialog
 
+# Make sibling repos importable (Xeno_ui, etc.) when running from source.
+# In PyInstaller EXE mode this is harmless (the dirs simply won't exist).
+_GIT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _GIT_ROOT not in sys.path:
+    sys.path.insert(0, _GIT_ROOT)
+
 # --- TKINTER DIALOG SUBPROCESS DISPATCHER ---
 # This must stay at the very top of the file. When the EXE launches a subprocess 
 # for a file dialog, we execute the script and exit immediately before the 
@@ -355,6 +361,21 @@ async def open_update_folder_endpoint():
             os.startfile(folder_path)
             return {"status": "success"}
         return JSONResponse(status_code=404, content={"status": "error", "message": "Folder not found"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+@app.post("/show-about")
+async def show_about():
+    """Spawn the Xeno_ui About dialog in a subprocess."""
+    try:
+        from Xeno_ui.about import show_about_subprocess
+        show_about_subprocess("WYSIWYG")
+        return {"status": "success"}
+    except ImportError:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Xeno_ui not available — ensure C:\\Git\\Xeno_ui exists"},
+        )
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 

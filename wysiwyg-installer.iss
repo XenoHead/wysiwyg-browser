@@ -3,7 +3,7 @@
 
 #define MyAppName "WYSIWYG"
 #define MyAppVersion "1.12.36.3"
-#define MyAppPublisher "Xeno Head"
+#define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
 [Setup]
@@ -50,6 +50,7 @@ Source: "styles.css"; DestDir: "{app}"; Flags: ignoreversion
 Source: "style_guide.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "walmart.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\Scott\FYR_LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Subfolders
 ; NOTE: The compiled EXE is a PyInstaller onefile build that bundles Uberpaste,

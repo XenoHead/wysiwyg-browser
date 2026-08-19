@@ -138,6 +138,7 @@ select[multiple] { min-height: 60px; }
 }
 [data-theme="dark"] .close-btn { color: #ccc; }
 [data-theme="dark"] .close-btn:hover { color: white; }
+[data-theme="dark"] .hk-key-btn { color: #fff; }
 [data-theme="dark"] #boxNumber, [data-theme="dark"] #lister { background-color: #5c5c00; color: #fff; }
 [data-theme="dark"] .sku-flag-selected { background-color: #5c5c00 !important; color: #fff; }
 [data-theme="dark"] .bg-media-red { background-color: #5c0000 !important; color: #fff; }
@@ -239,6 +240,14 @@ select[multiple] { min-height: 60px; }
 .modal-content-wide { max-width: 500px; width: 90%; text-align: left; }
 .modal-content-narrow { width: 400px; text-align: left; }
 .modal-actions { text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
+
+/* --- Hot Keys Modal --- */
+.hk-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 2px; border-bottom: 1px solid var(--border-color, #eee); }
+.hk-row:last-child { border-bottom: none; }
+.hk-label { font-size: 13px; }
+.hk-key-btn { min-width: 120px; padding: 6px 10px; font-family: monospace; font-size: 12px; background: var(--bg-secondary, #eee); color: #000; border: 1px solid var(--border-color, #ccc); border-radius: 4px; cursor: pointer; }
+.hk-key-btn:hover { border-color: var(--wysiwyg-blue, #0000FF); }
+.hk-key-btn.capturing { background: var(--wysiwyg-blue, #0000FF); color: #fff; border-color: #000; }
 .form-label { display:block; margin-bottom:5px; font-weight:bold; }
 .full-width-input { width: 100%; margin-bottom: 10px; }
 .scraper-form-container { display:flex; justify-content:space-between; align-items:center; }
