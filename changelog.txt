@@ -7,6 +7,7 @@
 -- WysiScan AI Prompt: added a "💾 Save" button that persists the current text-box content as the Custom prompt to prompts.json.
 -- WysiScan autoscan fix: autoscan now triggers ONLY when Start Group is explicitly invoked (button or Enter). Refresh, rename, and group-name auto-load no longer fire an unwanted scan when autoscan is checked.
 -- WysiScan & Amazon Adds: added an "Always on top" (in-page pin) toggle at the top of the AI Prompt modal and the Amazon Adds page so they float above other in-page content. (OS-level native-window topmost deferred to the standalone EXE build.)
+-- Hot Keys: added editable bindings for "Amazon Adds" (default Ctrl+Shift+A) and "Discogs Adds" (default Ctrl+Shift+D). Both appear in the Hot Keys modal and are rebindable like the others.
 -- Amazon Adds (Discogs API) overhaul: results now render as per-field rows with editable boxes and a Copy button each; Upload Photos / Merchant Shipping Group / Quantity rows kept alignment-matched but copy-less
 -- Subject Keyword group: each keyword is its own deletable + editable row, with a "Copy Line" button that joins survivors with spaces
 -- Keyword expansion: all lowercase, space-joined one-liner capped at 210 bytes, derived from the item's own data with an Amazon-safe blocklist (no "Check box: This product does not have a Product ID", promo/brand-only terms, etc.)
