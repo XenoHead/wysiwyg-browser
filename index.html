@@ -489,6 +489,13 @@
             <button id="runUberPasteBtn" class="drawer-btn"><span class="drawer-ico">📋</span> UberPaste</button>
             <button id="runWysiScanBtn" class="drawer-btn"><span class="drawer-ico">🔍</span> WysiScan</button>
             <button id="runWalmartSheetBtn" class="drawer-btn"><span class="drawer-ico">🛒</span> Walmart Sheet</button>
+            <div class="drawer-submenu" id="addsSubmenu">
+                <button id="addsToggleBtn" class="drawer-btn drawer-submenu-toggle"><span class="drawer-ico drawer-ico-sm">➕</span> Adds</button>
+                <div class="drawer-submenu-items" id="addsSubmenuItems" style="display:none;">
+                    <button id="addsAmazonBtn" class="drawer-btn drawer-submenu-item"><span class="drawer-ico drawer-ico-sm">📦</span> Amazon</button>
+                    <button id="addsDiscogsBtn" class="drawer-btn drawer-submenu-item"><span class="drawer-ico drawer-ico-sm">💿</span> Discogs</button>
+                </div>
+            </div>
             <button id="openCalcBtn" class="drawer-btn"><span class="drawer-ico">💲</span> Cost Calculator</button>
             <hr class="drawer-sep">
             <button id="hotkeysBtn" class="drawer-btn"><span class="drawer-ico">⌨️</span> Hot Keys</button>
@@ -573,6 +580,11 @@
             width: 22px;
             text-align: center;
         }
+        .drawer-submenu { width: 100%; }
+        .drawer-submenu-items { padding-left: 18px; }
+        .drawer-submenu-item { font-size: 13px; padding: 9px 12px; }
+        .drawer-ico-sm { font-size: 13px; width: 18px; }
+        .drawer-submenu-toggle .drawer-ico { transition: transform 0.15s ease; }
         .drawer-section-title {
             font-size: 11px;
             font-weight: 700;

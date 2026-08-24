@@ -125,6 +125,9 @@ function setupEventListeners() {
     addClickListener('runUberPasteBtn', runUberPaste);
     addClickListener('runWysiScanBtn', runWysiScan);
     addClickListener('runWalmartSheetBtn', runWalmartSheet);
+    addClickListener('addsToggleBtn', toggleAddsSubmenu);
+    addClickListener('addsAmazonBtn', openAddsAmazon);
+    addClickListener('addsDiscogsBtn', openAddsDiscogs);
     addClickListener('hotkeysBtn', openHotkeysModal);
     addClickListener('themeBtn', toggleTheme);
     addClickListener('refreshBtn', () => location.reload(true));
@@ -197,6 +200,7 @@ function setupEventListeners() {
         // drawer open so you can tap multiple times / edit without reopening.
         drawer.querySelectorAll('button').forEach((btn) => {
             if (btn.classList.contains('counter-button') || btn.id === 'editCountersBtn') return;
+            if (btn.id === 'addsToggleBtn') return; // keep drawer open while expanding the Adds submenu
             btn.addEventListener('click', () => {
                 // Defer so the action's own handler runs first
                 setTimeout(closeDrawer, 0);
@@ -401,6 +405,49 @@ async function runWalmartSheet() {
         }
     } catch (e) {
         customAlert('Failed to open Walmart Sheet: ' + e);
+    }
+}
+
+function toggleAddsSubmenu() {
+    const items = document.getElementById('addsSubmenuItems');
+    const toggle = document.getElementById('addsToggleBtn');
+    if (!items || !toggle) return;
+    const willShow = items.style.display === 'none';
+    items.style.display = willShow ? 'block' : 'none';
+    const ico = toggle.querySelector('.drawer-ico');
+    if (ico) ico.textContent = willShow ? '➖' : '➕';
+}
+
+let _addsAmazonWindow = null;
+async function openAddsAmazon() {
+    try {
+        const url = '/adds/amazon';
+        _addsAmazonWindow = window.open(url, 'AddsAmazonWindow', 'width=820,height=820,resizable=yes,scrollbars=yes,status=yes');
+        if (_addsAmazonWindow) {
+            _addsAmazonWindow.focus();
+        } else {
+            customAlert('Popup window was blocked by the browser. Please allow popups for this site.');
+        }
+    } catch (e) {
+        customAlert('Failed to open Adds > Amazon: ' + e);
+    }
+}
+
+async function openAddsDiscogs() {
+    // Discogs sub-item: opens the existing Builder scrape flow on the main page.
+    // For now it reuses the Builder tab + its Discogs URL scraper.
+    try {
+        const tab = document.querySelector('.tab-btn[data-tab="listingTool"]');
+        if (tab) tab.click();
+        const input = document.getElementById('discogsUrlInput');
+        if (input) {
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus();
+        } else {
+            customAlert('Discogs scrape input not found on the Builder tab.');
+        }
+    } catch (e) {
+        customAlert('Failed to open Adds > Discogs: ' + e);
     }
 }
 

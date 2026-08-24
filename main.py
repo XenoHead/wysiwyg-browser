@@ -47,6 +47,16 @@ from fastapi.staticfiles import StaticFiles
 from html_format import format_discogs_to_html
 from WalmartSheet.walmart import router as walmart_router
 
+# --- Adds feature (Amazon Adds scraper) ---
+_ADDS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Adds")
+if _ADDS_DIR not in sys.path:
+    sys.path.insert(0, _ADDS_DIR)
+try:
+    import Amazon_add_scraper as _amazon_add
+except Exception as _e:  # pragma: no cover - module may be absent in some builds
+    _amazon_add = None
+    logging.warning(f"Amazon_add_scraper unavailable: {_e}")
+
 
 app = FastAPI()
 
@@ -166,8 +176,37 @@ def get_current_version_str():
             pass
     return "1.2.0.0"
 
-DISCOGS_TOKEN = "PzJscAOAJKspsQFlsvQTDChKjbnaWypCetHnoyGK" 
-DISCOGS_TOKEN = os.environ.get("DISCOGS_TOKEN", "PzJscAOAJKspsQFlsvQTDChKjbnaWypCetHnoyGK")
+def _load_env_file():
+    """Minimal .env loader (no external dependency). Reads KEY=VALUE pairs
+    from a .env file next to this script (or inside the PyInstaller bundle)
+    into os.environ if the variable isn't already set. .env is gitignored so
+    secrets never enter version control."""
+    candidates = []
+    base = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(base, ".env"))
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(os.path.join(sys._MEIPASS, ".env"))
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip().strip('"').strip("'")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+            except OSError:
+                pass
+            break
+
+_load_env_file()
+
+# Live Discogs token is sourced from the environment / .env (gitignored),
+# never hardcoded here. Set DISCOGS_TOKEN in .env for local runs and builds.
+DISCOGS_TOKEN = os.environ.get("DISCOGS_TOKEN", "")
 # Load version dynamically for User-Agent
 HEADERS = {"User-Agent": f"WYSIWYG/{get_current_version_str()}", "Authorization": f"Discogs token={DISCOGS_TOKEN}"}
 CHANGELOG_FILE = "changelog.txt"
@@ -1791,6 +1830,142 @@ async def scrape_discogs(url: str = Form(...)):
             return HTMLResponse(content=response_content)
         except Exception as e:
             return HTMLResponse(f"Scraper Error: {str(e)}")
+
+# --- Adds > Amazon: Discogs API -> Amazon Adds scraper ---
+def _discogs_release_to_raw_text(release: dict) -> str:
+    """Flatten a Discogs API release object into the raw-text shape the
+    Amazon_add_scraper module expects (Artist - Title / Label: / Format: / ...)."""
+    artists = release.get('artists') or []
+    artist_str = " ".join((a.get('anv') or a.get('name') or '').strip() for a in artists).strip()
+    title = release.get('title', '') or ''
+    header = f"{artist_str} - {title}" if artist_str else title
+
+    label_parts = []
+    for l in (release.get('labels') or []):
+        name = (l.get('name') or '').strip()
+        if _amazon_add is not None:
+            name = _amazon_add.clean_name(name)
+        cat = (l.get('catno') or '').strip()
+        if name and cat:
+            label_parts.append(f"{name} \u2013 {cat}")
+        elif name:
+            label_parts.append(name)
+    label_line = "Label: " + ", ".join(label_parts) if label_parts else "Label:"
+
+    fmt_parts = []
+    for f in (release.get('formats') or []):
+        name = f.get('name', '') or ''
+        descs = " ".join(f.get('descriptions', []) or [])
+        text = (f.get('text', '') or '')
+        blob = " ".join(x for x in [name, descs, text] if x).strip()
+        if blob:
+            fmt_parts.append(blob)
+    fmt_line = "Format: " + ", ".join(fmt_parts)
+
+    country = release.get('country', '') or ''
+    released = release.get('released', '') or ''
+    genres = ", ".join(release.get('genres') or [])
+    styles = ", ".join(release.get('styles') or [])
+
+    lines = [header, label_line, fmt_line]
+    if country:
+        lines.append(f"Country: {country}")
+    if released:
+        lines.append(f"Released: {released}")
+    if genres:
+        lines.append(f"Genre: {genres}")
+    if styles:
+        lines.append(f"Style: {styles}")
+    # Barcode(s) as Discogs presents them (Scanned + any Text display)
+    barcodes = [b for b in (release.get("barcode") or "").split(";") if b.strip()] if isinstance(release.get("barcode"), str) else []
+    for ident in (release.get("identifiers") or []):
+        if (ident.get("type") or "").lower() == "barcode":
+            val = (ident.get("value") or "").strip()
+            if val:
+                barcodes.append(val)
+    if barcodes:
+        lines.append("Barcode: " + ", ".join(barcodes))
+    lines.append("Tracklist:")
+    for t in (release.get('tracklist') or []):
+        pos = (t.get('position', '') or '').strip()
+        ttitle = (t.get('title', '') or '').strip()
+        dur = (t.get('duration', '') or '').strip()
+        line = f"{pos} {ttitle}".strip()
+        if dur:
+            line += f" {dur}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+@app.get("/adds/amazon")
+async def serve_adds_amazon():
+    """Serves the Amazon Adds tab page."""
+    return FileResponse(resource_path("Adds/amazon_add_page.html"))
+
+
+@app.post("/api/adds/amazon-scrape")
+async def adds_amazon_scrape(data: dict = Body(...)):
+    if not _amazon_add:
+        return JSONResponse(status_code=503,
+                            content={"status": "error", "message": "Amazon scraper module unavailable."})
+    url = (data.get("url") or "").strip()
+    if not url:
+        return JSONResponse(status_code=400,
+                            content={"status": "error", "message": "URL is required."})
+
+    # Resolve the release id from a Discogs link (release / master / marketplace item)
+    # using the same logic as the existing scrape endpoints.
+    release_id = None
+    match = re.search(r'release/(\d+)', url)
+    if match:
+        release_id = match.group(1)
+
+    async with httpx.AsyncClient() as client:
+        if not release_id:
+            ml = re.search(r'(?:sell|shop)/item/(\d+)', url)
+            if ml:
+                try:
+                    lr = await client.get(f"https://api.discogs.com/marketplace/listings/{ml.group(1)}",
+                                          headers=HEADERS)
+                    if lr.status_code == 200:
+                        release_id = str(lr.json().get('release', {}).get('id', ''))
+                except Exception:
+                    pass
+            if not release_id:
+                mm = re.search(r'master/(\d+)', url)
+                if mm:
+                    mr = await client.get(f"https://api.discogs.com/masters/{mm.group(1)}",
+                                          headers=HEADERS)
+                    if mr.status_code == 200:
+                        release_id = str(mr.json().get('main_release', ''))
+
+        if not release_id:
+            return JSONResponse(status_code=400, content={
+                "status": "error",
+                "message": "Invalid URL. Must be a Release, Master, or Marketplace Item (shop/item/...) link."})
+
+        try:
+            resp = await client.get(f"https://api.discogs.com/releases/{release_id}", headers=HEADERS)
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+        if resp.status_code != 200:
+            msg = f"Discogs API returned status code: {resp.status_code}."
+            if resp.status_code == 404:
+                msg = ("Error 404 (Not Found). The release may be a Draft (not accessible via the API) "
+                       "or the link is invalid.")
+            elif resp.status_code == 401:
+                msg = "Error 401 (Unauthorized). The Discogs API token may be invalid or expired."
+            elif resp.status_code == 429:
+                msg = "Error 429 (Too Many Requests). Please wait a minute before trying again."
+            return JSONResponse(status_code=resp.status_code, content={"status": "error", "message": msg})
+
+        release = resp.json()
+
+    raw_text = _discogs_release_to_raw_text(release)
+    text = _amazon_add.scrape_to_text(raw_text)
+    return {"status": "success", "text": text}
+
 
 @app.post("/shutdown")
 async def shutdown():

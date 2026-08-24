@@ -36,11 +36,7 @@ ENV/
 # Local Configuration and Secrets
 .env
 .env.*
-allpass.json
-Conditions.json
-data.json
-version.json
-media_formats.json
+
 
 # Backups
 *.bak
@@ -70,3 +66,4 @@ logs/
 # Build artifacts
 build/
 dist/
+backups/

@@ -1,0 +1,22 @@
+{
+  "physical_audio_analog": {
+    "vinyl_and_shellac": [
+      "Vinyl", "LP", "7\"", "45 RPM", "Single", "12\"", "33 ⅓ RPM", "10\"", "78 RPM", "Shellac", "80 RPM", "90 RPM", "120 RPM", "16 ⅔ RPM", "8 ⅓ RPM", "Single Sided", "Double Sided", "Picture Disc", "Etched", "Lathe Cut", "Acetate", "Flexi-disc", "Styrene", "Edison Disc", "Pathé Disc", "Cylinder", "8\"", "¼\"", "6\"", "5½\"", "5\"", "9\"", "16\"", "4\"", "11\"", "6½\"", "2\"", "1\"", "⅛\"", "14\"", "40cm", "50cm", "35cm", "29cm", "27cm", "25cm", "21cm", "Tefifon", "Bioplastic", "Jukebox", "Transcription", "Sopic"
+    ],
+    "magnetic_tape": [
+      "Cassette", "8-Track Cartridge", "Reel-To-Reel", "4-Track Cartridge", "PlayTape", "Microcassette", "Elcaset", "RCA Tape Cartridge", "Sabamobil", "Wire Recording", "15 ips", "7 ½ ips", "3 ¾ ips", "1 ⅞ ips", "15/16 ips", "30 ips", "7\" Cine Reel", "5\" Cine Reel", "3\" Cine Reel", "6\" Cine Reel", "10.5\" NAB Reel", "4-Track Stereo", "2-Track Stereo", "2-Track Mono", "4-Track Mono"
+    ]
+  },
+  "digital_optical_media": [
+    "CD", "CDr", "CD-ROM", "CD+G", "CDV", "CDi", "CD-Record", "HDCD", "SACD", "XRCD", "VCD", "SVCD", "AVCD", "Mini", "3\"", "Minimax", "DVD", "DVD-Video", "DVD-Audio", "DVD-Data", "DVDr", "DVDplus", "DualDisc", "DVD-9", "Blu-ray", "Blu-ray Audio", "Blu-ray-R", "Ultra HD Blu-ray"
+  ],
+  "digital_file_formats": [
+    "File", "MP3", "FLAC", "WAV", "AAC", "AIFF", "ALAC", "ogg-vorbis", "DSF", "DFF", "WavPack", "TTA", "SHN", "MP2", "MP1", "Opus", "AMR", "RA", "SPX", "MP3 Surround", "MPEG-4 Video", "MPEG-4", "MPEG Video", "MOV", "AVI", "WMV", "FLV", "SWF", "RM", "AIFC", "Disc Image"
+  ],
+  "video_formats": [
+    "VHS", "Super VHS", "Betamax", "Super Beta", "Video8", "Video 2000", "Laserdisc", "SelectaVision", "VHD", "U-matic", "Betacam", "Betacam SP", "UMD", "HD DVD", "HD DVD-R", "MVD", "TeD", "Cartrivision", "16mm", "35mm", "Film Reel"
+  ],
+  "niche_and_historical_formats": [
+    "Floppy Disk", "3.5\"", "5.25\"", "3½\"", "Zip Disk", "Minidisc", "DCC", "Pocket Rocker", "HitClips", "Business Card", "Memory Stick", "NT Cassette", "Revere Magnetic Stereo Tape Ca", "Salon", "Concert", "29", "12"
+  ]
+}

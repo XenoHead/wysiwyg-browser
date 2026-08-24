@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WYSIWYG &middot; Adds &middot; Amazon</title>
+<style>
+    :root {
+        --bg: #f4f6f9;
+        --panel: #ffffff;
+        --text: #1a1a1a;
+        --muted: #6b7280;
+        --border: #d0d5dd;
+        --accent: #0000ff;
+        --accent-soft: #eef3fb;
+        --btn: #0000ff;
+        --btn-text: #ffffff;
+    }
+    body.dark {
+        --bg: #1b1d21;
+        --panel: #25282e;
+        --text: #e6e6e6;
+        --muted: #9aa0a6;
+        --border: #3a3f47;
+        --accent: #ffd400;
+        --accent-soft: #2c2f36;
+        --btn: #ffd400;
+        --btn-text: #111111;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 18px;
+    }
+    h2 { margin: 0 0 4px; font-size: 18px; color: var(--accent); }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    input[type="text"] {
+        flex: 1;
+        min-width: 260px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        font-size: 14px;
+    }
+    button.scrape-btn {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 6px;
+        background: var(--btn);
+        color: var(--btn-text);
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    button.scrape-btn:disabled { opacity: 0.55; cursor: wait; }
+    button.ghost {
+        padding: 9px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .status { font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 16px; }
+    .status.err { color: #c62828; }
+    .status.ok { color: #2e7d32; }
+    textarea {
+        width: 100%;
+        min-height: 420px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 12.5px;
+        padding: 12px;
+        resize: vertical;
+        white-space: pre;
+        overflow-wrap: normal;
+    }
+    label.lbl { font-size: 12px; font-weight: 600; color: var(--muted); display:block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+    <h2>Adds &middot; Amazon</h2>
+    <div class="sub">Paste a Discogs seller / release link (e.g. https://www.discogs.com/shop/item/4330873320). Data is pulled via the Discogs API and laid out using the Amazon Adds scraper.</div>
+
+    <div class="row">
+        <input type="text" id="urlInput" placeholder="Paste Discogs URL here..." autocomplete="off" spellcheck="false">
+        <button class="scrape-btn" id="scrapeBtn">Scrape</button>
+        <button class="ghost" id="copyBtn">Copy</button>
+    </div>
+    <div class="status" id="status"></div>
+    <label class="lbl">Scraped output</label>
+    <textarea id="output" readonly placeholder="Scraped data will appear here..."></textarea>
+
+<script>
+(async function () {
+    const urlInput = document.getElementById('urlInput');
+    const scrapeBtn = document.getElementById('scrapeBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const statusEl = document.getElementById('status');
+    const output = document.getElementById('output');
+
+    // Match the app's dark/light theme from localStorage if present.
+    try {
+        const t = localStorage.getItem('wysiwyg_theme');
+        if (t === 'dark') document.body.classList.add('dark');
+    } catch (e) {}
+
+    function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    async function doScrape() {
+        const url = urlInput.value.trim();
+        if (!url) {
+            setStatus('Paste a Discogs URL first.', 'err');
+            return;
+        }
+        scrapeBtn.disabled = true;
+        scrapeBtn.textContent = 'Scraping...';
+        output.value = '';
+        setStatus('Fetching from Discogs API...');
+        try {
+            const resp = await fetch('/api/adds/amazon-scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                output.value = data.text;
+                setStatus('Done.', 'ok');
+            } else {
+                output.value = '';
+                setStatus('Error: ' + (data.message || 'Unknown error'), 'err');
+            }
+        } catch (e) {
+            setStatus('Request failed: ' + e, 'err');
+        } finally {
+            scrapeBtn.disabled = false;
+            scrapeBtn.textContent = 'Scrape';
+        }
+    }
+
+    // (a) Auto-paste the clipboard on load.
+    window.addEventListener('DOMContentLoaded', async () => {
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                const txt = (await navigator.clipboard.readText()).trim();
+                if (txt) {
+                    urlInput.value = txt;
+                    // (b)+(c) auto-trigger scrape when we have a URL from clipboard
+                    doScrape();
+                }
+            }
+        } catch (e) {
+            // Clipboard read may be blocked without permission; ignore.
+        }
+    });
+
+    // Manual scrape button
+    scrapeBtn.addEventListener('click', doScrape);
+
+    // Auto-trigger when a URL is pasted manually into the box.
+    urlInput.addEventListener('paste', (e) => {
+        // Let the paste land, then scrape.
+        setTimeout(doScrape, 0);
+    });
+
+    copyBtn.addEventListener('click', async () => {
+        if (!output.value) return;
+        try {
+            await navigator.clipboard.writeText(output.value);
+            setStatus('Copied to clipboard.', 'ok');
+        } catch (e) {
+            output.select();
+            document.execCommand('copy');
+            setStatus('Copied.', 'ok');
+        }
+    });
+})();
+</script>
+</body>
+</html>
