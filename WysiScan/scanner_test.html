@@ -456,6 +456,11 @@
         .ocr-modal.stay-on-top {
             z-index: 2000;
         }
+        #cliPinBtn.pinned {
+            background: #6f42c1;
+            color: #fff;
+            border-color: #6f42c1;
+        }
 
         .ocr-modal-content {
             padding: 15px;
@@ -569,9 +574,9 @@
                         <input type="text" id="groupName" list="groupList"
                             placeholder="Type new name, or select existing" autocomplete="off"
                             style="width: 100%; box-sizing: border-box;"
-                            onkeydown="if (event.key === 'Enter') startOrResumeGroup();">
+                            onkeydown="if (event.key === 'Enter') startOrResumeGroup(true);">
                         <datalist id="groupList"></datalist>
-                        <button id="newGroupBtn" onclick="startOrResumeGroup()"
+                        <button id="newGroupBtn" onclick="startOrResumeGroup(true)"
                             style="white-space: nowrap; margin-right: 0;">Start Group</button>
                         <button onclick="clearGroupAndUI()" title="Clear group name and reset UI"
                             style="white-space: nowrap; background-color: #dc3545; color: white; margin-right: 0;">Clear</button>
@@ -945,26 +950,129 @@
             document.getElementById('cliResultText').value = '';
             document.getElementById('cliStatusMsg').innerText = '';
 
-            // Load default prompt from json
+            // Load selectable prompt presets from prompts.json
             try {
-                const res = await fetch('/get-default-prompt');
-                const data = await res.json();
-                if (data.status === 'success' && data.prompt) {
-                    if (typeof data.prompt === 'string') {
-                        document.getElementById('cliPromptText').value = data.prompt;
-                    } else if (typeof data.prompt === 'object') {
-                        document.getElementById('cliPromptText').value = data.prompt.default_prompt || data.prompt.prompt || JSON.stringify(data.prompt, null, 2);
-                    }
+                const pres = await fetch('/get-prompts');
+                const pdata = await pres.json();
+                const sel = document.getElementById('cliPromptSelect');
+                sel.innerHTML = '<option value="">-- Select a prompt --</option>';
+                if (pdata.status === 'success' && pdata.names && pdata.names.length) {
+                    window._promptPresets = pdata.prompts || {};
+                    pdata.names.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        sel.appendChild(opt);
+                    });
+                    // Auto-select the first preset and populate the text box
+                    const first = pdata.names[0];
+                    sel.value = first;
+                    document.getElementById('cliPromptText').value = window._promptPresets[first] || '';
+                    onCliPromptSelect(); // apply readonly/save state for the selected preset
+                } else {
+                    window._promptPresets = {};
                 }
             } catch (e) {
-                console.error("Could not load default prompt:", e);
+                console.error("Could not load prompt presets:", e);
+                window._promptPresets = {};
             }
 
             document.getElementById('cliModal').style.display = 'block';
         }
 
+        // Populate the prompt text box when a preset is chosen, and enforce
+        // editability: ONLY the "Custom" prompt may be edited; Basic / Detailed
+        // (and any future non-Custom) load read-only and SAVE is disabled.
+        function onCliPromptSelect() {
+            const sel = document.getElementById('cliPromptSelect');
+            const name = sel.value;
+            const box = document.getElementById('cliPromptText');
+            const saveBtn = document.querySelector('button[onclick="saveCliPrompt()"]');
+
+            if (name && window._promptPresets && window._promptPresets[name]) {
+                box.value = window._promptPresets[name];
+            } else {
+                box.value = '';
+            }
+
+            const editable = (name === 'Custom');
+            box.readOnly = !editable;
+            box.style.opacity = editable ? '1' : '0.75';
+            if (saveBtn) {
+                saveBtn.disabled = !editable;
+                saveBtn.title = editable ? 'Save this custom prompt' : 'Only the Custom prompt can be saved';
+            }
+            const statusMsg = document.getElementById('cliStatusMsg');
+            if (statusMsg) {
+                statusMsg.innerText = editable ? '' : `“${name}” is read-only. Select “Custom” to edit & save.`;
+            }
+        }
+        // (change listener now wired via inline onchange on the <select>)
+
+        // Save the current text-box content as a named prompt (overwrites the
+        // selected preset name, or creates it). Writes to prompts.json via API.
+        async function saveCliPrompt() {
+            const sel = document.getElementById('cliPromptSelect');
+            const name = sel.value;
+            const text = document.getElementById('cliPromptText').value;
+            const statusMsg = document.getElementById('cliStatusMsg');
+
+            if (!name) {
+                showToast("Select a preset name (or 'Custom') to save over first.", "warn");
+                return;
+            }
+            if (!text.trim()) {
+                showToast("Prompt text is empty; nothing to save.", "warn");
+                return;
+            }
+
+            statusMsg.innerText = "Saving...";
+            try {
+                const res = await fetch('/save-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, prompt: text })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(`Saved prompt "${name}".`, "success");
+                    statusMsg.innerText = `Saved "${name}".`;
+                    // Refresh the dropdown so the saved version is available
+                    try {
+                        const pres = await fetch('/get-prompts');
+                        const pdata = await pres.json();
+                        if (pdata.status === 'success') {
+                            window._promptPresets = pdata.prompts || {};
+                            sel.innerHTML = '<option value="">-- Select a prompt --</option>';
+                            pdata.names.forEach(n => {
+                                const opt = document.createElement('option');
+                                opt.value = n; opt.textContent = n;
+                                sel.appendChild(opt);
+                            });
+                            sel.value = name;
+                        }
+                    } catch (e) { /* non-fatal */ }
+                } else {
+                    showToast("Save failed: " + data.message, "error");
+                    statusMsg.innerText = "Save failed.";
+                }
+            } catch (e) {
+                showToast("Save error: " + e, "error");
+                statusMsg.innerText = "Save error.";
+            }
+        }
+
         function closeCliModal() {
             document.getElementById('cliModal').style.display = 'none';
+        }
+
+        // Toggle: keep the AI Prompt modal above other in-page panels.
+        function toggleCliPin() {
+            const modal = document.getElementById('cliModal');
+            const btn = document.getElementById('cliPinBtn');
+            const on = modal.classList.toggle('stay-on-top');
+            btn.classList.toggle('pinned', on);
+            btn.textContent = on ? '📌 Pinned' : '📌 Pin';
         }
 
         async function submitCliPrompt() {
@@ -1228,7 +1336,7 @@
             }
         }
 
-        async function startOrResumeGroup() {
+        async function startOrResumeGroup(triggerAutoscan = false) {
             const newGroupName = getGroupName();
 
             if (currentGroupName && currentGroupName !== newGroupName) {
@@ -1291,7 +1399,7 @@
                 status.innerText = `Starting new group '${groupName}'.`;
             }
 
-            if (document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked) {
+            if (triggerAutoscan && document.getElementById('autoScanCheckbox') && document.getElementById('autoScanCheckbox').checked) {
                 performScan();
             }
         }
@@ -3126,7 +3234,11 @@
         <div class="ocr-modal-content">
             <div class="ocr-modal-header">
                 <h3 style="margin: 0;">🤖 Run Gemini CLI Prompt</h3>
-                <button onclick="closeCliModal()" class="close-btn" title="Close">&times;</button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="cliPinBtn" onclick="toggleCliPin()" title="Keep this window on top of other panels"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">📌 Pin</button>
+                    <button onclick="closeCliModal()" class="close-btn" title="Close">&times;</button>
+                </div>
             </div>
 
             <div style="margin-bottom: 10px;">
@@ -3135,6 +3247,16 @@
                 <div id="cliSelectedList"
                     style="font-size: 12px; max-height: 80px; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
                 </div>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label for="cliPromptSelect"
+                    style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Prompt
+                    Preset:</label>
+                <select id="cliPromptSelect" onchange="onCliPromptSelect()"
+                    style="width: 100%; padding: 6px; font-size: 14px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main);">
+                    <option value="">-- Select a prompt --</option>
+                </select>
             </div>
 
             <div style="margin-bottom: 10px;">
@@ -3155,10 +3277,12 @@
             <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-color);"></span>
                 <div>
+                    <button onclick="saveCliPrompt()"
+                        style="background-color: #28a745; color: white; margin-right: 6px;">💾 Save</button>
                     <button onclick="closeCliModal()"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main);">Cancel</button>
                     <button id="btnRunCli" onclick="submitCliPrompt()"
-                        style="background-color: #6f42c1; color: white;">🚀 Run Prompt</button>
+                        style="background-color: #6f42c1; color: white; margin-left: 6px;">🚀 Run Prompt</button>
                 </div>
             </div>
         </div>

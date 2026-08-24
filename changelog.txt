@@ -1,4 +1,12 @@
 ### v1.13.0.0 - 2026-08-24
+-- WysiScan UI: removed the blue "WysiScan" banner; added a left-aligned "☰ Menu" button (main-app styling) opening a drawer with Hot Keys / Theme / Exit only. AI Prompt stays on the main form.
+-- WysiScan AI Prompt (Gemini) now reads its API key from the main app root .env (GEMINI_API_KEY) at scanner startup; falls back to a local .env for standalone use. Fixed loader so the key actually loads (resolves main root .env two dirs up from WysiScan).
+-- WysiScan AI Prompt: added a "Prompt Preset" dropdown populated from prompts.json (Basic / Custom / Detailed). Selecting a preset fills the prompt text box; the text box is the single source sent to Gemini (no default_prompt.json duplication, which previously caused doubled output).
+-- prompts.json simplified to plain instruction line-lists (stripped Step/a]/b] scaffolding) for cleaner AI input; "Custom" entry holds just GLOBAL RULE + FORMATTING as an editable base.
+-- WysiScan AI Prompt: only the "Custom" preset is editable; Basic / Detailed (and future presets) load read-only and the Save button is disabled for them (enforced in UI and server-side).
+-- WysiScan AI Prompt: added a "💾 Save" button that persists the current text-box content as the Custom prompt to prompts.json.
+-- WysiScan autoscan fix: autoscan now triggers ONLY when Start Group is explicitly invoked (button or Enter). Refresh, rename, and group-name auto-load no longer fire an unwanted scan when autoscan is checked.
+-- WysiScan & Amazon Adds: added an "Always on top" (in-page pin) toggle at the top of the AI Prompt modal and the Amazon Adds page so they float above other in-page content. (OS-level native-window topmost deferred to the standalone EXE build.)
 -- Amazon Adds (Discogs API) overhaul: results now render as per-field rows with editable boxes and a Copy button each; Upload Photos / Merchant Shipping Group / Quantity rows kept alignment-matched but copy-less
 -- Subject Keyword group: each keyword is its own deletable + editable row, with a "Copy Line" button that joins survivors with spaces
 -- Keyword expansion: all lowercase, space-joined one-liner capped at 210 bytes, derived from the item's own data with an Amazon-safe blocklist (no "Check box: This product does not have a Product ID", promo/brand-only terms, etc.)

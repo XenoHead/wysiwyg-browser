@@ -251,6 +251,124 @@ async def get_default_prompt():
             return {'status': 'error', 'message': str(e)}
     return {'status': 'error', 'message': 'default_prompt.json not found'}
 
+# 1b. Endpoint to retrieve the selectable list of named prompts from prompts.json
+def _format_prompt_text(prompt_obj):
+    """Flatten a prompt object into a single prompt string for the text box /
+    Gemini call. Supports the current plain shape {"prompt": [...lines...]}
+    and legacy shapes (GLOBAL RULE / FORMATTING / RULES) for backward compat."""
+    if not isinstance(prompt_obj, dict):
+        return str(prompt_obj)
+    # Current shape: a flat list of prompt lines
+    if "prompt" in prompt_obj and isinstance(prompt_obj["prompt"], list):
+        return "\n".join(str(line) for line in prompt_obj["prompt"])
+    # Legacy shape
+    parts = []
+    gr = prompt_obj.get("GLOBAL RULE")
+    if gr:
+        parts.append("GLOBAL RULE:")
+        if isinstance(gr, list):
+            parts.extend([f"  {g}" for g in gr])
+        else:
+            parts.append(f"  {gr}")
+    fmt = prompt_obj.get("FORMATTING")
+    if fmt:
+        parts.append(f"FORMATTING: {fmt}")
+    rules = prompt_obj.get("RULES")
+    if isinstance(rules, list):
+        parts.append("RULES:")
+        for r in rules:
+            if isinstance(r, dict):
+                step = r.get("Step", "")
+                desc = r.get("Description", "")
+                sub = r.get("SubGroup", "")
+                instrs = r.get("Instructions", [])
+                line = f"  Step {step}:"
+                if sub:
+                    line += f" [{sub}]"
+                if desc:
+                    line += f" {desc}"
+                parts.append(line)
+                if isinstance(instrs, list):
+                    for i in instrs:
+                        parts.append(f"    - {i}")
+                elif instrs:
+                    parts.append(f"    - {instrs}")
+            else:
+                parts.append(f"  {r}")
+    return "\n".join(parts)
+
+def load_prompts():
+    """Load prompts.json. Supports two shapes:
+       a) A dict of named prompts: {"Basic": {...}, "Detailed": {...}}
+       b) A single flat prompt object with an "Option" key naming it.
+    Returns dict: { name: prompt_object }."""
+    path = os.path.join(APP_DIR, "prompts.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    # Shape (a): every value is itself a dict (a prompt object)
+    if data and all(isinstance(v, dict) for v in data.values()):
+        return data
+    # Shape (b): single flat prompt object
+    name = data.get("Option") or "Basic"
+    return {name: data}
+
+@app.get('/get-prompts')
+async def get_prompts():
+    prompts = load_prompts()
+    if not prompts:
+        return {'status': 'error', 'message': 'prompts.json not found or empty'}
+    return {
+        'status': 'success',
+        'names': list(prompts.keys()),
+        'prompts': {name: _format_prompt_text(obj) for name, obj in prompts.items()},
+    }
+
+
+# 1c. Endpoint to save (overwrite/create) a named prompt in prompts.json
+@app.post('/save-prompt')
+async def save_prompt(data: dict = Body(default={})):
+    name = (data.get('name') or '').strip()
+    prompt_text = data.get('prompt', '')
+    if not name:
+        return {'status': 'error', 'message': 'No prompt name provided.'}
+    if not prompt_text or not prompt_text.strip():
+        return {'status': 'error', 'message': 'Prompt text is empty.'}
+    # Only the "Custom" prompt may be saved/edited. Basic, Detailed, and any
+    # other preset are read-only by design.
+    if name != 'Custom':
+        return {'status': 'error', 'message': 'Only the "Custom" prompt can be saved.'}
+
+    path = os.path.join(APP_DIR, "prompts.json")
+    prompts = {}
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                prompts = json.load(f)
+        except Exception:
+            prompts = {}
+    if not isinstance(prompts, dict):
+        prompts = {}
+
+    # Store as a plain list of lines (the editable shape)
+    lines = [ln.rstrip() for ln in prompt_text.replace("\r\n", "\n").split("\n")]
+    prompts[name] = {"prompt": lines}
+
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(prompts, f, indent=4, ensure_ascii=False)
+        return {'status': 'success', 'message': f'Saved prompt "{name}".', 'names': list(prompts.keys())}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
+
 # 2. Endpoint to run CLI command with prompt and images
 @app.post('/run-cli-prompt')
 async def run_cli_prompt(data: dict = Body(default={})):

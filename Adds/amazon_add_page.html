@@ -186,9 +186,39 @@
         flex: 0 0 72px;
         width: 72px;
     }
+    /* --- Always-on-top pin --- */
+    #aapTopbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        justify-content: flex-end;
+        padding: 0 0 10px;
+        background: var(--bg);
+    }
+    #aapPinBtn.pinned {
+        background: var(--accent);
+        color: var(--btn-text);
+        border-color: var(--accent);
+    }
+    #aapWrap.pinned {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2147483647;
+        background: var(--bg);
+        padding: 18px;
+        overflow: auto;
+        max-height: 100vh;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    }
 </style>
 </head>
 <body>
+    <div id="aapTopbar">
+        <button id="aapPinBtn" class="ghost" onclick="toggleAapPin()">📌 Always on top: OFF</button>
+    </div>
     <h2>Adds &middot; Amazon</h2>
     <div class="sub">Paste a Discogs seller / release link (e.g. https://www.discogs.com/shop/item/4330873320). Data is pulled via the Discogs API and laid out using the Amazon Adds scraper.</div>
 
@@ -490,6 +520,28 @@
         setTimeout(doScrape, 0);
     });
 })();
+</script>
+<script>
+// Always-on-top pin for the Amazon Adds page (in-page; wraps content and
+// floats it above other in-page content). Global so the inline onclick works.
+function toggleAapPin() {
+    let wrap = document.getElementById('aapWrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'aapWrap';
+        const topbar = document.getElementById('aapTopbar');
+        const toMove = [];
+        for (const child of Array.from(document.body.children)) {
+            if (child !== topbar) toMove.push(child);
+        }
+        for (const child of toMove) wrap.appendChild(child);
+        document.body.insertBefore(wrap, topbar.nextSibling);
+    }
+    const on = wrap.classList.toggle('pinned');
+    const btn = document.getElementById('aapPinBtn');
+    btn.classList.toggle('pinned', on);
+    btn.textContent = on ? '📌 Always on top: ON' : '📌 Always on top: OFF';
+}
 </script>
 </body>
 </html>
