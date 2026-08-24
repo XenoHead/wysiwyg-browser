@@ -71,21 +71,121 @@
     .status { font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 16px; }
     .status.err { color: #c62828; }
     .status.ok { color: #2e7d32; }
-    textarea {
-        width: 100%;
-        min-height: 420px;
+    label.lbl { font-size: 12px; font-weight: 600; color: var(--muted); display:block; margin-bottom: 8px; }
+
+    /* --- Result field rows --- */
+    .results { margin-top: 2px; }
+    .section-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin: 16px 0 6px;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .field-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-bottom: 6px;
+    }
+    .field-label {
+        flex: 0 0 190px;
+        width: 190px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        padding-top: 8px;
+        word-break: break-word;
+    }
+    .field-val {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 7px 10px;
         border: 1px solid var(--border);
         border-radius: 6px;
         background: var(--panel);
         color: var(--text);
-        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-        font-size: 12.5px;
-        padding: 12px;
+        font-size: 13px;
+        font-family: inherit;
         resize: vertical;
-        white-space: pre;
-        overflow-wrap: normal;
     }
-    label.lbl { font-size: 12px; font-weight: 600; color: var(--muted); display:block; margin-bottom: 4px; }
+    .copy-one {
+        flex: 0 0 72px;
+        width: 72px;
+        padding: 7px 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .copy-one:hover { background: var(--accent-soft); }
+    .copy-spacer {
+        flex: 0 0 72px;
+        width: 72px;
+    }
+    /* --- Subject Keyword group --- */
+    .kw-group {
+        margin-bottom: 8px;
+    }
+    .kw-line {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-bottom: 6px;
+    }
+    .kw-del {
+        flex: 0 0 26px;
+        width: 26px;
+        align-self: center;
+        padding: 4px 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .kw-del:hover { background: #d9534f; color: #fff; border-color: #d9534f; }
+    .kw-val {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        font-size: 13px;
+        font-family: inherit;
+        resize: vertical;
+    }
+    .kw-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin: 4px 0 2px;
+    }
+    .kw-copyline {
+        flex: 0 0 72px;
+        width: 72px;
+        padding: 7px 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .kw-copyline:hover { background: var(--accent-soft); }
+    .kw-spacer {
+        flex: 0 0 72px;
+        width: 72px;
+    }
 </style>
 </head>
 <body>
@@ -95,19 +195,20 @@
     <div class="row">
         <input type="text" id="urlInput" placeholder="Paste Discogs URL here..." autocomplete="off" spellcheck="false">
         <button class="scrape-btn" id="scrapeBtn">Scrape</button>
-        <button class="ghost" id="copyBtn">Copy</button>
+        <button class="ghost" id="copyAllBtn">Copy All</button>
     </div>
     <div class="status" id="status"></div>
     <label class="lbl">Scraped output</label>
-    <textarea id="output" readonly placeholder="Scraped data will appear here..."></textarea>
+    <div class="results" id="results"></div>
 
 <script>
 (async function () {
     const urlInput = document.getElementById('urlInput');
     const scrapeBtn = document.getElementById('scrapeBtn');
-    const copyBtn = document.getElementById('copyBtn');
+    const copyAllBtn = document.getElementById('copyAllBtn');
     const statusEl = document.getElementById('status');
-    const output = document.getElementById('output');
+    const results = document.getElementById('results');
+    let lastText = '';
 
     // Match the app's dark/light theme from localStorage if present.
     try {
@@ -120,6 +221,216 @@
         statusEl.className = 'status' + (kind ? ' ' + kind : '');
     }
 
+    // Subject Keyword group: each comma-separated token is its own
+    // deletable + editable row, with a "Copy Line" button that joins
+    // the survivors into a single "item1, item2, ..." string.
+    function renderKeywordGroup(value) {
+        const group = document.createElement('div');
+        group.className = 'kw-group';
+
+        const lbl = document.createElement('div');
+        lbl.className = 'field-label';
+        lbl.textContent = 'Subject Keyword';
+        group.appendChild(lbl);
+
+        const tokens = value.split(',').map((t) => t.trim()).filter((t) => t.length);
+
+        const list = document.createElement('div');
+        list.className = 'kw-list';
+        tokens.forEach((tok) => {
+            const line = document.createElement('div');
+            line.className = 'kw-line';
+
+            const del = document.createElement('button');
+            del.className = 'kw-del';
+            del.type = 'button';
+            del.textContent = '✕';
+            del.title = 'Delete this keyword';
+
+            const ta = document.createElement('textarea');
+            ta.className = 'kw-val';
+            ta.value = tok;
+            ta.rows = 1;
+
+            const copy = document.createElement('button');
+            copy.className = 'copy-one';
+            copy.type = 'button';
+            copy.textContent = 'Copy';
+
+            line.appendChild(del);
+            line.appendChild(ta);
+            line.appendChild(copy);
+            list.appendChild(line);
+        });
+        group.appendChild(list);
+
+        const actions = document.createElement('div');
+        actions.className = 'kw-actions';
+        const copyLine = document.createElement('button');
+        copyLine.className = 'kw-copyline';
+        copyLine.type = 'button';
+        copyLine.textContent = 'Copy Line';
+        const spacer = document.createElement('div');
+        spacer.className = 'kw-spacer';
+        actions.appendChild(copyLine);
+        actions.appendChild(spacer);
+        group.appendChild(actions);
+
+        results.appendChild(group);
+    }
+
+    // Turn the scraped markdown text into copy-friendly field rows.
+    function renderResults(text) {
+        results.innerHTML = '';
+        let pendingKeywords = [];
+        const lines = text.split('\n');
+        for (const raw of lines) {
+            const line = raw.trimEnd();
+            if (!line.trim()) continue;
+            if (line.startsWith('Section')) {
+                const h = document.createElement('div');
+                h.className = 'section-title';
+                h.dataset.full = line;
+                h.textContent = line.replace(/^Section\s*\d+:\s*/, '');
+                results.appendChild(h);
+                continue;
+            }
+            // Field line: "Label - Value" (split on the first " - ").
+            const idx = line.indexOf(' - ');
+            let label = '';
+            let value = line;
+            if (idx !== -1) {
+                label = line.slice(0, idx).trim();
+                value = line.slice(idx + 3).trim();
+            }
+
+            // Subject Keyword may arrive as one comma-joined line OR several
+            // "Subject Keyword - X" lines. Fold them all into a single group.
+            if (label === 'Subject Keyword') {
+                pendingKeywords.push(value);
+                continue;
+            }
+            // A non-keyword line ends any accumulated keyword block.
+            if (pendingKeywords.length) {
+                renderKeywordGroup(pendingKeywords.join(', '));
+                pendingKeywords = [];
+            }
+
+            const row = document.createElement('div');
+            row.className = 'field-row';
+
+            const lbl = document.createElement('div');
+            lbl.className = 'field-label';
+            lbl.textContent = label;
+
+            const val = document.createElement('textarea');
+            val.className = 'field-val';
+            val.value = value;
+            val.dataset.label = label;
+            val.rows = Math.max(1, Math.min(8, Math.ceil(value.length / 60)));
+
+            row.appendChild(lbl);
+            row.appendChild(val);
+
+            // Skip the Copy button for rows the user edits manually,
+            // but keep a 72px spacer so every text box aligns at the same width.
+            const NO_COPY = ['Upload Photos', 'Merchant Shipping Group', 'Quantity'];
+            if (label && !NO_COPY.includes(label)) {
+                const btn = document.createElement('button');
+                btn.className = 'copy-one';
+                btn.type = 'button';
+                btn.textContent = 'Copy';
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('div');
+                spacer.className = 'copy-spacer';
+                row.appendChild(spacer);
+            }
+            results.appendChild(row);
+        }
+        if (pendingKeywords.length) {
+            renderKeywordGroup(pendingKeywords.join(', '));
+        }
+    }
+
+    async function flashCopied(btn) {
+        const old = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = old; }, 1200);
+    }
+
+    async function copyText(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Delegated clicks inside the results area.
+    results.addEventListener('click', async (e) => {
+        // Delete a single Subject Keyword token.
+        const del = e.target.closest('.kw-del');
+        if (del) {
+            const line = del.closest('.kw-line');
+            if (line) line.remove();
+            return;
+        }
+        // Copy Line: join the remaining keyword tokens with ", ".
+        const cl = e.target.closest('.kw-copyline');
+        if (cl) {
+            const group = cl.closest('.kw-group');
+            const vals = [];
+            if (group) {
+                group.querySelectorAll('.kw-line .kw-val').forEach((ta) => {
+                    const v = ta.value.trim();
+                    if (v) vals.push(v);
+                });
+            }
+            const text = vals.join(' ');
+            if (!text) { setStatus('No keywords left to copy.', 'err'); return; }
+            const ok = await copyText(text);
+            setStatus(ok ? 'Copied line: ' + text : 'Copy failed.', ok ? 'ok' : 'err');
+            if (!ok) { /* clipboard blocked; nothing else we can do here */ }
+            return;
+        }
+        // Per-row copy (Copy buttons everywhere, incl. keyword rows).
+        const btn = e.target.closest('.copy-one');
+        if (!btn) return;
+        const ta = btn.previousElementSibling;        // the editable textarea
+        const v = ta ? ta.value : '';
+        if (!v) return;
+        const ok = await copyText(v);
+        if (!ok && ta) { ta.select(); document.execCommand('copy'); }
+        flashCopied(btn);
+    });
+
+    copyAllBtn.addEventListener('click', async () => {
+        const parts = [];
+        results.querySelectorAll('.section-title').forEach((h) => {
+            parts.push(h.dataset.full || h.textContent);
+        });
+        results.querySelectorAll('.field-row').forEach((row) => {
+            const lbl = row.querySelector('.field-label');
+            const val = row.querySelector('.field-val');
+            if (lbl && val) parts.push(lbl.textContent + ' - ' + val.value);
+        });
+        results.querySelectorAll('.kw-group').forEach((grp) => {
+            const label = grp.querySelector('.field-label');
+            const vals = [];
+            grp.querySelectorAll('.kw-line .kw-val').forEach((ta) => {
+                const v = ta.value.trim();
+                if (v) vals.push(v);
+            });
+            if (label) parts.push(label.textContent + ' - ' + vals.join(' '));
+        });
+        const text = parts.join('\n');
+        if (!text.trim()) { setStatus('Nothing to copy yet.', 'err'); return; }
+        const ok = await copyText(text);
+        setStatus(ok ? 'Copied all (with your edits) to clipboard.' : 'Copy failed.', ok ? 'ok' : 'err');
+    });
+
     async function doScrape() {
         const url = urlInput.value.trim();
         if (!url) {
@@ -128,7 +439,8 @@
         }
         scrapeBtn.disabled = true;
         scrapeBtn.textContent = 'Scraping...';
-        output.value = '';
+        results.innerHTML = '';
+        lastText = '';
         setStatus('Fetching from Discogs API...');
         try {
             const resp = await fetch('/api/adds/amazon-scrape', {
@@ -138,10 +450,11 @@
             });
             const data = await resp.json();
             if (data.status === 'success') {
-                output.value = data.text;
+                lastText = data.text;
+                renderResults(data.text);
                 setStatus('Done.', 'ok');
             } else {
-                output.value = '';
+                results.innerHTML = '';
                 setStatus('Error: ' + (data.message || 'Unknown error'), 'err');
             }
         } catch (e) {
@@ -175,18 +488,6 @@
     urlInput.addEventListener('paste', (e) => {
         // Let the paste land, then scrape.
         setTimeout(doScrape, 0);
-    });
-
-    copyBtn.addEventListener('click', async () => {
-        if (!output.value) return;
-        try {
-            await navigator.clipboard.writeText(output.value);
-            setStatus('Copied to clipboard.', 'ok');
-        } catch (e) {
-            output.select();
-            document.execCommand('copy');
-            setStatus('Copied.', 'ok');
-        }
     });
 })();
 </script>

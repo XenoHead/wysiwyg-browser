@@ -1921,6 +1921,8 @@ async def adds_amazon_scrape(data: dict = Body(...)):
         release_id = match.group(1)
 
     async with httpx.AsyncClient() as client:
+        listing_price = None
+        listing_location = None
         if not release_id:
             ml = re.search(r'(?:sell|shop)/item/(\d+)', url)
             if ml:
@@ -1928,7 +1930,18 @@ async def adds_amazon_scrape(data: dict = Body(...)):
                     lr = await client.get(f"https://api.discogs.com/marketplace/listings/{ml.group(1)}",
                                           headers=HEADERS)
                     if lr.status_code == 200:
-                        release_id = str(lr.json().get('release', {}).get('id', ''))
+                        lj = lr.json()
+                        release_id = str(lj.get('release', {}).get('id', ''))
+                        # Capture the seller's listed price + location (SKU) so the
+                        # Amazon offer fields are populated from the actual listing.
+                        price_obj = lj.get('price') or {}
+                        if price_obj.get('value') is not None:
+                            listing_price = f"{price_obj['value']:.2f}"
+                        listing_location = (lj.get('location') or '').strip() or None
+                        # The seller's listing comment IS the item's actual
+                        # condition description (e.g. "Used Like New 1994 Mexican
+                        # Import Cassette Very Good+ ..."). Feed it to Item Condition.
+                        listing_comments = (lj.get('comments') or '').strip() or None
                 except Exception:
                     pass
             if not release_id:
@@ -1963,7 +1976,9 @@ async def adds_amazon_scrape(data: dict = Body(...)):
         release = resp.json()
 
     raw_text = _discogs_release_to_raw_text(release)
-    text = _amazon_add.scrape_to_text(raw_text)
+    # Pass the marketplace listing price/location/comments when available (shop/item URLs).
+    text = _amazon_add.scrape_to_text(raw_text, price=listing_price, location=listing_location,
+                                     comments=listing_comments)
     return {"status": "success", "text": text}
 
 

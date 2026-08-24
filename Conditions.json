@@ -257,6 +257,11 @@
             "favorite": true
         },
         {
+            "title": "Waviness/Bending (Jcard)",
+            "text": "waviness/bending to Jcard",
+            "favorite": true
+        },
+        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
@@ -323,10 +328,6 @@
         {
             "title": "Water Damage (Jcard)",
             "text": "water damage to Jcard"
-        },
-        {
-            "title": "Waviness/Bending (Jcard)",
-            "text": "waviness/bending to Jcard"
         },
         {
             "title": "Writing/Ink",

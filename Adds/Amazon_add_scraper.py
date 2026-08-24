@@ -235,9 +235,9 @@ def process_discogs_raw_data(raw_discogs_data):
         'Worldwide': 'United States'
     }
     
-    final_origin = country_map.get(raw_country_line, raw_country_line)
-    if not final_origin or final_origin.lower() in ['none', 'unknown', '']:
-        final_origin = 'United States'
+    # Country/Region of Origin is ALWAYS United States (our selling origin),
+    # regardless of the release's pressing country.
+    final_origin = 'United States'
     tags_found = []
     for e in EDITION_LOG:
         if re.search(r'\b' + re.escape(e) + r'\b', raw_discogs_data, re.IGNORECASE):
@@ -415,26 +415,42 @@ def process_seller_info_and_generate_asin(seller_info_data):
     comments_match = re.search(r'Comments\s*([\s\S]*?)Location:', seller_info_data)
     DISCOGS_DATA_STORAGE['Your Price'] = price_match.group(1).replace(',', '') if price_match else '0.00'
     DISCOGS_DATA_STORAGE['SKU'] = re.search(r'Location:\s*(\S+)', seller_info_data).group(1) if re.search(r'Location:\s*(\S+)', seller_info_data) else 'NEED-SKU'
+    comments_match = re.search(r'Comments\s*([\s\S]*?)Location:', seller_info_data)
     DISCOGS_DATA_STORAGE['Offer Condition Note'] = comments_match.group(1).strip() if comments_match else ''
-    found_typos = []
-    tracklist_text = DISCOGS_DATA_STORAGE.get('HTML Product Description', '')
-    for misspelled, correct in SPELLING_CORRECTIONS.items():
-        if re.search(r'\b' + re.escape(misspelled) + r'\b', tracklist_text, flags=re.IGNORECASE):
-            found_typos.append(f"{misspelled} -> {correct}")
-    print("\n⚠️ ACTION REQUIRED: INTERACTIVE SELECTION ⚠️")
-    print("\n--- 1. SELECT ITEM CONDITION ---")
-    print("[1] Collectible Like New")
-    print("[2] Collectible Very Good")
-    print("[3] Collectible Good")
-    if "Country: Europe" in DISCOGS_DATA_STORAGE.get('HTML Product Description', ''):
-       print("\n--- 2. SPECIFY COUNTRY ---")
-       print("The data lists 'Europe'. Please reply with the specific country (e.g., UK, Germany) for the Compliance field.")   
-    if found_typos:
-        print("\n--- 2. CONFIRM SPELLING FIXES ---")
-        for typo in found_typos:
-            print(f"[FIX] Found tracklist typo: {typo}. Should I apply this? (Yes/No)")
-    print("\n🛑 STOP: Please reply with Choice (1, 2, or 3) and Spelling (Yes/No).")
-    return "LOCKED: Awaiting user selection."
+    # Item Condition is ALWAYS derived from the Offer Condition Note: the
+    # worst (lowest) rating present, reported as "Collectable - <rating>".
+    DISCOGS_DATA_STORAGE['Item Condition'] = derive_item_condition(
+        DISCOGS_DATA_STORAGE.get('Offer Condition Note', ''))
+    # (Interactive selection prompts removed — the API path supplies the
+    #  condition choice and spelling flag directly to generate_final_amazon_table.)
+    return "LOCKED: Waiting for Phase 3."
+# Ratings we recognise in an Offer Condition Note, mapped to a quality rank
+# (higher = better). We always report the *lowest* (worst) rating present so
+# the buyer is never over-promised. The trailing +/- on a rating is dropped.
+_RATING_RANK = {'Like New': 3, 'Very Good': 2, 'Good': 1}
+def derive_item_condition(notes):
+    """Return 'Collectable - <lowest rating found in the note>'.
+
+    Scans the Offer Condition Note for Like New / Very Good / Good (most
+    specific first so 'Good' never matches inside 'Very Good'), keeps the
+    worst one present, and strips any +/- suffix. Falls back to
+    'Collectable - Good' when no recognised rating appears.
+    """
+    text = notes or ''
+    found = []
+    for rating in ['Like New', 'Very Good', 'Good']:
+        if rating == 'Good':
+            # Avoid matching the "Good" inside "Very Good".
+            pattern = r'(?<!very )Good\b'
+        else:
+            pattern = r'\b' + re.escape(rating) + r'\b'
+        if re.search(pattern, text, re.IGNORECASE):
+            found.append(rating)
+    if not found:
+        return 'Collectable - Good'
+    worst = min(found, key=lambda r: _RATING_RANK[r])
+    return 'Collectable - ' + worst
+
 def generate_final_amazon_table(condition_choice, apply_spelling):
     """PHASE 3: GENERATE FINAL OUTPUT."""
     global DISCOGS_DATA_STORAGE 
@@ -448,8 +464,11 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
     }
     final_output.update(DISCOGS_DATA_STORAGE)
     final_output['List Price'] = final_output.get('Your Price', '0.00')
-    cond_map = {'1': 'Collectible Like New', '2': 'Collectible Very Good', '3': 'Collectible Good'}
-    final_output['Item Condition'] = cond_map.get(str(condition_choice), 'Collectible Like New')
+    # Item Condition is ALWAYS "Collectable - <lowest rating in the Offer
+    # Condition Note>" (new policy). Derive it here so it's consistent whether
+    # or not Phase 2 populated the fields.
+    final_output['Item Condition'] = derive_item_condition(
+        final_output.get('Offer Condition Note', ''))
     if "Record Store Day" in str(final_output.get('Edition')) or "Record Store Day" in str(final_output.get('Raw Data')):
         final_output['Format:'] = "Limited Edition"
     if str(apply_spelling).lower() == 'yes':
@@ -487,43 +506,99 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
     current_pn = str(final_output.get('Part Number', '')).lower()
     if current_pn in ['n/a', '', 'none', '*(not found)*']:
         final_output['Part Number'] = text_barcode
-    kw_raw = [
-        final_output.get('Bullet Point'),
-        final_output.get('Artist(s)'), 
-        final_output.get('Part Number'),
-        final_output.get('Series')  # <--- ADDED THIS LINE
-    ]
-    if raw_barcode not in ('*(Not found)*',):
-        kw_raw.append(raw_barcode)     # Solid string format
-        kw_raw.append(text_barcode)    # Spaced text format
-    if final_output.get('Binding') == 'DVD Audio' and 'CDV' in str(final_output.get('Raw Data')):
-        kw_raw.extend(["CD Video", "CDV"])
-    if final_output.get('Binding') == 'Audio Cassette':
-        released_line = next((l for l in str(final_output.get('Raw Data', '')).split('\n') if l.startswith('Released:')), '')
-        year_m = re.search(r'(\d{4})', released_line)
-        if year_m and int(year_m.group(1)) < 1990:
-            kw_raw.append("Vintage Cassette")
-        else:
-            kw_raw.append("Cassette")
-    elif final_output.get('Binding') == 'Vinyl':
+    # ---- Subject Keyword -------------------------------------------------
+    # Build a richer pool derived from the item, lower-cased and stripped of
+    # anything Amazon dislikes, then cap the space-joined one-liner to 210 bytes.
+    def _clean_kw(token):
+        if token is None:
+            return ''
+        t = str(token).lower().strip()
+        t = re.sub(r"[^a-z0-9\s\-]", ' ', t)   # drop punctuation / markup
+        t = re.sub(r'\s+', ' ', t).strip()
+        return t
+
+    BLOCKED = {
+        'amazon', 'ebay', 'walmart', 'free', 'free shipping', 'sale', 'best', 'cheap',
+        'wholesale', 'retail', 'authentic', 'genuine', 'original', 'replica',
+        'counterfeit', 'new', 'used', 'refurbished', 'warranty', 'guarantee',
+        'discount', 'promo', 'offer', 'limited time', 'only', 'exclusive',
+        'official', 'licensed', 'real', 'fake', 'copy', 'reproduction', 'buy now',
+        'click', 'import', 'shipping', 'tm', '100%', '®', '©',
+    }
+
+    def _bad(t):
+        if not t:
+            return True
+        if 'check box' in t:
+            return True
+        if t in BLOCKED:
+            return True
+        if any(b in t for b in ('amazon', 'ebay', 'walmart', 'free shipping', '100%', 'check box')):
+            return True
+        return False
+
+    candidates = []
+    for src in ('Bullet Point', 'Artist(s)', 'Part Number', 'Series',
+                'Brand Name', 'Manufacturer', 'Item Name'):
+        c = _clean_kw(final_output.get(src))
+        if c and not _bad(c):
+            candidates.append(c)
+    if raw_barcode and 'Check box' not in raw_barcode and raw_barcode != '*(Not found)*':
+        candidates.append(raw_barcode)
+    binding = final_output.get('Binding', '')
+    if binding == 'Audio Cassette':
+        candidates.append('cassette')
+        candidates.append('cassette tape')
+        released_line = next((l for l in str(final_output.get('Raw Data', '')).split('\n')
+                              if l.startswith('Released:')), '')
+        ym = re.search(r'(\d{4})', released_line)
+        if ym and int(ym.group(1)) < 1990:
+            candidates.append('vintage cassette')
+    elif binding == 'Vinyl':
+        candidates.append('vinyl')
+        candidates.append('vinyl lp')
         if final_output.get('Bullet Point') == '12" - Vinyl':
-            kw_raw.append('12" - Vinyl')
-        else:
-            kw_raw.append("Vinyl Record")       
-        if any("Colored Vinyl" in str(final_output.get(f'Vinyl Record Details {i}', '')) for i in range(1, 4)):
-            kw_raw.append("Colored Vinyl")
-    kw_raw.append("Out of Print")
-    genre_tags = [g.strip() for g in final_output.get('Genre_Style', '').split(',')]
-    if len(genre_tags) >= 1:
-        kw_raw.append(f"{final_output.get('Artist(s)')} {genre_tags[0]}") # e.g. Jim Allchin Rock
-    if len(genre_tags) >= 2:
-        kw_raw.append(f"{genre_tags[-1]} Music") # e.g. Blues Rock Music
-    format_line = next((l for l in str(final_output.get('Raw Data', '')).split('\n') if l.startswith('Format:')), '')
-    if 'limited' in format_line.lower():
-        kw_raw.append("Limited Release")
+            candidates.append('12 inch vinyl')
+        if any('Colored Vinyl' in str(final_output.get(f'Vinyl Record Details {i}', ''))
+               for i in range(1, 4)):
+            candidates.append('colored vinyl')
+    elif binding == 'CD':
+        candidates.append('cd')
+        candidates.append('compact disc')
+    elif binding == 'DVD Audio':
+        candidates.append('dvd')
+        if 'CDV' in str(final_output.get('Raw Data', '')):
+            candidates.append('cd video')
+    for g in [x.strip() for x in str(final_output.get('Genre_Style', '')).split(',') if x.strip()]:
+        cg = _clean_kw(g)
+        if cg and not _bad(cg):
+            candidates.append(cg)
+    pd_year = re.search(r'(\d{4})', str(final_output.get('Publication Date', '')))
+    if pd_year:
+        candidates.append(f"{(int(pd_year.group(1)) // 10) * 10}s")
+    candidates.append('music')
+    candidates.append('out of print')
+    if ('limited' in str(final_output.get('Edition', '')).lower()
+            or 'limited' in str(final_output.get('Raw Data', '')).lower()):
+        candidates.append('limited release')
+    # dedupe (preserve order), drop empties / blocked / check-box placeholders
     seen = set()
-    kw_unique = [k for k in kw_raw if k and k != 'N/A' and not (k in seen or seen.add(k))]
-    final_output['Subject Keyword'] = '\n'.join(kw_unique)
+    kw_unique = []
+    for c in candidates:
+        if c and not _bad(c) and c not in seen:
+            seen.add(c)
+            kw_unique.append(c)
+    # cap to 210 bytes when space-joined (this is the Amazon one-liner)
+    final_tokens = []
+    used = 0
+    for t in kw_unique:
+        add = len(t.encode('utf-8')) + (1 if final_tokens else 0)
+        if used + add <= 210:
+            final_tokens.append(t)
+            used += add
+        else:
+            break
+    final_output['Subject Keyword'] = ', '.join(final_tokens)
     final_output['Product Type:'] = 'CDs & Vinyl'
     sections = {
         "Section 1: Product Identity": ["Item Name", "Product Type:", "Brand Name", "UPC/GTIN (Scanned)", "UPC/GTIN (Text Display)", "ID_Type"],

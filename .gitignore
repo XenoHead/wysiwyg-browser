@@ -62,6 +62,8 @@ WysiChat/user_prefs_*.json
 # Logs and other runtime files
 *.log
 logs/
+wysiwyg_history.json
+walmart_context_cache.json
 
 # Build artifacts
 build/
