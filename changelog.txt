@@ -1,3 +1,14 @@
+### v1.13.0.0 - 2026-08-24
+-- Amazon Adds (Discogs API) overhaul: results now render as per-field rows with editable boxes and a Copy button each; Upload Photos / Merchant Shipping Group / Quantity rows kept alignment-matched but copy-less
+-- Subject Keyword group: each keyword is its own deletable + editable row, with a "Copy Line" button that joins survivors with spaces
+-- Keyword expansion: all lowercase, space-joined one-liner capped at 210 bytes, derived from the item's own data with an Amazon-safe blocklist (no "Check box: This product does not have a Product ID", promo/brand-only terms, etc.)
+-- Item Condition now derived from the Offer Condition Note as "Collectable - <lowest rating>" (Like New / Very Good / Good), with any +/- suffix stripped
+-- Offer Condition Note captured verbatim from the Discogs marketplace listing comment
+-- Your Price and SKU pulled from the actual marketplace listing
+-- Country/Region of Origin forced to United States (our selling origin)
+-- Discogs API token moved to .env (bundled with the EXE); no longer hardcoded in source
+-- Drawer/menu icons resized to 13px to avoid a scrollbar
+
 ### v1.12.36.3 - 2026-08-19
 -- All buttons moved to menu items in WYSIWYG and WysiScan
 -- Added hot keys

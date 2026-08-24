@@ -47,6 +47,38 @@ else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSET_DIR = APP_DIR
 
+def _load_main_env_file():
+    """Load KEY=VALUE pairs from the main app's .env into os.environ (if not
+    already set). Mirrors main.py's _load_env_file so the AI Prompt can read
+    GEMINI_API_KEY from the .env that lives in the main app root folder.
+    Falls back to a .env next to this scanner if run standalone."""
+    candidates = []
+    # Main app root: scanner_server.py lives in <main>/WysiScan, so go up TWO dirs total
+    base = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(os.path.dirname(base), ".env"))
+    # Also the scanner's own directory (standalone exe builds)
+    candidates.append(os.path.join(base, ".env"))
+    if getattr(sys, 'frozen', False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), ".env"))
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip().strip('"').strip("'")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+            except OSError:
+                pass
+            break  # only load the first .env found
+
+
+_load_main_env_file()
+
 if pytesseract:
     # Attempt to locate Tesseract binary if not in PATH
     if shutil.which("tesseract") is None:
