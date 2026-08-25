@@ -192,9 +192,20 @@
         top: 0;
         z-index: 50;
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
         padding: 0 0 10px;
         background: var(--bg);
+    }
+    #aapViewMode {
+        font-size: 13px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--input-bg);
+        color: var(--text);
+        cursor: pointer;
     }
     #aapPinBtn.pinned {
         background: var(--accent);
@@ -217,6 +228,13 @@
 </head>
 <body>
     <div id="aapTopbar">
+        <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
+            View:
+            <select id="aapViewMode" onchange="onAapViewChange()">
+                <option value="Full" selected>Full</option>
+                <option value="Small">Small</option>
+            </select>
+        </label>
         <button id="aapPinBtn" class="ghost" onclick="toggleAapPin()">📌 Always on top: OFF</button>
     </div>
     <h2>Adds &middot; Amazon</h2>
@@ -311,13 +329,19 @@
 
     // Turn the scraped markdown text into copy-friendly field rows.
     function renderResults(text) {
+        lastText = text || '';
         results.innerHTML = '';
         let pendingKeywords = [];
+        // "Small" view shows only the core offer fields; "Full" shows everything.
+        const mode = (document.getElementById('aapViewMode') || {}).value || 'Full';
+        const SMALL_FIELDS = ['SKU', 'Your Price', 'Item Condition', 'Offer Condition Note', 'Product Tax Code'];
+        const isSmall = (mode === 'Small');
         const lines = text.split('\n');
         for (const raw of lines) {
             const line = raw.trimEnd();
             if (!line.trim()) continue;
             if (line.startsWith('Section')) {
+                if (isSmall) continue;  // hide section headers in Small view
                 const h = document.createElement('div');
                 h.className = 'section-title';
                 h.dataset.full = line;
@@ -337,9 +361,13 @@
             // Subject Keyword may arrive as one comma-joined line OR several
             // "Subject Keyword - X" lines. Fold them all into a single group.
             if (label === 'Subject Keyword') {
+                if (isSmall) continue;  // not part of the Small view
                 pendingKeywords.push(value);
                 continue;
             }
+            // In Small view, only keep the designated core offer fields.
+            if (isSmall && !SMALL_FIELDS.includes(label)) continue;
+
             // A non-keyword line ends any accumulated keyword block.
             if (pendingKeywords.length) {
                 renderKeywordGroup(pendingKeywords.join(', '));
@@ -381,6 +409,11 @@
         if (pendingKeywords.length) {
             renderKeywordGroup(pendingKeywords.join(', '));
         }
+    }
+
+    // Re-render the last scrape in the newly selected view (no re-scrape needed).
+    function onAapViewChange() {
+        renderResults(lastText);
     }
 
     async function flashCopied(btn) {

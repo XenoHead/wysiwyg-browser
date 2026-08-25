@@ -196,6 +196,12 @@ Describe how this repository prefers to work with AI assistants.
 
 ---
 
+## Project Conventions
+
+UI / build / data conventions live in **`docs/CONVENTIONS.md`** — consult it for
+modal behavior (draggable + resizable + redraw), pixel parity, scraping rules, and
+build/packaging. It is the durable source of truth for project-wide standards.
+
 ## BEHAVIOR EXAMPLES
 
 **User:** "Should we use Redis or Memcached for caching?"

@@ -1,4 +1,13 @@
 ### v1.13.0.0 - 2026-08-24
+-- WysiScan Extract Text (AI Prompt): renamed modal to "Extract Text From Image(s)"; results now render as per-entry label + value rows (Amazon Adds style) with Copy buttons; Media Description section is one editable block with "Copy Desc."; button text forced near-black so it stays readable in dark mode; button label shortened to "Run".
+-- WysiScan Extract Text: modal is now draggable (drag header), resizable, and redraws content to fill the window both horizontally and vertically (flex-column layout). Added "Max" (maximize/restore) and "Open" (dumps full content to Notepad with focus) buttons.
+-- WysiScan Extract Text: added a scan cache (last 3 scans, keyed by image filenames) in cli_cache.json; reopening with the same images auto-loads the prior results without re-running the AI. When loaded from cache the button shows "Re-Run" to force a fresh scan.
+-- WysiScan Extract Text: API calls pinned to the absolute scanner URL (8010) with CORS enabled; the /run-cli-prompt route hardened to always return JSON (no more "Failed to fetch"), and the npx fallback removed.
+-- WysiScan Extract Text: removed the crowding "read-only" note; the Basic / Detailed presets are now tagged "(read only)" in the dropdown instead.
+-- Amazon Adds: Search Keywords no longer contain label / publisher / company names (Amazon forbids them) — Brand Name, Manufacturer and Series removed as keyword sources, plus a blocked-names set filters any label/publisher/company tokens.
+-- Amazon Adds: the "PRODUCT_TAX_CODE" field label is now shown correctly as "Product Tax Code".
+-- Amazon Adds: added a top "View" dropdown (Full / Small). Small shows only SKU, Your Price, Item Condition, Offer Condition Note, and Product Tax Code; switching back to Full restores the full layout.
+-- docs/CONVENTIONS.md added as the durable home for UI/build/data conventions (modal draggable+resizable+redraw, pixel parity, scraping rules); referenced from AGENTS.md.
 -- WysiScan UI: removed the blue "WysiScan" banner; added a left-aligned "☰ Menu" button (main-app styling) opening a drawer with Hot Keys / Theme / Exit only. AI Prompt stays on the main form.
 -- WysiScan AI Prompt (Gemini) now reads its API key from the main app root .env (GEMINI_API_KEY) at scanner startup; falls back to a local .env for standalone use. Fixed loader so the key actually loads (resolves main root .env two dirs up from WysiScan).
 -- WysiScan AI Prompt: added a "Prompt Preset" dropdown populated from prompts.json (Basic / Custom / Detailed). Selecting a preset fills the prompt text box; the text box is the single source sent to Gemini (no default_prompt.json duplication, which previously caused doubled output).

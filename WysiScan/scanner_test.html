@@ -451,6 +451,35 @@
             border-radius: 8px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
             width: 500px;
+            max-width: 95vw;
+            max-height: 95vh;
+            resize: both;
+            overflow: hidden;
+            flex-direction: column;
+        }
+        /* Maximized state: fill most of the viewport (toggle via header button). */
+        .ocr-modal.maximized {
+            left: 0;
+            top: 0;
+            transform: none;
+            width: 96vw;
+            height: 96vh;
+            max-width: 96vw;
+            max-height: 96vh;
+        }
+        .ocr-modal-content {
+            padding: 15px;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* Make the Extracted Text result box grow to fill the resized window. */
+        #cliResultBox {
+            flex: 1 1 auto;
+            min-height: 120px;
+            overflow-y: auto;
         }
 
         .ocr-modal.stay-on-top {
@@ -526,7 +555,7 @@
             <button class="menu-btn" onclick="openWysiScanDrawer()">☰ Menu</button>
             <button onclick="openCliModal()" title="Process Selected with AI"
                 style="background-color: #6f42c1; color: white; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🤖
-                AI Prompt</button>
+                Extract Text</button>
         </div>
 
         <!-- Hamburger drawer: Hot Keys / Theme / Exit -->
@@ -947,7 +976,7 @@
             const listDiv = document.getElementById('cliSelectedList');
             listDiv.innerHTML = checked.map(p => `<div>📄 ${p.split(/[\\/]/).pop()}</div>`).join('');
             document.getElementById('cliSelectedCount').innerText = checked.length;
-            document.getElementById('cliResultText').value = '';
+            document.getElementById('cliResultBox').innerHTML = '';
             document.getElementById('cliStatusMsg').innerText = '';
 
             // Load selectable prompt presets from prompts.json
@@ -961,7 +990,8 @@
                     pdata.names.forEach(name => {
                         const opt = document.createElement('option');
                         opt.value = name;
-                        opt.textContent = name;
+                        // Only "Custom" is editable; mark the rest as read-only in the list.
+                        opt.textContent = (name === 'Custom') ? name : `${name} (read only)`;
                         sel.appendChild(opt);
                     });
                     // Auto-select the first preset and populate the text box
@@ -977,7 +1007,26 @@
                 window._promptPresets = {};
             }
 
-            document.getElementById('cliModal').style.display = 'block';
+            // Pre-load any cached AI results for these exact images, so the user
+            // can revisit prior extractions without re-running the prompt.
+            try {
+                const cres = await fetch('/get-cli-cache', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files: checked })
+                });
+                const cdata = await cres.json();
+                if (cdata.status === 'hit' && cdata.output) {
+                    renderCliResults(cdata.output || '');
+                    document.getElementById('cliStatusMsg').innerText = 'Loaded from cache (click Re-Run to refresh).';
+                    const rb = document.getElementById('btnRunCli');
+                    if (rb) rb.textContent = 'Re-Run';
+                }
+            } catch (e) {
+                console.error("Could not load AI cache:", e);
+            }
+
+            document.getElementById('cliModal').style.display = 'flex';
         }
 
         // Populate the prompt text box when a preset is chosen, and enforce
@@ -1004,7 +1053,9 @@
             }
             const statusMsg = document.getElementById('cliStatusMsg');
             if (statusMsg) {
-                statusMsg.innerText = editable ? '' : `“${name}” is read-only. Select “Custom” to edit & save.`;
+                // (Read-only hint intentionally omitted — it crowded the buttons.
+                // The "(read only)" tag in the dropdown makes the state clear.)
+                statusMsg.innerText = '';
             }
         }
         // (change listener now wired via inline onchange on the <select>)
@@ -1075,12 +1126,50 @@
             btn.textContent = on ? '📌 Pinned' : '📌 Pin';
         }
 
+        // Toggle: maximize the AI Prompt window to fill most of the viewport
+        // (and back). The native CSS resize handle is also available.
+        function toggleCliMax() {
+            const modal = document.getElementById('cliModal');
+            const btn = document.getElementById('cliMaxBtn');
+            const on = modal.classList.toggle('maximized');
+            btn.textContent = on ? '❒ Restore' : '□ Max';
+        }
+
+        // Gather the full Extract Text content and open it in Notepad (server
+        // writes a temp .txt and launches it with focus).
+        async function openCliInNotepad() {
+            const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value.split(/[\\/]/).pop());
+            const prompt = document.getElementById('cliPromptText').value.trim();
+            const resultText = document.getElementById('cliResultBox').innerText || '';
+            let out = '';
+            if (checked.length) {
+                out += 'Selected Images (' + checked.length + '):\n  - ' + checked.join('\n  - ') + '\n\n';
+            }
+            if (prompt) {
+                out += 'Prompt:\n' + prompt + '\n\n';
+            }
+            out += 'Extracted Text:\n' + resultText.trim() + '\n';
+            try {
+                const res = await fetch('/open-in-notepad', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: out })
+                });
+                const data = await res.json();
+                if (data.status !== 'success') {
+                    showToast('Open failed: ' + (data.message || 'unknown error'), 'error');
+                }
+            } catch (e) {
+                showToast('Network error opening Notepad: ' + e, 'error');
+            }
+        }
+
         async function submitCliPrompt() {
             const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
             const prompt = document.getElementById('cliPromptText').value.trim();
             const btn = document.getElementById('btnRunCli');
             const statusMsg = document.getElementById('cliStatusMsg');
-            const resultBox = document.getElementById('cliResultText');
+            const resultBox = document.getElementById('cliResultBox');
 
             if (!prompt) {
                 showToast("Prompt text cannot be empty.", "warn");
@@ -1088,8 +1177,8 @@
             }
 
             btn.disabled = true;
-            statusMsg.innerText = "Processing CLI prompt...";
-            resultBox.value = "Executing command via backend CLI...";
+            statusMsg.innerText = "Processing...";
+            resultBox.innerHTML = '<div style="font-size:12px;color:var(--muted-color,#888);">Extracting text from image(s)...</div>';
 
             try {
                 const response = await fetch('/run-cli-prompt', {
@@ -1100,20 +1189,137 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    resultBox.value = data.output;
-                    statusMsg.innerText = "Completed successfully!";
+                    renderCliResults(data.output || '');
+                    if (data.cached) {
+                        statusMsg.innerText = "Loaded from cache (click Re-Run to refresh).";
+                        btn.textContent = "Re-Run";
+                    } else {
+                        statusMsg.innerText = "Completed successfully!";
+                        btn.textContent = "Run";
+                    }
                 } else {
-                    resultBox.value = "Error: " + data.message;
+                    resultBox.innerHTML = '<div style="color:#c62828;font-size:13px;">Error: ' + (data.message || 'Unknown error') + '</div>';
                     statusMsg.innerText = "Failed.";
                 }
             } catch (e) {
-                resultBox.value = "Network Error: " + e;
+                resultBox.innerHTML = '<div style="color:#c62828;font-size:13px;">Network Error: ' + e + '</div>';
                 statusMsg.innerText = "Error.";
             } finally {
                 btn.disabled = false;
             }
         }
-        function sendHeartbeat() {
+
+            // Render AI extraction output as per-entry rows (Amazon Adds style):
+            // each line = a text box + Copy button. Section headers (lines ending
+            // with ":") become titles. The Media Description section is rendered as
+            // ONE block with a single "Copy Desc." button that copies the whole thing.
+            function cliCopyText(text) {
+                try { return navigator.clipboard.writeText(text); }
+                catch (e) { return Promise.reject(e); }
+            }
+            function cliFlashCopied(btn) {
+                const old = btn.textContent;
+                btn.textContent = 'Copied';
+                setTimeout(() => { btn.textContent = old; }, 1200);
+            }
+            function renderCliResults(text) {
+                const box = document.getElementById('cliResultBox');
+                box.innerHTML = '';
+                if (!text || !text.trim()) {
+                    box.innerHTML = '<div style="font-size:12px;color:var(--muted-color,#888);">No text returned.</div>';
+                    return;
+                }
+                const lines = text.split('\n');
+                let inMediaDesc = false;
+                let mediaLines = [];
+                const flushMedia = () => {
+                    if (!inMediaDesc || mediaLines.length === 0) { inMediaDesc = false; mediaLines = []; return; }
+                    const wrap = document.createElement('div');
+                    wrap.style.margin = '8px 0';
+                    const head = document.createElement('div');
+                    head.style.cssText = 'font-size:12px;font-weight:700;color:var(--accent,#6f42c1);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;';
+                    head.textContent = 'Media Description';
+                    const ta = document.createElement('textarea');
+                    ta.value = mediaLines.join('\n');
+                    ta.readOnly = false;
+                    ta.style.cssText = 'width:100%;min-height:90px;font-family:monospace;font-size:13px;padding:6px;background:var(--input-bg);color:var(--text-main);border:1px solid var(--border-color);border-radius:4px;box-sizing:border-box;resize:vertical;';
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = 'Copy Desc.';
+                    btn.style.cssText = 'margin-top:4px;padding:4px 10px;border:1px solid var(--border-color);border-radius:4px;background:var(--panel,#fff);color:#111;cursor:pointer;font-size:12px;';
+                    btn.addEventListener('click', async () => {
+                        try { await cliCopyText(ta.value); cliFlashCopied(btn); }
+                        catch (e) { ta.select(); document.execCommand('copy'); cliFlashCopied(btn); }
+                    });
+                    wrap.appendChild(head);
+                    wrap.appendChild(ta);
+                    wrap.appendChild(btn);
+                    box.appendChild(wrap);
+                    inMediaDesc = false;
+                    mediaLines = [];
+                };
+                for (const raw of lines) {
+                    const line = raw.replace(/\s+$/, '');
+                    if (!line.trim()) continue;
+                    // Section header: a line ending with ":" (e.g. "Media Description:")
+                    const headerMatch = line.match(/^(.+?):\s*$/);
+                    if (headerMatch) {
+                        flushMedia();
+                        const name = headerMatch[1].trim();
+                        if (name.toLowerCase().includes('media description')) {
+                            inMediaDesc = true;
+                            mediaLines = [];
+                            continue;
+                        }
+                        const h = document.createElement('div');
+                        h.style.cssText = 'font-size:12px;font-weight:700;color:var(--accent,#6f42c1);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px;';
+                        h.textContent = name;
+                        box.appendChild(h);
+                        continue;
+                    }
+                    if (inMediaDesc) { mediaLines.push(line); continue; }
+                    // Normal entry: split "Label - Value" (or "Label: Value") into a
+                    // label + a text box holding ONLY the value, plus a Copy button
+                    // that copies just the value.
+                    let entryLabel = '';
+                    let entryValue = line;
+                    const dashIdx = line.indexOf(' - ');
+                    const colonIdx = line.indexOf(': ');
+                    let splitAt = -1;
+                    if (dashIdx !== -1 && (colonIdx === -1 || dashIdx < colonIdx)) splitAt = dashIdx + 3;
+                    else if (colonIdx !== -1) splitAt = colonIdx + 2;
+                    if (splitAt !== -1) {
+                        entryLabel = line.slice(0, splitAt - (line[splitAt - 1] === ' ' ? 1 : 0)).trim();
+                        entryLabel = entryLabel.replace(/[-:]\s*$/, '').trim();
+                        entryValue = line.slice(splitAt).trim();
+                    }
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;gap:6px;align-items:flex-start;margin:4px 0;';
+                    if (entryLabel) {
+                        const lbl = document.createElement('div');
+                        lbl.textContent = entryLabel;
+                        lbl.style.cssText = 'flex:0 0 130px;font-size:12px;font-weight:600;color:var(--text-main);padding-top:8px;text-align:right;';
+                        row.appendChild(lbl);
+                    }
+                    const ta = document.createElement('textarea');
+                    ta.value = entryValue;
+                    ta.style.cssText = 'flex:1 1 auto;min-height:34px;font-family:monospace;font-size:13px;padding:6px;background:var(--input-bg);color:var(--text-main);border:1px solid var(--border-color);border-radius:4px;box-sizing:border-box;resize:vertical;';
+                    ta.rows = Math.max(1, Math.min(8, Math.ceil(entryValue.length / 60)));
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = 'Copy';
+                    btn.style.cssText = 'flex:0 0 auto;padding:4px 10px;border:1px solid var(--border-color);border-radius:4px;background:var(--panel,#fff);color:#111;cursor:pointer;font-size:12px;';
+                    btn.addEventListener('click', async () => {
+                        try { await cliCopyText(ta.value); cliFlashCopied(btn); }
+                        catch (e) { ta.select(); document.execCommand('copy'); cliFlashCopied(btn); }
+                    });
+                    row.appendChild(ta);
+                    row.appendChild(btn);
+                    box.appendChild(row);
+                }
+                flushMedia();
+            }
+            function sendHeartbeat() {
             fetch('/api/heartbeat', { method: 'POST' }).catch(() => { });
         }
         sendHeartbeat();
@@ -1154,7 +1360,7 @@
             paddingDown: { key: 'ArrowDown', code: 'ArrowDown', ctrl: false, alt: false, shift: false, description: 'Decrease Padding' }
         };
 
-        function openHelpModal() { document.getElementById('helpModal').style.display = 'block'; }
+        function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
         function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
 
         // Hamburger drawer (Hot Keys / Theme / Exit)
@@ -2201,7 +2407,7 @@
                 input.value = currentGroupName;
             }
 
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
             input.focus();
             input.select();
         }
@@ -2416,7 +2622,7 @@
 
         // --- Padding Options Logic ---
         function openPaddingModal() {
-            document.getElementById('paddingModal').style.display = 'block';
+            document.getElementById('paddingModal').style.display = 'flex';
             renderPaddingList();
             document.getElementById('newPaddingVal').focus();
         }
@@ -2611,16 +2817,23 @@
         });
 
         // --- Auto-Close Logic ---
+        // API_BASE: the scanner server (port 8010) owns all /api routes. Pinning
+        // fetches to it makes the page work whether it's opened from 8010 directly
+        // or via the main app's static mount on 8008. CORS is enabled on 8010.
+        const API_BASE = 'http://127.0.0.1:8010';
         const originalFetch = window.fetch;
         window.fetch = async (...args) => {
+            if (typeof args[0] === 'string' && args[0].startsWith('/')) {
+                args[0] = API_BASE + args[0];
+            }
             try {
                 const response = await originalFetch(...args);
-                if (args[0] === '/exit') {
+                if (args[0] === '/exit' || args[0] === API_BASE + '/exit') {
                     window.close();
                 }
                 return response;
             } catch (e) {
-                if (args[0] === '/exit') {
+                if (args[0] === '/exit' || args[0] === API_BASE + '/exit') {
                     window.close();
                 }
                 throw e;
@@ -2744,39 +2957,49 @@
             checkbox.checked = stayOnTop;
             modal.classList.toggle('stay-on-top', stayOnTop);
 
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
         }
 
-        // --- Draggable Modal Logic ---
+        // --- Draggable Modal Logic (applies to every .ocr-modal) ---
         (function () {
-            const modal = document.getElementById('ocrResultModal');
-            const header = modal.querySelector('.ocr-modal-header');
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
+            document.querySelectorAll('.ocr-modal').forEach((modal) => {
+                const header = modal.querySelector('.ocr-modal-header');
+                if (!header) return;
+                let isDragging = false;
+                let startX, startY, initialLeft, initialTop;
 
-            header.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
+                header.addEventListener('mousedown', (e) => {
+                    // Don't start a drag when clicking the header's buttons.
+                    if (e.target.closest('button')) return;
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
 
-                // Switch from transform centering to absolute positioning for dragging
-                const rect = modal.getBoundingClientRect();
-                modal.style.transform = 'none';
-                modal.style.left = rect.left + 'px';
-                modal.style.top = rect.top + 'px';
+                    // Switch from transform-centering to absolute positioning
+                    // so dragging moves the actual left/top.
+                    const rect = modal.getBoundingClientRect();
+                    modal.style.transform = 'none';
+                    modal.style.left = rect.left + 'px';
+                    modal.style.top = rect.top + 'px';
 
-                initialLeft = rect.left;
-                initialTop = rect.top;
-                header.style.cursor = 'grabbing';
+                    initialLeft = rect.left;
+                    initialTop = rect.top;
+                    header.style.cursor = 'grabbing';
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    modal.style.left = (initialLeft + (e.clientX - startX)) + 'px';
+                    modal.style.top = (initialTop + (e.clientY - startY)) + 'px';
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    header.style.cursor = 'grab';
+                });
             });
-
-            document.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                modal.style.left = (initialLeft + (e.clientX - startX)) + 'px';
-                modal.style.top = (initialTop + (e.clientY - startY)) + 'px';
-            });
-
-            document.addEventListener('mouseup', () => { isDragging = false; header.style.cursor = 'grab'; });
         })();
 
         // --- Tilt & Auto-Align Logic ---
@@ -3233,8 +3456,10 @@
     <div id="cliModal" class="ocr-modal" style="width: 600px; max-width: 90vw;">
         <div class="ocr-modal-content">
             <div class="ocr-modal-header">
-                <h3 style="margin: 0;">🤖 Run Gemini CLI Prompt</h3>
+                <h3 style="margin: 0;">🤖 Extract Text From Image(s)</h3>
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="cliMaxBtn" onclick="toggleCliMax()" title="Maximize / restore this window"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">&#9633; Max</button>
                     <button id="cliPinBtn" onclick="toggleCliPin()" title="Keep this window on top of other panels"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">📌 Pin</button>
                     <button onclick="closeCliModal()" class="close-btn" title="Close">&times;</button>
@@ -3267,22 +3492,24 @@
             </div>
 
             <div style="margin-bottom: 10px;">
-                <label style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">CLI
-                    Response:</label>
-                <textarea id="cliResultText" readonly
-                    style="width: calc(100% - 12px); height: 160px; font-family: monospace; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;"
-                    placeholder="Output from CLI will appear here..."></textarea>
+                <label style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Extracted
+                    Text:</label>
+                <div id="cliResultBox"
+                    style="width: calc(100% - 12px); max-height: 260px; overflow-y: auto; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px;">
+                </div>
             </div>
 
             <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-color);"></span>
                 <div>
+                    <button onclick="openCliInNotepad()"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); margin-right: 6px;">📝 Open</button>
                     <button onclick="saveCliPrompt()"
                         style="background-color: #28a745; color: white; margin-right: 6px;">💾 Save</button>
                     <button onclick="closeCliModal()"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main);">Cancel</button>
                     <button id="btnRunCli" onclick="submitCliPrompt()"
-                        style="background-color: #6f42c1; color: white; margin-left: 6px;">🚀 Run Prompt</button>
+                        style="background-color: #6f42c1; color: white; margin-left: 6px;">🚀 Run</button>
                 </div>
             </div>
         </div>

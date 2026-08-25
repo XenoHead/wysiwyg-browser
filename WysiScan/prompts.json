@@ -35,12 +35,13 @@
             "GLOBAL RULE:",
             "Always place each labeled item in the images on to its own separate line.",
             "List all attributes on consecutive lines without empty line returns between them.",
-            "Example:",
-            "Band Name: AAAA",
-            "Album Title: BBBB",
-            "Catalog Number: CCCC",
-            "",
-            "FORMATTING: ** SINGLE SPACED PRINTING **"
+            "FORMATTING: ** SINGLE SPACED PRINTING **",
+            "Group 'Media Description:'.",
+            "For CASSETTE SHELL images: get the following: Shell Type/Style, Shell Texture, Timing Window, Shell Color, Ink Color, Binding (screws or sonic weld), Stamps.",
+            "For CD images get Matrix, Runout, IFPI, etc.",
+            "Capitalize the first letter of every word.",
+            "List all Media attributes on consecutive lines without empty line returns between them.",
+            "Include all labels for the data. Do not include 'Category names"
         ]
     },
     "Detailed": {

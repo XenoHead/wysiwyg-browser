@@ -526,6 +526,32 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
         'click', 'import', 'shipping', 'tm', '100%', '®', '©',
     }
 
+    # Amazon FORBIDS label / publisher / company names in the search-keyword
+    # field. Build a set of every such name tied to this item and reject any
+    # candidate that contains one.
+    blocked_names = set()
+    def _add_blocked_name(n):
+        n = _clean_kw(n)
+        if n:
+            blocked_names.add(n)
+    _add_blocked_name(primary_label)
+    _add_blocked_name(DISCOGS_DATA_STORAGE.get('Html_Label_Display'))
+    for fld in ('Record Company', 'Manufactured By', 'Distributed By',
+                'Licensed To', 'Marketed By', 'Phonographic Copyright (p)',
+                'Copyright (c)', 'Label'):
+        _add_blocked_name(final_output.get(fld))
+        _add_blocked_name(DISCOGS_DATA_STORAGE.get(fld))
+    # Html_Label_Display may hold "LabelA – CAT / LabelB – CAT"; split it apart.
+    for raw in (str(DISCOGS_DATA_STORAGE.get('Html_Label_Display', '')),
+                str(final_output.get('Label', ''))):
+        for part in re.split(r'[/–\-]', raw):
+            _add_blocked_name(part)
+
+    def _has_label_name(t):
+        if not t:
+            return False
+        return any(bn and bn in t for bn in blocked_names)
+
     def _bad(t):
         if not t:
             return True
@@ -535,11 +561,12 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
             return True
         if any(b in t for b in ('amazon', 'ebay', 'walmart', 'free shipping', '100%', 'check box')):
             return True
+        if _has_label_name(t):
+            return True
         return False
 
     candidates = []
-    for src in ('Bullet Point', 'Artist(s)', 'Part Number', 'Series',
-                'Brand Name', 'Manufacturer', 'Item Name'):
+    for src in ('Bullet Point', 'Artist(s)', 'Part Number', 'Item Name'):
         c = _clean_kw(final_output.get(src))
         if c and not _bad(c):
             candidates.append(c)
@@ -638,7 +665,8 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
                 display_val = str(val)
             else:
                 display_val = str(val).replace('\n', '<br>')
-            output_md += f"{f} - {display_val}\n"
+            label = 'Product Tax Code' if f == 'PRODUCT_TAX_CODE' else f
+            output_md += f"{label} - {display_val}\n"
         output_md += "\n"
 
     output_md = output_md.replace('***', '').replace('**', '')

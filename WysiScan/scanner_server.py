@@ -15,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI, Body
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import win32com.client
 import pythoncom
 import cv2
@@ -46,6 +47,64 @@ else:
     # Running as script
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSET_DIR = APP_DIR
+
+# Cache of the last few AI-Prompt (Extract Text) runs, keyed by the set of
+# selected image file names. Lets the user reopen prior results for the same
+# images without re-running the (slow/costly) AI call.
+CLI_CACHE_FILE = os.path.join(APP_DIR, "cli_cache.json")
+CLI_CACHE_MAX = 3
+
+
+def _cli_cache_key(files):
+    """Stable key for a set of image paths: sorted basenames joined."""
+    names = sorted(os.path.basename(f) for f in (files or []))
+    return "||".join(names)
+
+
+def load_cli_cache():
+    """Return the cache list (newest last). Empty list on error."""
+    try:
+        if os.path.isfile(CLI_CACHE_FILE):
+            with open(CLI_CACHE_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+def save_cli_cache(entries):
+    """Persist the cache list (trimmed to CLI_CACHE_MAX, newest last)."""
+    try:
+        entries = entries[-CLI_CACHE_MAX:]
+        with open(CLI_CACHE_FILE, "w", encoding="utf-8") as fh:
+            json.dump(entries, fh, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def get_cli_cache_entry(files):
+    """Return cached output string for these image files, or None."""
+    key = _cli_cache_key(files)
+    for entry in reversed(load_cli_cache()):
+        if entry.get("key") == key and entry.get("output"):
+            return entry["output"]
+    return None
+
+
+def upsert_cli_cache(files, output):
+    """Store a result, moving/keeping it as the most recent entry."""
+    key = _cli_cache_key(files)
+    entries = [e for e in load_cli_cache() if e.get("key") != key]
+    entries.append({
+        "key": key,
+        "files": [os.path.basename(f) for f in (files or [])],
+        "output": output,
+        "ts": datetime.now().isoformat(timespec="seconds"),
+    })
+    save_cli_cache(entries)
+
 
 def _load_main_env_file():
     """Load KEY=VALUE pairs from the main app's .env into os.environ (if not
@@ -222,6 +281,18 @@ def create_backup(file_path):
 
 app = FastAPI(lifespan=lifespan)
 
+# Allow cross-origin requests. The scanner page is normally served from this
+# server (8010), but if it's opened via the main app's static mount (8008) the
+# API calls would otherwise be blocked by the browser. Permissive CORS here is
+# fine: the scanner server only listens on 127.0.0.1 (localhost).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def get_prompt_file_path():
     candidates = [
         os.path.join(APP_DIR, "default_prompt.json"),
@@ -380,6 +451,12 @@ async def run_cli_prompt(data: dict = Body(default={})):
     if not files or len(files) < 1 or len(files) > 5:
         return {'status': 'error', 'message': 'Select between 1 and 5 files.'}
 
+    # If we already extracted these exact images, return the cached result
+    # instead of re-running the (slow/costly) AI call.
+    cached = get_cli_cache_entry(files)
+    if cached is not None:
+        return {'status': 'success', 'output': cached, 'cached': True}
+
     # Determine model from default_prompt.json if available
     model_name = "gemini-3.6-flash"
     prompt_file = get_prompt_file_path()
@@ -405,11 +482,20 @@ async def run_cli_prompt(data: dict = Body(default={})):
     try:
         from google import genai
         client = genai.Client(api_key=api_key) if api_key else genai.Client()
-        
+
         contents = [prompt]
+        skipped = []
         for f in files:
-            if os.path.exists(f):
-                contents.append(Image.open(f))
+            try:
+                if os.path.exists(f):
+                    contents.append(Image.open(f))
+                else:
+                    skipped.append(f)
+            except Exception as img_err:
+                print(f"DEBUG - Could not load image {f}: {img_err}")
+                skipped.append(f)
+        if skipped:
+            print(f"DEBUG - Skipped {len(skipped)} unreadable image(s).")
 
         # Retry setup for temporary 503 capacity spikes
         max_retries = 3
@@ -422,6 +508,7 @@ async def run_cli_prompt(data: dict = Body(default={})):
                     model=model_name,
                     contents=contents
                 )
+                upsert_cli_cache(files, response.text or "")
                 return {'status': 'success', 'output': response.text or ""}
             except Exception as err:
                 err_msg = str(err)
@@ -436,21 +523,36 @@ async def run_cli_prompt(data: dict = Body(default={})):
                     raise err
     except Exception as sdk_err:
         print(f"DEBUG - Python SDK Error (Final): {sdk_err}")
-        try:
-            cmd = ["npx", "-y", "@google/gemini-cli", prompt] + files
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                shell=True,
-                timeout=120
-            )
-            output = result.stdout if result.stdout else result.stderr
-            if output:
-                return {'status': 'success', 'output': output}
-        except Exception:
-            pass
+        import traceback as _tb
+        print("DEBUG - Traceback:\n" + _tb.format_exc())
         return {'status': 'error', 'message': f'AI prompt failed: {str(sdk_err)}'}
+
+
+# 3. Endpoint to fetch cached AI-Prompt results for a given set of images,
+#    so the Extract Text window can reopen prior data without re-running AI.
+@app.post('/get-cli-cache')
+async def get_cli_cache(data: dict = Body(default={})):
+    files = data.get('files', [])
+    output = get_cli_cache_entry(files)
+    if output is not None:
+        return {'status': 'hit', 'output': output}
+    return {'status': 'miss'}
+
+
+# 4. Endpoint to dump the Extract Text content into Notepad and bring it forward.
+@app.post('/open-in-notepad')
+async def open_in_notepad(data: dict = Body(default={})):
+    text = data.get('text', '') or ''
+    try:
+        out_path = os.path.join(APP_DIR, "cli_last_output.txt")
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.startfile(out_path)  # opens with default .txt app (Notepad) and focuses it
+        return {'status': 'success', 'path': out_path}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
 
 
 
