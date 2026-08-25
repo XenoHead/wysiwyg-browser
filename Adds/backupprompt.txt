@@ -1,0 +1,58 @@
+{
+    "Option": "Basic",
+    "GLOBAL RULE": [
+        "a] Always place each labeled item in the images on to its own separate line.",
+        "b] List all attributes on consecutive lines without empty line returns between them.",
+        "Example:\nBand Name: AAAA\nAlbum Title: BBBB\nCatalog Number: CCCC"
+    ],
+    "FORMATTING": "** SINGLE SPACED PRINTING **",
+    "RULES": [
+        {
+            "Step": 1,
+            "Description": "Give me all the text and song names in the image"
+        },
+        {
+            "Step": 2,
+            "SubGroup": "Release:",
+            "Instructions": [
+                "Separate the band name, album name, release date, label, catalogue number into its own sub group called 'Release:'",
+                "a] Capitalize the first letter of every word."
+            ]
+        },
+        {
+            "Step": 3,
+            "SubGroup": "Tracks:",
+            "Instructions": [
+                "Separate the song titles into its own sub group called 'Tracks:'",
+                "a] Format tracks as [Side Letter][Track Number] - [Song Title] (e.g., A1 - Introduction, A2 - Chica Bonita, B1 - Dos Corazones).",
+                "b] Convert Side 1 to A, Side 2 to B, Side 3 to C, etc.",
+                "c] Do NOT include verbose prefixes like 'Side 1 Track 1:' or duplicate leading track numbers like '1. Introduction'.",
+                "d] Capitalize the first letter of every word."
+            ]
+        },
+        {
+            "Step": 4,
+            "SubGroup": "Extra:",
+            "Instructions": [
+                "Separate any other data into its own sub group 'Extra:'",
+                "a] Capitalize the first letter of every word.",
+                "b] List all Media attributes on consecutive lines without empty line returns between them."
+            ]
+        },
+        {
+            "Step": 5,
+            "SubGroup": "Media Description:",
+            "Instructions": [
+                "Separate shell data into its own sub group 'Media Description:'",
+                "- For CASSETTE SHELL images: get the following: Shell Type/Style, Shell Texture, Timing Window, Shell Color, Ink Color, Binding (screws or sonic weld), Stamps",
+                "- For CD images get Matrix, Runout, IFPI, etc.",
+                "a] Capitalize the first letter of every word.",
+                "b] List all Media attributes on consecutive lines without empty line returns between them."
+            ]
+        },
+        {
+            "Step": 6,
+            "Description": "Include all labels for the data. Do not include 'Category names'"
+        }
+    ]
+}

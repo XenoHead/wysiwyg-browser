@@ -69,3 +69,9 @@ walmart_context_cache.json
 build/
 dist/
 backups/
+key.txt
+keys.txt
+test_results.json
+discogs_last_extract.json
+Listings/2026-08-25_Listings.txt
+Adds/Raw Extraction (verify OCR text).txt

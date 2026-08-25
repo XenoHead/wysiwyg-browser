@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Test Results Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f1117;
+      --bg-secondary: #161b26;
+      --bg-card: rgba(26, 32, 48, 0.7);
+      --bg-card-hover: rgba(35, 43, 64, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-active: rgba(99, 102, 241, 0.5);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --error: #ef4444;
+      --error-glow: rgba(239, 68, 68, 0.2);
+      --warning: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(22, 27, 38, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #10b981, #6366f1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .brand h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #ffffff, #86efac);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .container {
+      flex: 1;
+      padding: 24px 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Stats Overview Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-top: 6px;
+      color: #fff;
+    }
+
+    /* Filters Bar */
+    .filters-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .filters-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input, select {
+      background: rgba(15, 17, 23, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Results Table */
+    .table-container {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: rgba(22, 27, 38, 0.9);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .status-badge.ok {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge.fail {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .model-tag {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .key-tag {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+
+    .detail-row {
+      display: none;
+      background: rgba(10, 12, 18, 0.85);
+    }
+
+    .detail-row.open {
+      display: table-row;
+    }
+
+    .detail-content {
+      padding: 14px 18px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #d1d5db;
+    }
+
+    .expand-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .expand-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">✓</div>
+      <div>
+        <h1>Gemini Test History & Results</h1>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="btn btn-secondary">Open Tester</a>
+      <button class="btn btn-secondary" onclick="loadResults()">Refresh</button>
+      <button class="btn btn-danger" onclick="clearResults()">Clear History</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Stats Overview -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Tests Executed</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Success Rate</div>
+        <div class="stat-value" id="statSuccessRate" style="color: var(--success);">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Average Latency</div>
+        <div class="stat-value" id="statAvgLatency">0 ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Unique Models</div>
+        <div class="stat-value" id="statUniqueModels">0</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="filters-group">
+        <input type="text" id="filterSearch" placeholder="Search prompt / response..." oninput="renderTable()">
+        <select id="filterStatus" onchange="renderTable()">
+          <option value="all">All Statuses</option>
+          <option value="success">Success Only</option>
+          <option value="error">Errors Only</option>
+        </select>
+        <select id="filterModel" onchange="renderTable()">
+          <option value="all">All Models</option>
+        </select>
+        <select id="filterKey" onchange="renderTable()">
+          <option value="all">All Keys</option>
+        </select>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--text-muted);" id="showingCount">Showing 0 results</div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px;"></th>
+            <th>Timestamp</th>
+            <th>Model</th>
+            <th>Key</th>
+            <th>Status</th>
+            <th>Latency</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody id="resultsTableBody">
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Loading results from test_results.json...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let allResults = [];
+
+    async function loadResults() {
+      try {
+        const res = await fetch('/api/results');
+        const data = await res.json();
+        allResults = data.results || [];
+        populateFilterDropdowns();
+        updateStats();
+        renderTable();
+      } catch (err) {
+        console.error('Failed to load results', err);
+      }
+    }
+
+    async function clearResults() {
+      if (!confirm('Are you sure you want to clear all test history?')) return;
+      try {
+        await fetch('/api/results', { method: 'DELETE' });
+        await loadResults();
+      } catch (err) {
+        alert('Failed to clear results: ' + err);
+      }
+    }
+
+    function updateStats() {
+      const total = allResults.length;
+      document.getElementById('statTotal').textContent = total;
+
+      if (!total) {
+        document.getElementById('statSuccessRate').textContent = '0%';
+        document.getElementById('statAvgLatency').textContent = '0 ms';
+        document.getElementById('statUniqueModels').textContent = '0';
+        return;
+      }
+
+      const successCount = allResults.filter(r => r.result && r.result.status === 'success').length;
+      const rate = ((successCount / total) * 100).toFixed(1);
+      document.getElementById('statSuccessRate').textContent = `${rate}%`;
+
+      const latencies = allResults.map(r => r.result?.latencyMs || 0).filter(l => l > 0);
+      const avgLat = latencies.length ? (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(0) : 0;
+      document.getElementById('statAvgLatency').textContent = `${avgLat} ms`;
+
+      const uniqueModels = new Set(allResults.map(r => r.model).filter(Boolean));
+      document.getElementById('statUniqueModels').textContent = uniqueModels.size;
+    }
+
+    function populateFilterDropdowns() {
+      const modelSelect = document.getElementById('filterModel');
+      const keySelect = document.getElementById('filterKey');
+
+      const models = Array.from(new Set(allResults.map(r => r.model).filter(Boolean))).sort();
+      const keys = Array.from(new Set(allResults.map(r => r.key).filter(Boolean))).sort();
+
+      const currentModel = modelSelect.value;
+      const currentKey = keySelect.value;
+
+      modelSelect.innerHTML = '<option value="all">All Models</option>' + models.map(m => `<option value="${m}">${m}</option>`).join('');
+      keySelect.innerHTML = '<option value="all">All Keys</option>' + keys.map(k => `<option value="${k}">${k}</option>`).join('');
+
+      if (models.includes(currentModel)) modelSelect.value = currentModel;
+      if (keys.includes(currentKey)) keySelect.value = currentKey;
+    }
+
+    function renderTable() {
+      const search = (document.getElementById('filterSearch').value || '').toLowerCase();
+      const statusFilter = document.getElementById('filterStatus').value;
+      const modelFilter = document.getElementById('filterModel').value;
+      const keyFilter = document.getElementById('filterKey').value;
+
+      const filtered = allResults.filter(r => {
+        const isOk = r.result && r.result.status === 'success';
+        if (statusFilter === 'success' && !isOk) return false;
+        if (statusFilter === 'error' && isOk) return false;
+        if (modelFilter !== 'all' && r.model !== modelFilter) return false;
+        if (keyFilter !== 'all' && r.key !== keyFilter) return false;
+
+        if (search) {
+          const content = JSON.stringify(r).toLowerCase();
+          if (!content.includes(search)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('showingCount').textContent = `Showing ${filtered.length} of ${allResults.length} records`;
+
+      const tbody = document.getElementById('resultsTableBody');
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No test records match your filter</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map((r, idx) => {
+        const isOk = r.result && r.result.status === 'success';
+        const statusBadge = isOk
+          ? `<span class="status-badge ok">SUCCESS</span>`
+          : `<span class="status-badge fail">FAILED ${r.result?.code ? '(' + r.result.code + ')' : ''}</span>`;
+
+        const dateStr = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() + ' ' + new Date(r.timestamp).toLocaleDateString() : '-';
+        const summary = isOk ? (r.result.response || r.result.text || 'Success') : (r.result?.message || 'Error');
+        const latency = r.result?.latencyMs ? `${r.result.latencyMs} ms` : '-';
+
+        return `
+          <tr>
+            <td>
+              <button class="expand-btn" onclick="toggleDetail(${idx})">▶</button>
+            </td>
+            <td style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</td>
+            <td><span class="model-tag">${r.model || '-'}</span></td>
+            <td><span class="key-tag">${r.key || '-'}</span></td>
+            <td>${statusBadge}</td>
+            <td style="font-family: var(--font-mono); font-size: 0.8rem;">${latency}</td>
+            <td style="font-family: var(--font-mono); font-size: 0.78rem; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${isOk ? '#d1d5db' : '#f87171'};">${escapeHtml(summary)}</td>
+          </tr>
+          <tr id="detail-${idx}" class="detail-row">
+            <td colspan="7">
+              <div class="detail-content">
+<strong>Prompt:</strong> ${escapeHtml(r.prompt || '')}
+${r.system_instruction ? `<strong>System Instruction:</strong> ${escapeHtml(r.system_instruction)}\n` : ''}<strong>Full Output / Details:</strong>
+${escapeHtml(JSON.stringify(r.result, null, 2))}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function toggleDetail(idx) {
+      const row = document.getElementById(`detail-${idx}`);
+      if (row) {
+        row.classList.toggle('open');
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function startHeartbeat() {
+      setInterval(() => {
+        fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+      }, 2500);
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadResults();
+      startHeartbeat();
+    });
+  </script>
+</body>
+</html>

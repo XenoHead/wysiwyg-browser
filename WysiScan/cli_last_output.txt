@@ -1,0 +1,88 @@
+Selected Images (3):
+  - JoeEsp_1.jpg
+  - JoeEsp_3.jpg
+  - JoeEsp_2.jpg
+
+Prompt:
+GLOBAL RULE:
+Always place each labeled item in the images on to its own separate line.
+List all attributes on consecutive lines without empty line returns between them.
+Example:
+Band Name: AAAA
+Album Title: BBBB
+Catalog Number: CCCC
+
+FORMATTING: ** SINGLE SPACED PRINTING **
+
+Give me all the text and song names in the image.
+Separate the band name, album name, release date, label, catalogue number into its own sub group called 'Release:'.
+Capitalize the first letter of every word.
+Separate the song titles into its own sub group called 'Tracks:'.
+Format tracks as [Side Letter][Track Number] - [Song Title] (e.g., A1 - Introduction, A2 - Chica Bonita, B1 - Dos Corazones).
+Convert Side 1 to A, Side 2 to B, Side 3 to C, etc.
+Do NOT include verbose prefixes like 'Side 1 Track 1:' or duplicate leading track numbers like '1. Introduction'.
+Capitalize the first letter of every word.
+Separate any other data into its own sub group 'Extra:'.
+Capitalize the first letter of every word.
+List all Media attributes on consecutive lines without empty line returns between them.
+Separate shell data into its own sub group 'Media Description:'.
+For CASSETTE SHELL images: get the following: Shell Type/Style, Shell Texture, Timing Window, Shell Color, Ink Color, Binding (screws or sonic weld), Stamps.
+For CD images get Matrix, Runout, IFPI, etc.
+Capitalize the first letter of every word.
+List all Media attributes on consecutive lines without empty line returns between them.
+Include all labels for the data. Do not include 'Category names'.
+
+Extracted Text:
+RELEASE
+Band Name
+Copy
+Album Title
+Copy
+Release Date
+Copy
+Label
+Copy
+Catalogue Number
+Copy
+TRACKS
+A1
+Copy
+A2
+Copy
+A3
+Copy
+A4
+Copy
+A5
+Copy
+B1
+Copy
+B2
+Copy
+B3
+Copy
+B4
+Copy
+B5
+Copy
+EXTRA
+Barcode
+Copy
+Phonographic Copyright
+Copy
+Copyright
+Copy
+Distributed By
+Copy
+Licensed By
+Copy
+Address
+Copy
+Telephone
+Copy
+Fax
+Copy
+Note
+Copy
+MEDIA DESCRIPTION
+Copy Desc.
