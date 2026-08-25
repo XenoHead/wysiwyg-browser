@@ -1,4 +1,4 @@
-### v1.13.0.0 - 2026-08-24
+### v1.13.5.8 - 2026-08-25
 -- WysiScan Extract Text (AI Prompt): renamed modal to "Extract Text From Image(s)"; results now render as per-entry label + value rows (Amazon Adds style) with Copy buttons; Media Description section is one editable block with "Copy Desc."; button text forced near-black so it stays readable in dark mode; button label shortened to "Run".
 -- WysiScan Extract Text: modal is now draggable (drag header), resizable, and redraws content to fill the window both horizontally and vertically (flex-column layout). Added "Max" (maximize/restore) and "Open" (dumps full content to Notepad with focus) buttons.
 -- WysiScan Extract Text: added a scan cache (last 3 scans, keyed by image filenames) in cli_cache.json; reopening with the same images auto-loads the prior results without re-running the AI. When loaded from cache the button shows "Re-Run" to force a fresh scan.

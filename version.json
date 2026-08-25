@@ -1,10 +1,10 @@
 {
     "ProgramName": "WysiWyg-Browser",
-    "version": "1.13.0.0",
-    "last_updated": "2026-08-24",
+    "version": "1.13.5.8",
+    "last_updated": "2026-08-25",
     "changelog": [],
     "major": 1,
     "minor": 13,
-    "patch": 0,
-    "build": 0
+    "patch": 5,
+    "build": 8
 }
