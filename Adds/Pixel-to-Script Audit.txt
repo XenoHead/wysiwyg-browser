@@ -1,0 +1,107 @@
+**Pixel-to-Script Audit**
+
+| Script Rule | Pixel Extraction Source | Transformation Applied |
+| --- | --- | --- |
+| **Strict Title Case** | `LarDoln_1.jpg` / `LarDoln_5.jpg` | Converted artwork title to "Don't Fence Me In" |
+| **ANV Extraction** | `LarDoln_5.jpg` (Disc Face) | Primary credit extracted as Lari White |
+| **Barcode Text Audit** | `LarDoln_3.jpg` (Back Cover) | Extracted literal digits: `0 7863-66742-2 9` |
+| **LCCN Mapping** | `LarDoln_3.jpg` / `LarDoln_5.jpg` | Extracted RCA logo & copyright entities |
+| **Matrix Normalization** | `LarDoln_4.jpg` (Disc Mirror Band) | Extracted matrix: `07863667422 THIS` |
+| **Mastering SID Mapping** | `LarDoln_4.jpg` (Disc Mirror Band) | Extracted Mastering SID: `IFPI L155` |
+| **External Genre/Style Lookup** | Discogs / Web DB | Populated Folk, World, & Country / Country via external lookup |
+
+---
+
+**1. Artists & Title**
+
+| Item | Value |
+| --- | --- |
+| Artist 1 (Actual Name) | Lari White |
+| Title | Don't Fence Me In |
+
+---
+
+**2. Label, Company, Catalog Number, Etc. (LCCN)**
+
+| Item | Value |
+| --- | --- |
+| Label | RCA |
+| Catalog Number | 07863 66742-2 |
+| Distributed By | BMG Entertainment |
+| Manufactured By | BMG Entertainment |
+| Phonographic Copyright (p) | BMG Entertainment |
+| Copyright (c) | BMG Entertainment |
+| Glass Mastered At | Sonopress USA |
+
+---
+
+**3. Barcodes and Other Identifiers (BAOI)**
+
+| Item | Value |
+| --- | --- |
+| Barcode (Text) | 0 7863-66742-2 9 |
+| Matrix / Runout | 07863667422 THIS |
+| Mastering SID Code | IFPI L155 |
+
+---
+
+**4. Format**
+
+| Item | Value |
+| --- | --- |
+| Format | CD |
+| Quantity | 1 |
+| Checklist | [x] Album |
+| Checklist | [x] Promo |
+
+---
+
+**5. Country & Release Year**
+
+| Item | Value |
+| --- | --- |
+| Country | US |
+| Released | 1996 |
+
+---
+
+**6. Tracklist**
+
+| Track | Title | Time |
+| --- | --- | --- |
+| 1 | Don't Fence Me In | 3:33 |
+| 2 | Wild At Heart | 2:23 |
+| 3 | Ready, Willing And Able | 3:10 |
+| 4 | Ghost Of A Chance | 4:02 |
+| 5 | The Test | 3:28 |
+| 6 | Ain't Gonna Worry About Love No More | 3:07 |
+| 7 | Next To Love | 3:51 |
+| 8 | Something Blue | 3:22 |
+| 9 | Do It Again | 3:25 |
+| 10 | I've Been Waiting For Your Love | 4:32 |
+| 11 | Soul Searchin' Blues | 3:42 |
+| 12 | Woman Of The World | 3:36 |
+| 13 | Don't Fence Me In (Reprise) | 2:55 |
+
+---
+
+**7. Credits & Genres**
+
+| Role | Artist |
+| --- | --- |
+| Genre | Folk, World, & Country |
+| Style | Country |
+| Producer | Josh Leo, Lari White |
+
+---
+
+**8. Notes**
+
+| Item | Value |
+| --- | --- |
+| General Notes | Promo gold stamp over barcode on back inlay: "NOT FOR SALE". Disc face features promo text printed in white: "NOT FOR SALE". |
+| Submission Notes | Added release to Discogs. |
+
+---
+
+*Trace Rigor: Extraction strictly anchored to pixel sources LarDoln_1.jpg through LarDoln_5.jpg and external Genre/Style resolution rules.*

@@ -1,0 +1,42 @@
+MASTER EXECUTION LOCK: PHASED PROTOCOL
+
+#### PHASE 0: REFERENCE
+* [STATEFUL-TERMINAL] Identify and anchor to the most recently uploaded '.txt' file as the primary directive for 'discogs_add_macro' and script logic.
+* [PERSISTENCE] Retain this file in active memory as the authoritative reference until a newer '.txt' file is uploaded.
+* [LATEST-ONLY] Disregard older text files; always point to the most recent upload for current turn adherence.
+
+#### PHASE 1: MEMORY
+* [IMAGE-ISOLATION] Purge prior turns on new upload.
+* [TURN-ZERO] Fresh extraction per image.
+* [BUFFER-EXCEPTION] Keep current turn text/overrides.
+* [SYNC] Reconcile only current turn images.
+* [VERIFY] Current pixels/overrides always dominate contradictions.
+
+#### PHASE 2: EXTRACTION
+* [MACRO-DOMINANCE] 'discogs_add_macro' overrides all AI habits.
+* [PIXEL-LITERALISM] Visible ink only; no general knowledge (Stereo/Chrome/Dolby).
+* [ZERO-INFERENCE-EXCEPTION] Strict ban on assumed data. If a field isn't printed directly on the material, it must remain blank, WITH THE EXCEPTION of Genre and Style fields, which must be parsed via external online lookups when absent from the physical ink.
+* [BARCODE-ISOLATION] Remove the generic 'Barcode' field. Only render the 'Barcode (Text)' field to ensure 100% alignment with visible ink and avoid scanner-mimicry hallucinations.
+* [DVD-SPEC-ROUTING] Route 'Region 0', 'Dolby Digital', 'Video Format', and 'DVD Type' to Free Text or Notes instead of Checklists. Separate formatting data in Notes using the '|' delimiter.
+* [LCCN-LIBERATION] "Manufactured By" is a REQUIRED field in Table 2 (LCCN) if printed on the media or packaging.
+* [ANTI-HALLUCINATION] No Stereo if missing.
+* [ZERO-INFERENCE] Shell/Disc takes priority over missing Inlay.
+* [OMISSION] Leave unprinted fields blank.
+*  [HYPE-STICKER-CONSOLIDATION] All notes derived from hype stickers must be combined into a single entry in the Notes field. Use the literal prefix "Hype Sticker: " followed by the consolidated ink, using " / " as a delimiter between separate text blocks found on the sticker.
+* [FUNCTIONAL-OVERRIDE] Script-defined Genre/Style mappings supersede [PIXEL-LITERALISM].
+
+#### PHASE 2.5: THE AUDIT LOCK
+* [MANDATORY-PREAMBLE] Before rendering Phase 3 tables, generate a 'Pixel-to-Script Audit' markdown table.
+* [TRACEABILITY] Map every transformation (Title Case, Year Stripping, ANVs) to a specific filename (e.g., 1.jpg).
+* [LOGIC-PROVING] Justify all field entries using only current turn pixels or explicit user overrides.
+* [BARCODE-TEXT-AUDIT] Capture and log the literal spacing of the barcode digits for the 'Barcode (Text)' field (e.g., '5 883007 150016' vs '5883007150016') to ensure adherence to [PIXEL-LITERALISM].
+
+#### PHASE 3: RENDERING
+* [FUNCTIONAL-INTEGRITY] Execute every Python step (Clean/Reconcile/Sub-row).
+* [CALIBRATION] Identify 8-table sequence.
+* [SEQUENCING] Protocol Audit Table MUST precede the 8-table sequence.
+* [AUDIT-STRUCTURE] Use 3 columns: Script Rule | Pixel Extraction Source | Transformation Applied.
+* [ZERO-DEVIATION] Macro logic > Industry norms.
+* [NO-COMPRESSION] No simplified data; render all mandated sub-rows/splits.
+* [CONSTRAINT] Do not combine tables; maintain all slots.
+* [CONFIRMATION] End with Trace Rigor text.

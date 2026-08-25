@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Key & Model Tester</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f1117;
+      --bg-secondary: #161b26;
+      --bg-card: rgba(26, 32, 48, 0.7);
+      --bg-card-hover: rgba(35, 43, 64, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-active: rgba(99, 102, 241, 0.5);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --error: #ef4444;
+      --error-glow: rgba(239, 68, 68, 0.2);
+      --warning: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    header {
+      background: rgba(22, 27, 38, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .brand h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #ffffff, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stats-badges {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+    }
+
+    .badge.keys {
+      color: #818cf8;
+      border-color: rgba(129, 140, 248, 0.3);
+    }
+
+    .badge.models {
+      color: #34d399;
+      border-color: rgba(52, 211, 153, 0.3);
+    }
+
+    .main-container {
+      flex: 1;
+      padding: 24px 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+    }
+
+    /* Left Sidebar */
+    .sidebar-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #e5e7eb;
+    }
+
+    .key-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .key-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(15, 17, 23, 0.6);
+      border: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .key-item:hover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .key-item.active {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.15);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .key-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4b5563;
+    }
+
+    .key-status-dot.success { background: var(--success); box-shadow: 0 0 8px var(--success-glow); }
+    .key-status-dot.error { background: var(--error); box-shadow: 0 0 8px var(--error-glow); }
+    .key-status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Tabs & Content Area */
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .tab-content {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tab-content.active {
+      display: flex;
+    }
+
+    /* Forms, Buttons & Controls */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    input, select, textarea {
+      background: rgba(15, 17, 23, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    textarea {
+      font-family: var(--font-mono);
+      resize: vertical;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Grid & Cards for Models / Results */
+    .model-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .model-card {
+      background: rgba(15, 17, 23, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .model-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-card-hover);
+    }
+
+    .model-card.selected {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.12);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .model-card.untested .model-name {
+      color: #34d399;
+    }
+
+    .model-card.tested {
+      opacity: 0.65;
+    }
+    .model-card.tested .model-name {
+      color: #9ca3af;
+    }
+    .model-card.tested::after {
+      content: "tested";
+      margin-left: auto;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 1px 6px;
+      border-radius: 4px;
+      align-self: flex-start;
+    }
+
+    .model-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #34d399;
+    }
+
+    .model-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .meta-tag {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Result Table */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: rgba(15, 17, 23, 0.7);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: rgba(22, 27, 38, 0.9);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .status-badge.ok {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge.fail {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-badge.pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .response-box {
+      background: #090a0f;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #e5e7eb;
+      min-height: 120px;
+      max-height: 380px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">G</div>
+      <div>
+        <h1>Gemini Pool & Model Tester</h1>
+      </div>
+    </div>
+    <div class="stats-badges">
+      <a href="/results" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding: 4px 12px; font-size: 0.75rem; text-decoration: none;">Open Results in New Tab ↗</a>
+      <button class="btn btn-secondary" onclick="quitServer()" style="padding: 4px 10px; font-size: 0.75rem; color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);">Quit Server ✕</button>
+      <div class="badge keys" id="badgeKeys">0 Keys Loaded</div>
+      <div class="badge models" id="badgeModels">0 Filtered Models</div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Sidebar: Key Pool & Quick Selection -->
+    <div class="sidebar-panel">
+      <div class="card">
+        <div class="card-title">
+          <span>Key Pool</span>
+          <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="loadKeys()">Refresh</button>
+        </div>
+        <div class="key-list" id="keyListContainer">
+          <div style="color: var(--text-muted); font-size: 0.8rem;">Loading keys...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Manage Keys (key.txt)</span>
+        </div>
+        <div class="form-group">
+          <textarea id="keysTextEditor" rows="6" placeholder="One API key per line..."></textarea>
+        </div>
+        <button class="btn" style="width: 100%;" onclick="saveKeysEditor()">Save Keys</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Model Filter Details</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.5;">
+          Excluded Categories:
+          <ul style="padding-left: 18px; margin-top: 4px;">
+            <li>Embedding models (<code>embed</code>)</li>
+            <li>Video generation (<code>veo</code>, <code>video</code>)</li>
+            <li>Live Translation (<code>translate</code>)</li>
+            <li>Robotics (<code>robot</code>)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="content-area">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tabConnectivity')">Connectivity Test</button>
+        <button class="tab-btn" onclick="switchTab('tabPlayground')">Interactive Playground</button>
+        <button class="tab-btn" onclick="switchTab('tabModels')">Browse Filtered Models</button>
+      </div>
+
+      <!-- Tab 1: Connectivity Test -->
+      <div id="tabConnectivity" class="tab-content active">
+        <div class="card">
+          <div class="card-title">
+            <span>Test Connectivity</span>
+            <div style="display: flex; gap: 8px;">
+              <a href="/results" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="text-decoration: none;">View Results ↗</a>
+              <button class="btn btn-secondary" id="btnTestSelected" onclick="testActiveKey()">Test Active Key</button>
+              <button class="btn" id="btnTestAll" onclick="testAllKeys()">Test All Keys</button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Target Model</label>
+              <select id="selectConnectivityModel"></select>
+            </div>
+            <div class="form-group">
+              <label>Test Prompt</label>
+              <input type="text" id="inputTestPrompt" value="Respond with 'SUCCESS' if you can read this.">
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Key</th>
+                  <th>Status</th>
+                  <th>Latency</th>
+                  <th>Response / Error</th>
+                </tr>
+              </thead>
+              <tbody id="testResultsBody">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted);">No tests executed yet. Click 'Test All Keys' or 'Test Active Key'</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Interactive Playground -->
+      <div id="tabPlayground" class="tab-content">
+        <div class="card">
+          <div class="card-title">
+            <span>Prompt Execution & Chat</span>
+            <button class="btn" id="btnExecutePrompt" onclick="executePrompt()">Execute Prompt</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 120px; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label>Select Key</label>
+              <select id="selectPlaygroundKey"></select>
+            </div>
+            <div class="form-group">
+              <label>Select Model</label>
+              <select id="selectPlaygroundModel"></select>
+            </div>
+            <div class="form-group">
+              <label>Temperature</label>
+              <input type="number" id="inputTemperature" min="0" max="2" step="0.1" value="0.7">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>System Instruction (Optional)</label>
+            <input type="text" id="inputSystemInstruction" placeholder="Optional system prompt...">
+          </div>
+
+          <div class="form-group">
+            <label>User Prompt</label>
+            <textarea id="inputUserPrompt" rows="4" placeholder="Enter your prompt here..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label>Response Output</label>
+              <span id="responseLatency" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+            </div>
+            <div class="response-box" id="responseOutputBox">Response will appear here...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Browse Filtered Models -->
+      <div id="tabModels" class="tab-content">
+        <div class="card">
+          <div class="card-title">
+            <span>Filtered Models Pool</span>
+            <input type="text" id="searchModelsInput" placeholder="Filter models..." style="padding: 4px 10px; width: 220px;" oninput="renderModelsList()">
+          </div>
+          <div class="model-cards" id="modelsGrid"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      keys: [],
+      models: [],
+      activeKeyIndex: 0,
+      activeModelId: 'gemini-2.5-flash',
+      keyStatuses: {},
+      testedModels: {}
+    };
+
+    async function init() {
+      await Promise.all([loadKeys(), loadModels(), loadTestedModels()]);
+    }
+
+    async function loadTestedModels() {
+      try {
+        const res = await fetch('/api/models-tested');
+        const data = await res.json();
+        state.testedModels = data.tested || {};
+        renderModelsList();
+        populateModelDropdowns();
+      } catch (err) {
+        console.error('Failed to load tested models', err);
+      }
+    }
+
+    async function loadKeys() {
+      try {
+        const res = await fetch('/api/keys');
+        const data = await res.json();
+        state.keys = data.keys || [];
+        document.getElementById('badgeKeys').textContent = `${state.keys.length} Keys Loaded`;
+        renderKeys();
+        populateKeyDropdowns();
+        document.getElementById('keysTextEditor').value = state.keys.map(k => k.key).join('\n');
+      } catch (err) {
+        console.error('Failed to load keys', err);
+      }
+    }
+
+    async function saveKeysEditor() {
+      const text = document.getElementById('keysTextEditor').value;
+      try {
+        const res = await fetch('/api/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keys_text: text })
+        });
+        await res.json();
+        await loadKeys();
+      } catch (err) {
+        alert('Failed to save keys: ' + err);
+      }
+    }
+
+    async function loadModels() {
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        state.models = data.models || [];
+        document.getElementById('badgeModels').textContent = `${state.models.length} Filtered Models`;
+        if (state.models.length > 0) {
+          state.activeModelId = state.models[0].id;
+        }
+        renderModelsList();
+        populateModelDropdowns();
+      } catch (err) {
+        console.error('Failed to load models', err);
+      }
+    }
+
+    function renderKeys() {
+      const container = document.getElementById('keyListContainer');
+      if (!state.keys.length) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">No keys found in key.txt / keys.txt</div>';
+        return;
+      }
+      container.innerHTML = state.keys.map((k, idx) => {
+        const status = state.keyStatuses[k.key] || 'idle';
+        const activeClass = idx === state.activeKeyIndex ? 'active' : '';
+        return `
+          <div class="key-item ${activeClass}" onclick="selectKey(${idx})">
+            <span>[#${idx + 1}] ${k.masked}</span>
+            <div class="key-status-dot ${status}"></div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectKey(idx) {
+      state.activeKeyIndex = idx;
+      renderKeys();
+      const select = document.getElementById('selectPlaygroundKey');
+      if (select) select.value = state.keys[idx]?.key || '';
+    }
+
+    function populateKeyDropdowns() {
+      const select = document.getElementById('selectPlaygroundKey');
+      if (!select) return;
+      select.innerHTML = state.keys.map((k, idx) => `
+        <option value="${k.key}">[#${idx + 1}] ${k.masked}</option>
+      `).join('');
+      if (state.keys[state.activeKeyIndex]) {
+        select.value = state.keys[state.activeKeyIndex].key;
+      }
+    }
+
+    function populateModelDropdowns() {
+      const connSelect = document.getElementById('selectConnectivityModel');
+      const playSelect = document.getElementById('selectPlaygroundModel');
+      const curConn = connSelect ? connSelect.value : null;
+      const curPlay = playSelect ? playSelect.value : null;
+
+      const options = state.models.map(m => {
+        const isTested = !!state.testedModels[m.id];
+        const textColor = isTested ? '#9ca3af' : '#34d399';
+        const label = isTested ? `[Tested] ${m.displayName} (${m.id})` : `[Untested] ${m.displayName} (${m.id})`;
+        return `<option value="${m.id}" style="color: ${textColor}; background-color: #161b26;">${label}</option>`;
+      }).join('');
+
+      if (connSelect) {
+        connSelect.innerHTML = options;
+        if (curConn) connSelect.value = curConn;
+      }
+      if (playSelect) {
+        playSelect.innerHTML = options;
+        if (curPlay) playSelect.value = curPlay;
+      }
+    }
+
+    function renderModelsList() {
+      const grid = document.getElementById('modelsGrid');
+      if (!grid) return;
+      const search = (document.getElementById('searchModelsInput')?.value || '').toLowerCase();
+      const filtered = state.models.filter(m =>
+        m.id.toLowerCase().includes(search) ||
+        m.displayName.toLowerCase().includes(search) ||
+        m.description.toLowerCase().includes(search)
+      );
+
+      grid.innerHTML = filtered.map(m => {
+        const isTested = !!state.testedModels[m.id];
+        const statusCls = isTested ? 'tested' : 'untested';
+        return `
+        <div class="model-card ${m.id === state.activeModelId ? 'selected' : ''} ${statusCls}" onclick="selectModel('${m.id}')">
+          <div class="model-name">${m.displayName}</div>
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: #818cf8;">${m.id}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${m.description || 'No description'}</div>
+          <div class="model-meta">
+            ${m.inputTokenLimit ? `<span class="meta-tag">In: ${(m.inputTokenLimit / 1024).toFixed(0)}k</span>` : ''}
+            ${m.outputTokenLimit ? `<span class="meta-tag">Out: ${(m.outputTokenLimit / 1024).toFixed(0)}k</span>` : ''}
+            ${m.thinking ? `<span class="meta-tag" style="color: #a78bfa;">Thinking</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function selectModel(id) {
+      state.activeModelId = id;
+      renderModelsList();
+      const connSelect = document.getElementById('selectConnectivityModel');
+      const playSelect = document.getElementById('selectPlaygroundModel');
+      if (connSelect) connSelect.value = id;
+      if (playSelect) playSelect.value = id;
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    async function testSingleKey(keyObj, model, prompt) {
+      state.keyStatuses[keyObj.key] = 'loading';
+      renderKeys();
+
+      try {
+        const res = await fetch('/api/test-connectivity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: keyObj.key, model: model, prompt: prompt })
+        });
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          data = { status: 'error', message: `HTTP ${res.status}: ${rawText || 'Server Error'}` };
+        }
+        if (data.status === 'success') {
+          state.keyStatuses[keyObj.key] = 'success';
+        } else {
+          state.keyStatuses[keyObj.key] = 'error';
+        }
+        renderKeys();
+        return data;
+      } catch (err) {
+        state.keyStatuses[keyObj.key] = 'error';
+        renderKeys();
+        return { status: 'error', message: err.message, latencyMs: 0 };
+      } finally {
+        // Refresh tested-model greying after each test.
+        loadTestedModels();
+      }
+    }
+
+    async function testActiveKey() {
+      if (!state.keys.length) return alert('No keys available');
+      const keyObj = state.keys[state.activeKeyIndex];
+      const model = document.getElementById('selectConnectivityModel').value;
+      const prompt = document.getElementById('inputTestPrompt').value;
+
+      const btn = document.getElementById('btnTestSelected');
+      btn.disabled = true;
+
+      const tbody = document.getElementById('testResultsBody');
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--warning);">Testing key ${keyObj.masked}...</td></tr>`;
+
+      const result = await testSingleKey(keyObj, model, prompt);
+
+      tbody.innerHTML = renderResultRow(1, keyObj.masked, result);
+      btn.disabled = false;
+    }
+
+    async function testAllKeys() {
+      if (!state.keys.length) return alert('No keys available');
+      const model = document.getElementById('selectConnectivityModel').value;
+      const prompt = document.getElementById('inputTestPrompt').value;
+
+      const btn = document.getElementById('btnTestAll');
+      btn.disabled = true;
+
+      const tbody = document.getElementById('testResultsBody');
+      tbody.innerHTML = state.keys.map((k, idx) => `
+        <tr id="row-key-${idx}">
+          <td>${idx + 1}</td>
+          <td style="font-family: var(--font-mono);">${k.masked}</td>
+          <td><span class="status-badge pending">Testing...</span></td>
+          <td>-</td>
+          <td>-</td>
+        </tr>
+      `).join('');
+
+      for (let i = 0; i < state.keys.length; i++) {
+        const k = state.keys[i];
+        const res = await testSingleKey(k, model, prompt);
+        const row = document.getElementById(`row-key-${i}`);
+        if (row) {
+          row.outerHTML = renderResultRow(i + 1, k.masked, res, `row-key-${i}`);
+        }
+      }
+
+      btn.disabled = false;
+    }
+
+    function renderResultRow(idx, maskedKey, result, rowId = '') {
+      const isOk = result.status === 'success';
+      const statusBadge = isOk 
+        ? `<span class="status-badge ok">SUCCESS</span>`
+        : `<span class="status-badge fail">FAILED ${result.code ? '(' + result.code + ')' : ''}</span>`;
+      const msg = isOk ? (result.response || result.text || 'SUCCESS') : (result.message || 'Error');
+
+      return `
+        <tr ${rowId ? `id="${rowId}"` : ''}>
+          <td>${idx}</td>
+          <td style="font-family: var(--font-mono);">${maskedKey}</td>
+          <td>${statusBadge}</td>
+          <td style="font-family: var(--font-mono); font-size: 0.8rem;">${result.latencyMs || 0} ms</td>
+          <td style="font-family: var(--font-mono); font-size: 0.8rem; color: ${isOk ? '#34d399' : '#f87171'}; max-width: 400px; word-break: break-word;">${msg}</td>
+        </tr>
+      `;
+    }
+
+    async function executePrompt() {
+      const key = document.getElementById('selectPlaygroundKey').value;
+      const model = document.getElementById('selectPlaygroundModel').value;
+      const temperature = document.getElementById('inputTemperature').value;
+      const systemInstruction = document.getElementById('inputSystemInstruction').value;
+      const prompt = document.getElementById('inputUserPrompt').value;
+
+      if (!prompt.trim()) return alert('Please enter a prompt');
+
+      const btn = document.getElementById('btnExecutePrompt');
+      const output = document.getElementById('responseOutputBox');
+      const latency = document.getElementById('responseLatency');
+
+      btn.disabled = true;
+      output.textContent = 'Generating response...';
+      latency.textContent = '';
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key,
+            model,
+            prompt,
+            temperature,
+            system_instruction: systemInstruction
+          })
+        });
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          data = { status: 'error', message: `HTTP ${res.status}: ${rawText || 'Server Error'}` };
+        }
+        if (data.status === 'success') {
+          output.textContent = data.text;
+          latency.textContent = `Latency: ${data.latencyMs} ms`;
+        } else {
+          output.textContent = `ERROR: ${data.message || 'Request failed'}`;
+          latency.textContent = `Failed in ${data.latencyMs || 0} ms`;
+        }
+      } catch (err) {
+        output.textContent = `ERROR: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        loadTestedModels();
+      }
+    }
+
+    async function quitServer() {
+      if (!confirm('Are you sure you want to stop the tester server?')) return;
+      try {
+        await fetch('/api/shutdown', { method: 'POST' });
+      } catch (e) {}
+      document.body.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 12px; font-family: sans-serif; background: #0f1117; color: #9ca3af;">
+          <h2 style="color: #f3f4f6;">Server Stopped</h2>
+          <p>The tester server has exited cleanly. You may now close this tab.</p>
+        </div>
+      `;
+    }
+
+    function startHeartbeat() {
+      setInterval(() => {
+        fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+      }, 2500);
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      init();
+      startHeartbeat();
+    });
+  </script>
+</body>
+</html>

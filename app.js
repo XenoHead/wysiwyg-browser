@@ -419,6 +419,7 @@ function toggleAddsSubmenu() {
 }
 
 let _addsAmazonWindow = null;
+let _addsDiscogsWindow = null;
 async function openAddsAmazon() {
     try {
         const url = '/adds/amazon';
@@ -434,17 +435,18 @@ async function openAddsAmazon() {
 }
 
 async function openAddsDiscogs() {
-    // Discogs sub-item: opens the existing Builder scrape flow on the main page.
-    // For now it reuses the Builder tab + its Discogs URL scraper.
     try {
-        const tab = document.querySelector('.tab-btn[data-tab="listingTool"]');
-        if (tab) tab.click();
-        const input = document.getElementById('discogsUrlInput');
-        if (input) {
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            input.focus();
+        // Reuse the existing window if it's still open.
+        if (_addsDiscogsWindow && !_addsDiscogsWindow.closed) {
+            _addsDiscogsWindow.focus();
+            return;
+        }
+        const url = '/adds/discogs';
+        _addsDiscogsWindow = window.open(url, 'AddsDiscogsWindow', 'width=900,height=860,resizable=yes,scrollbars=yes,status=yes');
+        if (_addsDiscogsWindow) {
+            _addsDiscogsWindow.focus();
         } else {
-            customAlert('Discogs scrape input not found on the Builder tab.');
+            customAlert('Popup window was blocked by the browser. Please allow popups for this site.');
         }
     } catch (e) {
         customAlert('Failed to open Adds > Discogs: ' + e);

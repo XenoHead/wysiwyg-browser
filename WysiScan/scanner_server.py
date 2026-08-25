@@ -12,7 +12,7 @@ import webbrowser
 from contextlib import asynccontextmanager
 import logging
 from logging.handlers import RotatingFileHandler
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, UploadFile, File, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,16 @@ try:
     import pytesseract
 except ImportError:
     pytesseract = None
+
+def _scanner_cfg_keys():
+    """Pull any gemini/google API keys from the scanner's local config so the
+    shared key pool can include them alongside .env and keys.txt."""
+    try:
+        cfg = load_config()
+        ck = (cfg.get("gemini_api_key") or cfg.get("google_api_key") or "").strip()
+        return [ck] if ck else []
+    except Exception:
+        return []
 
 if sys.platform == "win32":
     import winreg
@@ -448,8 +458,8 @@ async def run_cli_prompt(data: dict = Body(default={})):
 
     if not prompt:
         return {'status': 'error', 'message': 'No prompt provided.'}
-    if not files or len(files) < 1 or len(files) > 5:
-        return {'status': 'error', 'message': 'Select between 1 and 5 files.'}
+    if not files or len(files) < 1 or len(files) > 8:
+        return {'status': 'error', 'message': 'Select between 1 and 8 files.'}
 
     # If we already extracted these exact images, return the cached result
     # instead of re-running the (slow/costly) AI call.
@@ -469,63 +479,19 @@ async def run_cli_prompt(data: dict = Body(default={})):
         except Exception:
             pass
 
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        try:
-            cfg = load_config()
-            api_key = cfg.get("gemini_api_key") or cfg.get("google_api_key")
-        except Exception:
-            pass
-#   -------------------------
-#   -------------------------
-
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key) if api_key else genai.Client()
-
-        contents = [prompt]
-        skipped = []
-        for f in files:
-            try:
-                if os.path.exists(f):
-                    contents.append(Image.open(f))
-                else:
-                    skipped.append(f)
-            except Exception as img_err:
-                print(f"DEBUG - Could not load image {f}: {img_err}")
-                skipped.append(f)
-        if skipped:
-            print(f"DEBUG - Skipped {len(skipped)} unreadable image(s).")
-
-        # Retry setup for temporary 503 capacity spikes
-        max_retries = 3
-        base_delay = 2  # seconds
-
-        for attempt in range(max_retries):
-            try:
-                print(f"Attempt {attempt + 1}/{max_retries} using model: {model_name}")
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents
-                )
-                upsert_cli_cache(files, response.text or "")
-                return {'status': 'success', 'output': response.text or ""}
-            except Exception as err:
-                err_msg = str(err)
-                print(f"DEBUG - Attempt {attempt + 1} failed: {err_msg}")
-
-                # If it's a 503 high-demand spike, wait and retry
-                if "503" in err_msg and attempt < max_retries - 1:
-                    wait_time = base_delay * (2 ** attempt)
-                    print(f"Server busy (503). Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                else:
-                    raise err
-    except Exception as sdk_err:
-        print(f"DEBUG - Python SDK Error (Final): {sdk_err}")
-        import traceback as _tb
-        print("DEBUG - Traceback:\n" + _tb.format_exc())
-        return {'status': 'error', 'message': f'AI prompt failed: {str(sdk_err)}'}
+    # --- Gemini via shared key+model pool (gemini_pool.py in app root) ---
+    import sys as _sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in _sys.path:
+        _sys.path.insert(0, _root)
+    import gemini_pool
+    text, info = gemini_pool.gemini_generate(
+        prompt_text=prompt, image_paths=files, timeout=120,
+        extra_config_keys=_scanner_cfg_keys())
+    if text is None:
+        return {'status': 'error', 'message': info.get('error', 'AI prompt failed.')}
+    upsert_cli_cache(files, text)
+    return {'status': 'success', 'output': text}
 
 
 # 3. Endpoint to fetch cached AI-Prompt results for a given set of images,
@@ -554,6 +520,84 @@ async def open_in_notepad(data: dict = Body(default={})):
 
 
 
+
+
+@app.post('/run-discogs-add')
+async def run_discogs_add(request: Request):
+    try:
+        form = await request.form()
+        uploads = form.getlist('images')
+        if not uploads:
+            return {'status': 'error', 'message': 'No images uploaded.'}
+
+        # Persist uploaded images to a temp dir for Gemini.
+        import tempfile
+        tmpdir = tempfile.mkdtemp(prefix='discogs_add_')
+        saved_paths = []
+        for up in uploads:
+            if hasattr(up, 'filename') and hasattr(up, 'file'):
+                dest = os.path.join(tmpdir, os.path.basename(up.filename) or f'img_{len(saved_paths)}.jpg')
+                with open(dest, 'wb') as out:
+                    content = await up.read()
+                    out.write(content)
+                saved_paths.append(dest)
+            elif isinstance(up, str) and os.path.isfile(up):
+                saved_paths.append(up)
+        if not saved_paths:
+            return {'status': 'error', 'message': 'Could not read uploaded images.'}
+
+        # Load the extraction prompt (instructs Gemini on the expected schema).
+        prompt_path = os.path.join(APP_DIR, 'discogs_extract_prompt.txt')
+        if os.path.isfile(prompt_path):
+            with open(prompt_path, 'r', encoding='utf-8') as pf:
+                extract_prompt = pf.read()
+        else:
+            extract_prompt = "Extract physical media data as JSON (title, artist, label, catalog numbers, barcode, matrix, credits, tracklist, etc.)."
+
+        # Gemini extraction via shared key+model pool (gemini_pool.py).
+        import sys as _sys
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in _sys.path:
+            _sys.path.insert(0, _root)
+        import gemini_pool
+        text, info = gemini_pool.gemini_generate(
+            prompt_text=extract_prompt, image_paths=saved_paths, timeout=120,
+            extra_config_keys=_scanner_cfg_keys())
+        if text is None:
+            return {'status': 'error', 'message': info.get('error', 'Gemini extraction failed.')}
+        raw = text
+
+        # Strip markdown fences if present, then parse JSON.
+        raw = raw.strip()
+        if raw.startswith('```'):
+            raw = raw.split('```', 2)[1]
+            if raw.lower().startswith('json'):
+                raw = raw[4:]
+        try:
+            extracted_data = json.loads(raw)
+        except Exception as e:
+            return {'status': 'error', 'message': f'Could not parse Gemini JSON: {e}', 'raw': raw[:500]}
+
+        # Run the Discogs Add macro (imported from the main app's Adds folder).
+        try:
+            main_root = os.path.dirname(APP_DIR)
+            adds_dir = os.path.join(main_root, 'Adds')
+            if adds_dir not in sys.path:
+                sys.path.insert(0, adds_dir)
+            import importlib
+            discogs_add_mod = importlib.import_module('discogs_add')
+            importlib.reload(discogs_add_mod)
+            result = discogs_add_mod.discogs_add_macro(extracted_data)
+        except Exception as e:
+            import traceback as _tb
+            print("DEBUG - Discogs macro error:\n" + _tb.format_exc())
+            return {'status': 'error', 'message': f'Macro failed: {e}'}
+
+        return {'status': 'success', 'extracted': extracted_data, 'tables': result.get('tables', {})}
+    except Exception as e:
+        import traceback as _tb
+        print("DEBUG - /run-discogs-add error:\n" + _tb.format_exc())
+        return {'status': 'error', 'message': str(e)}
 
 
 DISCOGS_TOKEN = "PzJscAOAJKspsQFlsvQTDChKjbnaWypCetHnoyGK" 

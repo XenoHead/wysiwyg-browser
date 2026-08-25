@@ -1,0 +1,15 @@
+# Gemini model pool (one model id per line), curated from test_results.json
+# (191-test sweep, 2026-08-25). Only models with a proven success record are
+# listed. Ordered best-first: zero-failure models, then lowest-latency.
+# Nano Banana / image-only / tts / research / lyria / omni / pro models are
+# excluded (they cannot do text OCR/extraction and failed the sweep).
+gemini-3.5-flash
+gemini-3.1-flash-lite
+gemini-3-flash-preview
+gemini-3.5-flash-lite
+gemini-3.1-flash-lite-preview
+gemini-flash-lite-latest
+gemini-3.6-flash
+gemini-3.7-flash
+gemma-4-26b-a4b-it
+gemini-flash-latest

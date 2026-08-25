@@ -968,8 +968,8 @@
         async function openCliModal() {
             const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
 
-            if (checked.length < 1 || checked.length > 5) {
-                showToast("Please select between 1 and 5 images to process.", "warn");
+            if (checked.length < 1 || checked.length > 8) {
+                showToast("Please select between 1 and 8 images to process.", "warn");
                 return;
             }
 

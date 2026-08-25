@@ -20,12 +20,20 @@
 -- Amazon Adds (Discogs API) overhaul: results now render as per-field rows with editable boxes and a Copy button each; Upload Photos / Merchant Shipping Group / Quantity rows kept alignment-matched but copy-less
 -- Subject Keyword group: each keyword is its own deletable + editable row, with a "Copy Line" button that joins survivors with spaces
 -- Keyword expansion: all lowercase, space-joined one-liner capped at 210 bytes, derived from the item's own data with an Amazon-safe blocklist (no "Check box: This product does not have a Product ID", promo/brand-only terms, etc.)
+-- Gemini key/model pool: shared gemini_pool.py with a 6-key pool (keys.txt + root .env) and a curated models.txt; REST ?key= transport (works for both AIza and AQ keys) with per-combo failover ranked by test_results.json success rate. model_tester.py and WysiScan scanner_server.py now use the pool.
+-- Discogs Adds (Phase 1): /api/adds/discogs now uses the Gemini pool to OCR scanned media images into {raw_text, tracks, credits}.
+-- Discogs Adds (Phase 2): added parse_raw_text() that structures the loose OCR text into the fields the macro expects (artist, title, label, catalog, year, country, format, tracklist, credits, promo). discogs_add_macro now builds the 8 Discogs submission tables (Artists & Title, LCCN, BAOI, Format, Country & Release Year, Tracklist, Credits & Genres, Notes). Verified against the Lari White "Don't Fence Me In" scan set.
+-- Discogs Adds page: Extract & Build now renders the 8 tables as editable per-field rows with Copy buttons (tracklist objects + array rows + header rows handled).
+-- Discogs Adds window fix: openAddsDiscogs() now opens /adds/discogs in a real popup window (reusing it if already open), replacing the dead Builder-tab focus logic. Bound to the "Add Discogs" button and Ctrl+Shift+D.
+-- ChromeExt (browser extension, unpacked): added an auto-update mechanism. The installer now ships ChromeExt into C:\FYRTOOLS\WYSIWYG\ChromeExt and overwrites it on app upgrade (ignoreversion). background.js polls /api/extension-version every 5 min and auto-reloads (chrome.runtime.reload) when the version changes; added activeTab permission + version.json (v1.1). "Send to WYSIWYG Scraper" now also copies the Discogs link to the Windows clipboard.
 -- Item Condition now derived from the Offer Condition Note as "Collectable - <lowest rating>" (Like New / Very Good / Good), with any +/- suffix stripped
 -- Offer Condition Note captured verbatim from the Discogs marketplace listing comment
 -- Your Price and SKU pulled from the actual marketplace listing
 -- Country/Region of Origin forced to United States (our selling origin)
 -- Discogs API token moved to .env (bundled with the EXE); no longer hardcoded in source
 -- Drawer/menu icons resized to 13px to avoid a scrollbar
+-- ChromeExt (browser extension, unpacked): added an auto-update mechanism. The installer now ships ChromeExt into C:\FYRTOOLS\WYSIWYG\ChromeExt and overwrites it on app upgrade (ignoreversion). background.js polls the app's new GET /api/extension-version every 5 min and calls chrome.runtime.reload() when the bundled version.json changes, so extension updates apply without a manual Reload on chrome://extensions. Extension version is stamped in ChromeExt/version.json (bump it on each extension change). manifest.json gained the "alarms" permission. One-time setup: point "Load unpacked" at C:\FYRTOOLS\WYSIWYG\ChromeExt on each machine.
+-- ChromeExt: "Send to WYSIWYG Scraper" / "Send Page to WYSIWYG Scraper" now also copies the Discogs link to the Windows clipboard (via the service-worker clipboard API, with an active-tab inject fallback). Added the "activeTab" permission and bumped the extension to v1.1 (version.json + manifest.json) so the auto-update mechanism picks it up.
 
 ### v1.12.36.3 - 2026-08-19
 -- All buttons moved to menu items in WYSIWYG and WysiScan

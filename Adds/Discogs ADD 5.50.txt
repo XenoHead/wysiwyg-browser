@@ -1,160 +1,55 @@
+MASTER EXECUTION LOCK: PHASED PROTOCOL
+
+#### PHASE 0: REFERENCE
+* [STATEFUL-TERMINAL] Identify and anchor to the most recently uploaded '.txt' file as the primary directive for 'discogs_add_macro' and script logic.
+* [PERSISTENCE] Retain this file in active memory as the authoritative reference until a newer '.txt' file is uploaded.
+* [LATEST-ONLY] Disregard older text files; always point to the most recent upload for current turn adherence.
+
+#### PHASE 1: MEMORY
+* [IMAGE-ISOLATION] Purge prior turns on new upload.
+* [TURN-ZERO] Fresh extraction per image.
+* [BUFFER-EXCEPTION] Keep current turn text/overrides.
+* [SYNC] Reconcile only current turn images.
+* [VERIFY] Current pixels/overrides always dominate contradictions.
+
+#### PHASE 2: EXTRACTION
+* [MACRO-DOMINANCE] 'discogs_add_macro' overrides all AI habits.
+* [PIXEL-LITERALISM] Visible ink only; no general knowledge (Stereo/Chrome/Dolby).
+* [ZERO-INFERENCE-EXCEPTION] Strict ban on assumed data. If a field isn't printed directly on the material, it must remain blank, WITH THE EXCEPTION of Genre and Style fields, which must be parsed via external online lookups when absent from the physical ink.
+* [BARCODE-ISOLATION] Remove the generic 'Barcode' field. Only render the 'Barcode (Text)' field to ensure 100% alignment with visible ink and avoid scanner-mimicry hallucinations.
+* [DVD-SPEC-ROUTING] Route 'Region 0', 'Dolby Digital', 'Video Format', and 'DVD Type' to Free Text or Notes instead of Checklists. Separate formatting data in Notes using the '|' delimiter.
+* [LCCN-LIBERATION] "Manufactured By" is a REQUIRED field in Table 2 (LCCN) if printed on the media or packaging.
+* [ANTI-HALLUCINATION] No Stereo if missing.
+* [ZERO-INFERENCE] Shell/Disc takes priority over missing Inlay.
+* [OMISSION] Leave unprinted fields blank.
+*  [HYPE-STICKER-CONSOLIDATION] All notes derived from hype stickers must be combined into a single entry in the Notes field. Use the literal prefix "Hype Sticker: " followed by the consolidated ink, using " / " as a delimiter between separate text blocks found on the sticker.
+* [FUNCTIONAL-OVERRIDE] Script-defined Genre/Style mappings supersede [PIXEL-LITERALISM].
+
+#### PHASE 2.5: THE AUDIT LOCK
+* [MANDATORY-PREAMBLE] Before rendering Phase 3 tables, generate a 'Pixel-to-Script Audit' markdown table.
+* [TRACEABILITY] Map every transformation (Title Case, Year Stripping, ANVs) to a specific filename (e.g., 1.jpg).
+* [LOGIC-PROVING] Justify all field entries using only current turn pixels or explicit user overrides.
+* [BARCODE-TEXT-AUDIT] Capture and log the literal spacing of the barcode digits for the 'Barcode (Text)' field (e.g., '5 883007 150016' vs '5883007150016') to ensure adherence to [PIXEL-LITERALISM].
+
+#### PHASE 3: RENDERING
+* [FUNCTIONAL-INTEGRITY] Execute every Python step (Clean/Reconcile/Sub-row).
+* [CALIBRATION] Identify 8-table sequence.
+* [SEQUENCING] Protocol Audit Table MUST precede the 8-table sequence.
+* [AUDIT-STRUCTURE] Use 3 columns: Script Rule | Pixel Extraction Source | Transformation Applied.
+* [ZERO-DEVIATION] Macro logic > Industry norms.
+* [NO-COMPRESSION] No simplified data; render all mandated sub-rows/splits.
+* [CONSTRAINT] Do not combine tables; maintain all slots.
+* [CONFIRMATION] End with Trace Rigor text.
+
 import re
-
-def parse_raw_text(raw_text):
-    """Turn the loose OCR transcript (raw_text from the AI) into the structured
-    fields the macro expects (artist, title, label, catalog, year, country,
-    format, tracklist_raw, credits). Phase-2 'Python does the heavy lifting':
-    the AI only grabbed text; we structure it here. Returns a dict of
-    extracted_data keys (merged by the caller)."""
-    if not raw_text:
-        return {}
-    text = str(raw_text)
-    out = {}
-
-    _LABELS = r'(?i)\b(R\s*C\s*A|BMG|SONY|COLUMBIA|WARNER|CAPITOL|MCA|UNIVERSAL|EMI|ATLANTIC|ARISTA|GEFFEN|MERCURY|POLYDOR|ISLAND|ELEKTRA|EPIC|VIRGIN)\b'
-    def _clean_name(n):
-        # strip a leading label token and any catalog number from a name
-        n = re.sub(_LABELS, ' ', n)
-        n = re.sub(r'\b\d{4,}[\d \-]*\b', ' ', n)
-        n = re.sub(r'\s+', ' ', n).strip()
-        return n
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-
-    # --- Artist & Title ---
-    at_slash = re.search(r'^(.+?)\s*/\s*(.+)$', text, re.MULTILINE)
-    at_block = re.search(r'(?im)^\s*([A-Z][\w&\'.\- ]*?)\s*$\s*^\s*([A-Z][A-Z\'’\- ]{3,})\s*$', text)
-    if at_slash:
-        out["artist"] = _clean_name(at_slash.group(1)).title()
-        out["title"] = at_slash.group(2).strip().title()
-    elif at_block:
-        out["artist"] = _clean_name(at_block.group(1)).title()
-        out["title"] = at_block.group(2).strip().title()
-    else:
-        if lines:
-            out["title"] = lines[0].strip().title()
-
-    # --- Label ---
-    label_hits = re.findall(r'(?i)\b(R\s*C\s*A|BMG|SONY|COLUMBIA|WARNER|CAPITOL|MCA|UNIVERSAL|EMI|ATLANTIC|ARISTA|GEFFEN|MERCURY|POLYDOR|ISLAND|ELEKTRA|EPIC|VIRGIN)\b', text)
-    if label_hits:
-        out["label_literal"] = re.sub(r"\s+", "", label_hits[0]).upper()
-
-    # --- Catalog number ---
-    cat = None
-    m = re.search(r'(?i)(\d{5})\s*[-\s]\s*(\d{3,5}(?:-\d)?)(?!\d)', text)
-    if m:
-        cat = f"{m.group(1)}-{m.group(2)}"
-    if not cat:
-        m = re.search(r'(?i)(\d{5})(\d{3,6})(RE)?(?!\d)', text)
-        if m:
-            cat = f"{m.group(1)}-{m.group(2)}" + (m.group(3) or "")
-    if cat:
-        out["cat_no_spine"] = cat
-
-    # --- Year (from copyright: (c) 1996 / © 1996) ---
-    ym = re.search(r'(?i)(?:\([cp]\)|©|\(c\)|\(p\))\s*((?:19|20)\d{2})', text)
-    if ym:
-        out["year_latest"] = ym.group(1)
-        cpy = re.search(r'(?i)(?:©|\(c\))\s*((?:19|20)\d{2})\s*([A-Z][\w&.\'’\- ]+?)(?:\.|$|\n)', text)
-        if cpy:
-            out["c_copyright_latest"] = cpy.group(2).strip()
-
-    # --- Country (Made in USA / Printed in USA) ---
-    cm = re.search(r'(?i)(?:made|printed|manufactured)\s+in\s+([A-Za-z .]{2,20})', text)
-    if cm:
-        c = cm.group(1).strip().rstrip(".")
-        out["country_raw"] = c.upper() if c.lower() == "usa" else c
-
-    # --- Format (CD preferred; Cassette only when clearly the primary medium) ---
-    low = text.lower()
-    _cat = out.get("cat_no_spine", "")
-    _looks_cd = bool(re.search(r'\bcd\b|compact disc', low)) or _cat.endswith(("-2", "-1", "-4"))
-    if ("cassette" in low or re.search(r'\bMC\b', text)) and not _looks_cd:
-        out["core_format"] = "Cassette"
-    else:
-        out["core_format"] = "CD"
-    out["qty"] = "1"
-
-    # --- Tracklist ---
-    tracks_raw = []
-    for ln in lines:
-        tm = re.match(r'^\s*(\d+)\.\s*(.*)$', ln)
-        if not tm:
-            continue
-        num = tm.group(1)
-        rest = tm.group(2).strip()
-        dm = re.search(r'(?<![\d:])(:?\d{0,2})?:\d{2}\s*$', rest)
-        dur = ""
-        if dm:
-            dur = dm.group(0)
-            if dur.startswith(":"):
-                dur = "0" + dur
-            rest = rest[:dm.start()].strip()
-        title = rest.strip()
-        # strip known non-artist parenthetical suffixes so they don't look like ANVs
-        title = re.sub(r'\s*\((Reprise|Remastered|Live|Mono|Stereo|Bonus|Remix|Edit|Reissue)\)\s*$',
-                       '', title, flags=re.IGNORECASE).strip()
-        if title:
-            tracks_raw.append({"num": num, "title": title, "duration": dur})
-    if tracks_raw:
-        out["tracklist_raw"] = tracks_raw
-
-    # --- Credits (inline songwriter credits from raw text) ---
-    credits = []
-    for m in re.finditer(r'([A-Za-z][\w&.\'’\- ]*?)\s*\((ASCAP|BMI|SESAC)(?:/(ASCAP|BMI|SESAC))*\)', text):
-        name_blob = m.group(1).strip().strip("-").strip()
-        if not name_blob or len(name_blob) < 2:
-            continue
-        for nm in [n.strip() for n in re.split(r'\s*/\s*', name_blob) if n.strip()]:
-            if nm.lower() in ("and", "with", "feat", "featuring"):
-                continue
-            credits.append({"role": "Written-By", "name": nm.title()})
-    seen = set()
-    uniq = []
-    for c in credits:
-        k = (c["role"], c["name"].lower())
-        if k not in seen:
-            seen.add(k)
-            uniq.append(c)
-    if uniq:
-        out["credits"] = uniq
-
-    # --- Promo flag (drives the [x] Promo checklist row) ---
-    if re.search(r'(?i)not for sale|promo', text):
-        out["promo"] = True
-
-    return out
-
-
 def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     if extracted_data is None: extracted_data = {}
-    # Phase 2: if only raw OCR text was captured (no structured fields),
-    # parse it into the structured keys the macro expects.
-    if extracted_data.get("raw_text") and not extracted_data.get("tracklist_raw"):
-        parsed = parse_raw_text(extracted_data["raw_text"])
-        for k, v in parsed.items():
-            if k not in extracted_data or not extracted_data.get(k):
-                extracted_data[k] = v
-    # Fold explicit tracks list (list of strings) if the AI returned one.
-    if isinstance(extracted_data.get("tracks"), list) and not extracted_data.get("tracklist_raw"):
-        tr = []
-        for ln in extracted_data["tracks"]:
-            tm = re.match(r'^\s*(\d+)\.\s*(.*)$', str(ln))
-            if tm:
-                num = tm.group(1); rest = tm.group(2).strip()
-                dm = re.search(r'(?<![\d:])(:?\d+:\d+|\d+:\d+)\s*$', rest)
-                dur = ""
-                if dm:
-                    dur = dm.group(1)
-                    if dur.startswith(":"): dur = "0"+dur
-                    rest = rest[:dm.start()].strip()
-                if rest: tr.append({"num": num, "title": rest, "duration": dur})
-        if tr: extracted_data["tracklist_raw"] = tr
     extracted_data["Submission Notes"] = "Added release to Discogs"
+    if not extracted_data.get("Genre") or not extracted_data.get("Style"):
+        log_transformation("Search Trigger", "Discogs/Web", "Executing research turn for Genre/Style")
     execution_audit = []
     def log_transformation(rule, source_file, result):
         execution_audit.append({"Rule": rule, "Source": source_file, "Applied": result})
-    if not extracted_data.get("Genre") or not extracted_data.get("Style"):
-        log_transformation("Search Trigger", "Discogs/Web", "Executing research turn for Genre/Style")
     role_map = {
         "Lead": "Soloist",
         "Lead Vocals": "Soloist",
@@ -167,31 +62,15 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         "Mix": "Mixed By"
     }
     def process_credits_degrouped(raw_credits):
-        """Processes credits into Individualized Rows with Comma-Separated Roles.
-        Accepts either a dict {role: [names]} or a list of {role, name} dicts."""
-        individual_map = {} # {Name: [Role1, Role2]}
-        if isinstance(raw_credits, dict):
-            credit_items = raw_credits.items()
-        elif isinstance(raw_credits, list):
-            credit_items = [(c.get("role", ""), c.get("name", "")) for c in raw_credits]
-        else:
-            credit_items = []
-        for role, names in credit_items:
-            # Normalize a single name or a list of names into a list.
-            if isinstance(names, str):
-                name_list = [n.strip() for n in names.split(",")] if names else []
-            elif isinstance(names, (list, tuple)):
-                name_list = [str(n).strip() for n in names]
-            else:
-                name_list = [str(names).strip()] if names else []
+        """Processes credits into Individualized Rows with Comma-Separated Roles."""
+        individual_map = {} # {Name: [Role1, Role2]}  
+        for role, names in raw_credits.items():
             # Apply Dictionary Mapping
-            _lower_map = {k.lower(): v for k, v in role_map.items()}
-            mapped_role = role_map.get(role, _lower_map.get(role.lower(), role))
+            mapped_role = role_map.get(role, role)
             if mapped_role != role:
                 log_transformation("Role Mapping", "Credit Dictionary", f"{role} -> {mapped_role}")
-            for name in name_list:
-                if not name:
-                    continue
+            
+            for name in names:
                 if name not in individual_map:
                     individual_map[name] = []
                 if mapped_role not in individual_map[name]:
@@ -276,7 +155,7 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         if raw_year and str(raw_year).isdigit() and int(raw_year) < 1994:
             extracted_data["year_latest"] = "Unknown (Post-1994 SID Conflict)"
     raw_blob = str(extracted_data).upper()
-    is_club = any(x in raw_blob for x in ["COLUMBIA HOUSE", "DIDY", "CRC"]) 
+    is_club = any(x in raw_blob for x in ["COLUMBIA HOUSE", "DIDY", "CRC", "CH"]) 
     def validate_label(label, artist):
         if not label or str(label).strip().lower() in ["", "none", "unknown"]:
             return f"Not On Label ({artist} Self-released)" if artist else "Not On Label"
@@ -290,15 +169,7 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         return clean_text
     def strict_title_case(t):
         if not t: return t
-        out = []
-        for word in str(t).split():
-            if not word:
-                continue
-            w = word[0].upper() + word[1:]
-            # lowercase a letter immediately after an apostrophe (Don'T -> Don't)
-            w = re.sub(r"'([A-Z])", lambda m: "'" + m.group(1).lower(), w)
-            out.append(w)
-        return ' '.join(out)
+        return ' '.join(word[0].upper() + word[1:] if len(word) > 1 else word.upper() for word in str(t).split())
     def reconcile_brand_vs_company(name_string):
         corporate_flags = ["Group", "Inc.", "Ltd.", "S.A.", "Corp.", "GmbH", "LLC"]
         if any(flag in name_string for flag in corporate_flags):
@@ -381,7 +252,6 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         cleaned = str(raw_val).strip()
         if cleaned == matrix_literal or cleaned in matrix_literal:
             return None
-        return cleaned
     spine_cat = spine_data["cat"] or format_cat_no(extracted_data.get("cat_no_spine"))
     shell_cat = format_cat_no(extracted_data.get("cat_no_shell"))
     inlay_cat = format_cat_no(extracted_data.get("cat_no_other"))
@@ -517,9 +387,9 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
                 price_codes.append(("Price Code", f))
                 other_val_upper = other_val_upper.replace(f, "").strip()
         other_val = other_val_upper if other_val_upper and other_val_upper not in ["", "NONE"] else None
-    if other_val in [spine_cat, shell_cat, inlay_cat]:
+    if other_val in [spine_cat, shell_cat, additional_cat]:
         other_val = None
-    if literal_barcode in [spine_cat, shell_cat, inlay_cat]:
+    if literal_barcode in [spine_cat, shell_cat, additional_cat]:
         literal_barcode = None
     if str(other_val).upper() in ["SR", "AR"]:
         other_val = None

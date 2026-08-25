@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WYSIWYG &middot; Adds &middot; Discogs</title>
+<style>
+    :root {
+        --bg: #f4f6f9;
+        --panel: #ffffff;
+        --text: #1a1a1a;
+        --muted: #6b7280;
+        --border: #d0d5dd;
+        --accent: #0000ff;
+        --accent-soft: #eef3fb;
+        --btn: #0000ff;
+        --btn-text: #ffffff;
+    }
+    body.dark {
+        --bg: #1b1d21;
+        --panel: #25282e;
+        --text: #e6e6e6;
+        --muted: #9aa0a6;
+        --border: #3a3f47;
+        --accent: #ffd400;
+        --accent-soft: #2c2f36;
+        --btn: #ffd400;
+        --btn-text: #111111;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 18px;
+    }
+    /* Draggable + resizable container (matches Amazon Adds modal behaviour) */
+    #daWrap {
+        position: relative;
+        max-width: 900px;
+        margin: 0 auto;
+        background: var(--bg);
+    }
+    #daTopbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 0 0 10px;
+        background: var(--bg);
+    }
+    #daWrap.pinned {
+        position: fixed !important;
+        top: 0; left: 0; right: 0;
+        z-index: 2147483647;
+        background: var(--bg);
+        padding: 18px;
+        overflow: auto;
+        max-height: 100vh;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    }
+    h2 { margin: 0 0 4px; font-size: 18px; color: var(--accent); }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    button.primary {
+        padding: 10px 18px; border: none; border-radius: 6px;
+        background: var(--btn); color: var(--btn-text); font-weight: bold;
+        cursor: pointer; font-size: 14px;
+    }
+    button.primary:disabled { opacity: 0.55; cursor: wait; }
+    button.ghost {
+        padding: 9px 14px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--panel); color: var(--text); cursor: pointer; font-size: 13px;
+    }
+    .status { font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 16px; }
+    .status.err { color: #c62828; }
+    .status.ok { color: #2e7d32; }
+    label.lbl { font-size: 12px; font-weight: 600; color: var(--muted); display:block; margin-bottom: 8px; }
+
+    /* Image thumbnails */
+    #thumbList { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .thumb {
+        position: relative; width: 110px; height: 110px; border: 1px solid var(--border);
+        border-radius: 6px; overflow: hidden; background: var(--panel);
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb .rm {
+        position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: #fff;
+        border: none; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 1px 5px;
+    }
+
+    /* Result field rows (mirror Amazon Adds) */
+    .results { margin-top: 2px; overflow: auto; }
+    .section-title {
+        font-size: 13px; font-weight: 700; margin: 16px 0 6px;
+        color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .field-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+    .field-label {
+        flex: 0 0 190px; width: 190px; font-size: 12px; font-weight: 600;
+        color: var(--muted); padding-top: 8px; word-break: break-word;
+    }
+    .field-val {
+        flex: 1 1 auto; min-width: 0; padding: 7px 10px; border: 1px solid var(--border);
+        border-radius: 6px; background: var(--panel); color: var(--text);
+        font-size: 13px; font-family: inherit; resize: vertical;
+    }
+    .copy-one {
+        flex: 0 0 72px; width: 72px; padding: 7px 0; border: 1px solid var(--border);
+        border-radius: 6px; background: var(--panel); color: var(--text);
+        font-size: 12px; cursor: pointer;
+    }
+    .copy-one:hover { background: var(--accent-soft); }
+</style>
+</head>
+<body>
+    <div id="daWrap">
+        <div id="daTopbar">
+            <button id="daPinBtn" class="ghost" onclick="toggleDaPin()">📌 Always on top: OFF</button>
+        </div>
+        <h2>Adds &middot; Discogs</h2>
+        <div class="sub">Add already-scanned images of the physical media. The AI extracts the data and builds the 8 Discogs submission tables.</div>
+
+        <div class="row">
+            <input type="file" id="imgInput" accept="image/*" multiple
+                style="flex:1; min-width:260px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text);">
+            <button class="primary" id="buildBtn" onclick="runDiscogsAdd()">Extract &amp; Build</button>
+            <button class="ghost" onclick="copyAll()">Copy All</button>
+        </div>
+        <div class="status" id="status"></div>
+        <label class="lbl">Selected Images (<span id="imgCount">0</span>):</label>
+        <div id="thumbList"></div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+<script>
+(function () {
+    const API_BASE = '';
+    const imgInput = document.getElementById('imgInput');
+    const thumbList = document.getElementById('thumbList');
+    const statusEl = document.getElementById('status');
+    const results = document.getElementById('results');
+    const buildBtn = document.getElementById('buildBtn');
+    let lastText = '';
+
+    // Theme from localStorage if present.
+    try {
+        const t = localStorage.getItem('wysiwyg_theme');
+        if (t === 'dark') document.body.classList.add('dark');
+    } catch (e) {}
+
+    function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    // Track selected File objects.
+    let selectedFiles = [];
+    imgInput.addEventListener('change', () => {
+        for (const f of imgInput.files) {
+            if (selectedFiles.length >= 8) {
+                setStatus('Maximum of 8 images reached.', 'err');
+                break;
+            }
+            selectedFiles.push(f);
+        }
+        renderThumbs();
+        imgInput.value = '';
+    });
+
+    function renderThumbs() {
+        thumbList.innerHTML = '';
+        selectedFiles.forEach((f, i) => {
+            const div = document.createElement('div');
+            div.className = 'thumb';
+            const url = URL.createObjectURL(f);
+            const img = document.createElement('img');
+            img.src = url;
+            const rm = document.createElement('button');
+            rm.className = 'rm';
+            rm.textContent = '✕';
+            rm.onclick = () => { URL.revokeObjectURL(url); selectedFiles.splice(i, 1); renderThumbs(); };
+            div.appendChild(img); div.appendChild(rm);
+            thumbList.appendChild(div);
+        });
+        document.getElementById('imgCount').textContent = selectedFiles.length;
+    }
+
+    async function copyText(text) {
+        try { await navigator.clipboard.writeText(text); }
+        catch (e) { /* ignore */ }
+    }
+    function flashCopied(btn) {
+        const old = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = old; }, 900);
+    }
+
+    // Render the 8 tables as sections with per-field rows + Copy buttons.
+    function renderTables(tables) {
+        results.innerHTML = '';
+        const sectionOrder = Object.keys(tables);
+        for (const title of sectionOrder) {
+            const rows = tables[title] || [];
+            const h = document.createElement('div');
+            h.className = 'section-title';
+            h.textContent = title;
+            results.appendChild(h);
+            for (const row of rows) {
+                // Tracklist rows are objects {Track, Title, Time}
+                if (row && typeof row === 'object' && !Array.isArray(row)) {
+                    const track = row.Track || '';
+                    let title = (row.Title || '').replace(/\*\*(.+?)\*\*/g, '$1');
+                    const time = row.Time || '';
+                    const r = document.createElement('div');
+                    r.className = 'field-row';
+                    const lbl = document.createElement('div');
+                    lbl.className = 'field-label';
+                    lbl.textContent = (title && title.startsWith('**')) ? 'Section' : (track ? 'Track ' + track : '');
+                    const val = document.createElement('textarea');
+                    val.className = 'field-val';
+                    val.value = title + (time ? '  [' + time + ']' : '');
+                    val.rows = 1;
+                    r.appendChild(lbl); r.appendChild(val);
+                    if (String(title).trim()) {
+                        const btn = document.createElement('button');
+                        btn.className = 'copy-one';
+                        btn.textContent = 'Copy';
+                        btn.onclick = async () => { await copyText(val.value); flashCopied(btn); };
+                        r.appendChild(btn);
+                    }
+                    results.appendChild(r);
+                    continue;
+                }
+                if (!Array.isArray(row) || row.length < 2) continue;
+                const label = row[0];
+                const value = row[1];
+                if (value === '-' && label === '-') {
+                    // visual separator row
+                    const sep = document.createElement('div');
+                    sep.style.height = '6px';
+                    results.appendChild(sep);
+                    continue;
+                }
+                // Header rows (Item/Value, Role/Artist) render as a styled header.
+                if ((label === 'Item' && value === 'Value') || (label === 'Role' && value === 'Artist')) {
+                    const hd = document.createElement('div');
+                    hd.style.cssText = 'font-size:11px;font-weight:700;color:var(--muted);margin:2px 0 4px;text-transform:uppercase;letter-spacing:0.03em;';
+                    hd.textContent = label + ' / ' + value;
+                    results.appendChild(hd);
+                    continue;
+                }
+                const r = document.createElement('div');
+                r.className = 'field-row';
+                const lbl = document.createElement('div');
+                lbl.className = 'field-label';
+                lbl.textContent = label;
+                const val = document.createElement('textarea');
+                val.className = 'field-val';
+                val.value = value == null ? '' : String(value);
+                val.rows = Math.max(1, Math.min(8, Math.ceil(val.value.length / 60)));
+                r.appendChild(lbl); r.appendChild(val);
+                if (value !== '-' && String(value).trim() !== '') {
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-one';
+                    btn.textContent = 'Copy';
+                    btn.onclick = async () => { await copyText(val.value); flashCopied(btn); };
+                    r.appendChild(btn);
+                }
+                results.appendChild(r);
+            }
+
+        lastText = results.innerText;
+    }
+
+    window.copyAll = function () {
+        let out = '';
+        results.querySelectorAll('.section-title').forEach(sec => {
+            out += '\n' + sec.textContent + '\n';
+            let n = sec.nextElementSibling;
+            while (n && !n.classList.contains('section-title')) {
+                if (n.classList.contains('field-row')) {
+                    const l = n.querySelector('.field-label')?.textContent || '';
+                    const v = n.querySelector('.field-val')?.value || '';
+                    if (v.trim()) out += l + ': ' + v + '\n';
+                }
+                n = n.nextElementSibling;
+            }
+        });
+        copyText(out.trim());
+        setStatus('Copied all tables to clipboard.', 'ok');
+    };
+
+    window.runDiscogsAdd = async function () {
+        if (!selectedFiles.length) {
+            setStatus('Add at least one scanned image first.', 'err');
+            return;
+        }
+        buildBtn.disabled = true;
+        setStatus('Extracting data from images (Gemini)...');
+        results.innerHTML = '';
+        const url = API_BASE + '/api/adds/discogs';
+        console.log('Discogs add -> POST', url, 'images:', selectedFiles.length);
+        try {
+            const fd = new FormData();
+            selectedFiles.forEach(f => fd.append('images', f, f.name));
+            const resp = await fetch(url, { method: 'POST', body: fd });
+            console.log('Discogs add <- status', resp.status, resp.statusText);
+            const data = await resp.json();
+            console.log('Discogs add <- body', data);
+            if (data.status === 'success') {
+                const tables = data.tables || {};
+                if (data.phase === 'ocr_only') {
+                    // Phase 1: just show the raw OCR text for verification.
+                    results.innerHTML = '';
+                    const h = document.createElement('div');
+                    h.className = 'section-title';
+                    h.textContent = 'Raw Extraction (verify OCR text)';
+                    results.appendChild(h);
+                    const ta = document.createElement('textarea');
+                    ta.className = 'field-val';
+                    ta.style.height = '320px';
+                    ta.value = (data.extracted && (data.extracted.raw_text || JSON.stringify(data.extracted, null, 2))) || '';
+                    results.appendChild(ta);
+                    setStatus('OCR captured. Verify the text below, then we enable table-building.', 'ok');
+                } else {
+                    renderTables(tables);
+                    const n = Object.keys(tables).length;
+                    const totalRows = Object.values(tables).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0);
+                    if (n === 0 || totalRows === 0) {
+                        setStatus('Gemini responded but produced no table data. Try again or check the images.', 'err');
+                    } else {
+                        setStatus('Built ' + n + ' tables (' + totalRows + ' rows).', 'ok');
+                    }
+                }
+            } else {
+                setStatus('Error: ' + (data.message || 'Unknown error'), 'err');
+                if (data.raw) console.error('Gemini raw:', data.raw);
+            }
+        } catch (e) {
+            setStatus('Network error: ' + e, 'err');
+            console.error('Discogs add fetch failed:', e);
+        } finally {
+            buildBtn.disabled = false;
+        }
+    };
+
+    window.toggleDaPin = function () {
+        const w = document.getElementById('daWrap');
+        const btn = document.getElementById('daPinBtn');
+        const on = w.classList.toggle('pinned');
+        btn.textContent = on ? '📌 Always on top: ON' : '📌 Always on top: OFF';
+    };
+})();
+</script>
+</body>
+</html>

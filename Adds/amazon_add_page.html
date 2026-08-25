@@ -186,17 +186,18 @@
         flex: 0 0 72px;
         width: 72px;
     }
-    /* --- Always-on-top pin --- */
+    /* --- Always-on-top pin / sticky top bar --- */
     #aapTopbar {
         position: sticky;
         top: 0;
         z-index: 50;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 8px 4px;
+        margin: -8px -4px 12px;
         display: flex;
-        justify-content: space-between;
         align-items: center;
         gap: 10px;
-        padding: 0 0 10px;
-        background: var(--bg);
     }
     #aapViewMode {
         font-size: 13px;
@@ -205,6 +206,27 @@
         border: 1px solid var(--border);
         background: var(--input-bg);
         color: var(--text);
+        cursor: pointer;
+    }
+    #aapSectionNav {
+        font-size: 13px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--input-bg);
+        color: var(--text);
+        cursor: pointer;
+        max-width: 280px;
+    }
+    #aapPinBtn {
+        margin-left: auto;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1;
+        padding: 4px 8px;
+        border-radius: 4px;
         cursor: pointer;
     }
     #aapPinBtn.pinned {
@@ -235,7 +257,13 @@
                 <option value="Small">Small</option>
             </select>
         </label>
-        <button id="aapPinBtn" class="ghost" onclick="toggleAapPin()">📌 Always on top: OFF</button>
+        <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
+            Section:
+            <select id="aapSectionNav" onchange="onAapSectionNav(this.value)">
+                <option value="">Jump to section…</option>
+            </select>
+        </label>
+        <button id="aapPinBtn" class="ghost" title="Keep this panel on top" onclick="toggleAapPin()">📌</button>
     </div>
     <h2>Adds &middot; Amazon</h2>
     <div class="sub">Paste a Discogs seller / release link (e.g. https://www.discogs.com/shop/item/4330873320). Data is pulled via the Discogs API and laid out using the Amazon Adds scraper.</div>
@@ -409,11 +437,43 @@
         if (pendingKeywords.length) {
             renderKeywordGroup(pendingKeywords.join(', '));
         }
+        populateSectionNav();
     }
 
     // Re-render the last scrape in the newly selected view (no re-scrape needed).
     function onAapViewChange() {
         renderResults(lastText);
+    }
+
+    // Build the section-jump dropdown from the currently rendered section titles.
+    function populateSectionNav() {
+        const nav = document.getElementById('aapSectionNav');
+        if (!nav) return;
+        const titles = Array.from(results.querySelectorAll('.section-title'));
+        const opts = ['<option value="">Jump to section…</option>'];
+        titles.forEach((t, i) => {
+            const label = t.textContent || ('Section ' + (i + 1));
+            opts.push('<option value="' + i + '">' + label + '</option>');
+        });
+        nav.innerHTML = opts.join('');
+    }
+
+    // Scroll to the chosen section when the dropdown changes.
+    function onAapSectionNav(idx) {
+        if (idx === '' || idx == null) return;
+        const titles = Array.from(results.querySelectorAll('.section-title'));
+        const target = titles[parseInt(idx, 10)];
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Briefly highlight the landed section.
+            target.style.transition = 'background 0.3s';
+            const old = target.style.background;
+            target.style.background = 'var(--accent-soft)';
+            setTimeout(() => { target.style.background = old; }, 700);
+        }
+        // Reset the dropdown so the same section can be re-selected later.
+        const nav = document.getElementById('aapSectionNav');
+        if (nav) nav.value = '';
     }
 
     async function flashCopied(btn) {
@@ -573,7 +633,7 @@ function toggleAapPin() {
     const on = wrap.classList.toggle('pinned');
     const btn = document.getElementById('aapPinBtn');
     btn.classList.toggle('pinned', on);
-    btn.textContent = on ? '📌 Always on top: ON' : '📌 Always on top: OFF';
+    btn.title = on ? 'Unpin panel' : 'Keep this panel on top';
 }
 </script>
 </body>

@@ -52,6 +52,11 @@ Source: "walmart.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.js"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Users\Scott\FYR_LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+; Chrome extension (unpacked; loaded manually from {app}\ChromeExt on each
+; machine). ignoreversion overwrites on upgrade so the self-reload hook in
+; background.js picks up new files when the app version changes.
+Source: "ChromeExt\*"; DestDir: "{app}\ChromeExt"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 ; Subfolders
 ; NOTE: The compiled EXE is a PyInstaller onefile build that bundles Uberpaste,
 ; WysiScan and WalmartSheet internally (via --add-data / sys._MEIPASS). At runtime

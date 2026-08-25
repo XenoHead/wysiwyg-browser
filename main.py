@@ -41,7 +41,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import psutil 
 from datetime import datetime
-from fastapi import FastAPI, Form, Body, Request, Response
+from fastapi import FastAPI, Form, Body, Request, Response, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from html_format import format_discogs_to_html
@@ -74,6 +74,21 @@ except ImportError:
 
 # Browser-mode subscribers (open tabs listening via EventSource)
 scrape_subscribers = set()
+
+@app.get("/api/extension-version")
+async def extension_version():
+    """Returns the ChromeExt version bundled with this app build. The browser
+    extension polls this and calls chrome.runtime.reload() when it differs from
+    its own version.json (so installer-driven extension updates apply without a
+    manual Reload on chrome://extensions)."""
+    import json as _json
+    vp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ChromeExt", "version.json")
+    try:
+        with open(vp, encoding="utf-8") as f:
+            data = _json.load(f)
+        return {"version": data.get("version", "0"), "source": vp}
+    except Exception as e:
+        return {"version": "0", "error": str(e)}
 
 @app.post("/api/extension-scrape")
 async def extension_scrape(data: dict = Body(...)):
@@ -1749,6 +1764,7 @@ async def scrape_discogs(url: str = Form(...)):
             # Prepare data for JS injection (JSON encoded to handle special chars/newlines safely)
             json_raw_text = json.dumps(raw_text_tool).replace("</", "<\\/")
             json_tracklist = json.dumps(tracklist_str).replace("</", "<\\/")
+            json_item_title = json.dumps(f"{artist} - {album}").replace("</", "<\\/")
 
             response_content = f"""
             <script>
@@ -1802,6 +1818,12 @@ async def scrape_discogs(url: str = Form(...)):
                     }}
                     
                     const rawText = document.getElementById('scraperResultText')?.textContent || '';
+                    const headerEl = document.getElementById('scrapedItemHeader');
+                    if (headerEl) {{
+                        const titleText = {json_item_title};
+                        headerEl.textContent = titleText;
+                        headerEl.title = titleText;
+                    }}
                     if (rawText) {{
                         // Populate builder tab
                         if (typeof parsePastedData === 'function') {{
@@ -1901,6 +1923,125 @@ def _discogs_release_to_raw_text(release: dict) -> str:
 async def serve_adds_amazon():
     """Serves the Amazon Adds tab page."""
     return FileResponse(resource_path("Adds/amazon_add_page.html"))
+
+
+@app.get("/adds/discogs")
+async def serve_adds_discogs():
+    """Serves the Discogs Adds tab page."""
+    return FileResponse(resource_path("Adds/discogs_add_page.html"))
+
+
+@app.post("/api/adds/discogs")
+async def adds_discogs_build(request: Request):
+    """Same-origin endpoint: Gemini extracts data from scanned media images,
+    then runs discogs_add_macro to build the 8 Discogs submission tables."""
+    try:
+        print("DEBUG - /api/adds/discogs ENTERED")
+        form = await request.form()
+        uploads = form.getlist("images")
+        print(f"DEBUG - /api/adds/discogs: {len(uploads)} upload(s) received")
+        if not uploads:
+            return JSONResponse(status_code=400,
+                                content={"status": "error", "message": "No images uploaded."})
+        if len(uploads) > 8:
+            return JSONResponse(status_code=400,
+                                content={"status": "error", "message": "Maximum of 8 images allowed."})
+
+        import tempfile
+        tmpdir = tempfile.mkdtemp(prefix="discogs_add_")
+        saved_paths = []
+        for up in uploads:
+            if hasattr(up, "filename") and hasattr(up, "file"):
+                dest = os.path.join(tmpdir, os.path.basename(up.filename) or f"img_{len(saved_paths)}.jpg")
+                with open(dest, "wb") as out:
+                    content = await up.read()
+                    out.write(content)
+                saved_paths.append(dest)
+            elif isinstance(up, str) and os.path.isfile(up):
+                saved_paths.append(up)
+        if not saved_paths:
+            return JSONResponse(status_code=400,
+                                content={"status": "error", "message": "Could not read uploaded images."})
+
+        # Extraction prompt (lives next to this file in the repo root).
+        prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "WysiScan", "discogs_extract_prompt.txt")
+        if not os.path.isfile(prompt_path):
+            prompt_path = os.path.join(APP_DIR if "APP_DIR" in dir() else os.path.dirname(os.path.abspath(__file__)),
+                                       "discogs_extract_prompt.txt")
+        extract_prompt = ""
+        if os.path.isfile(prompt_path):
+            with open(prompt_path, "r", encoding="utf-8") as pf:
+                extract_prompt = pf.read()
+        else:
+            extract_prompt = ("Extract physical media data as JSON (title, artist, label, catalog "
+                              "numbers, barcode, matrix, credits, tracklist, etc.).")
+
+        # --- Gemini extraction via shared key+model pool (gemini_pool.py) ---
+        # Uses REST ?key= (works for both AIza... and AQ... keys) and fails over
+        # across keys (per-project quota) and models, ranking by test_results.json.
+        import gemini_pool
+        text, info = gemini_pool.gemini_generate(
+            prompt_text=extract_prompt, image_paths=saved_paths, timeout=120)
+        if text is None:
+            return JSONResponse(status_code=502,
+                                content={"status": "error",
+                                         "message": info.get("error", "Gemini extraction failed.")})
+        raw = text
+        print(f"DEBUG - Discogs Gemini OK via {info}")
+
+        # Strip markdown fences if present, then parse JSON.
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```", 2)[1]
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        try:
+            extracted_data = json.loads(raw)
+        except Exception as e:
+            return JSONResponse(status_code=422,
+                                content={"status": "error",
+                                         "message": f"Could not parse Gemini JSON: {e}", "raw": raw[:500]})
+
+        # --- Dump the raw OCR extraction to a file for inspection/debugging. ---
+        try:
+            dump_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     "discogs_last_extract.json")
+            with open(dump_path, "w", encoding="utf-8") as dfh:
+                json.dump(extracted_data, dfh, indent=2, ensure_ascii=False)
+            print(f"DEBUG - wrote raw extraction to {dump_path}")
+        except Exception as e:
+            print(f"DEBUG - could not write extract dump: {e}")
+
+        # --- Phase 2: run the Discogs Add macro (Python structures the data). ---
+        try:
+            adds_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Adds")
+            if adds_dir not in sys.path:
+                sys.path.insert(0, adds_dir)
+            import importlib
+            discogs_add_mod = importlib.import_module("discogs_add")
+            importlib.reload(discogs_add_mod)
+            print("DEBUG discogs keys:", list(extracted_data.keys()))
+            print("DEBUG raw_text len:", len(extracted_data.get("raw_text") or ""))
+            try:
+                print("DEBUG parse artist:", discogs_add_mod.parse_raw_text(extracted_data.get("raw_text") or "").get("artist"))
+            except Exception as pe:
+                print("DEBUG parse err:", pe)
+            result = discogs_add_mod.discogs_add_macro(extracted_data)
+        except Exception as e:
+            import traceback as _tb
+            print("DEBUG - Discogs macro error:\n" + _tb.format_exc())
+            return JSONResponse(status_code=500,
+                                content={"status": "error", "message": f"Macro failed: {e}"})
+
+        return {"status": "success", "extracted": extracted_data, "tables": result.get("tables", {})}
+    except Exception as e:
+        import traceback as _tb
+        print("DEBUG - /api/adds/discogs error:\n" + _tb.format_exc())
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+
+
 
 
 @app.post("/api/adds/amazon-scrape")
