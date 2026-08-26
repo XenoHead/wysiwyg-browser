@@ -18,57 +18,253 @@ def parse_raw_text(raw_text):
         n = re.sub(r'\b\d{4,}[\d \-]*\b', ' ', n)
         n = re.sub(r'\s+', ' ', n).strip()
         return n
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-
-    # --- Artist & Title ---
-    at_slash = re.search(r'^(.+?)\s*/\s*(.+)$', text, re.MULTILINE)
-    at_block = re.search(r'(?im)^\s*([A-Z][\w&\'.\- ]*?)\s*$\s*^\s*([A-Z][A-Z\'’\- ]{3,})\s*$', text)
-    if at_slash:
-        out["artist"] = _clean_name(at_slash.group(1)).title()
-        out["title"] = at_slash.group(2).strip().title()
-    elif at_block:
-        out["artist"] = _clean_name(at_block.group(1)).title()
-        out["title"] = at_block.group(2).strip().title()
-    else:
-        if lines:
-            out["title"] = lines[0].strip().title()
-
-    # --- Label ---
-    label_hits = re.findall(r'(?i)\b(R\s*C\s*A|BMG|SONY|COLUMBIA|WARNER|CAPITOL|MCA|UNIVERSAL|EMI|ATLANTIC|ARISTA|GEFFEN|MERCURY|POLYDOR|ISLAND|ELEKTRA|EPIC|VIRGIN)\b', text)
-    if label_hits:
-        out["label_literal"] = re.sub(r"\s+", "", label_hits[0]).upper()
-
-    # --- Catalog number ---
-    cat = None
-    m = re.search(r'(?i)(\d{5})\s*[-\s]\s*(\d{3,5}(?:-\d)?)(?!\d)', text)
-    if m:
-        cat = f"{m.group(1)}-{m.group(2)}"
-    if not cat:
-        m = re.search(r'(?i)(\d{5})(\d{3,6})(RE)?(?!\d)', text)
+    # Defense-in-depth: some models leak chain-of-thought / narration into the
+    # transcript (e.g. "The user wants...", "Image 1:", "Refining raw_text",
+    # "Final JSON", "I will combine...", or full sentences like
+    # '"LOS HERMANOS FARIAS" is the artist.'). Drop those lines so they can never
+    # become the release Title or a bogus track. The extraction prompt forbids
+    # this, but we scrub anyway.
+    _NARR_PATTERNS = [
+        re.compile(r'(?i)^image\s*\d+[:.]'),
+        re.compile(r'(?i)^the\s+user\s+(wants|asked|provided|said)'),
+        re.compile(r'(?i)refining\s+`?(raw_text|tracks|credits)`?'),
+        re.compile(r'(?i)final\s+(json|check)'),
+        re.compile(r'(?i)^`?[a-z_]+`?\s*:\s*$'),
+        re.compile(r'(?i)^one\s+object\.?$'),
+        re.compile(r'(?i)^no\s+markdown\.?$'),
+        re.compile(r'(?i)^keys:\s'),
+    ]
+    # English sentence-glue: real printed catalog text (labels, titles, catalog
+    # numbers, barcodes) almost never contains these phrases, but narration
+    # leaks through as full sentences, so any line containing one is dropped.
+    _NARR_SUBSTR = (
+        'is the ', 'are copyright', 'these are', 'the label is', 'the credits',
+        'is a label', 'is the artist', 'copyright notices', 'in image',
+        'raw text assembly', 'tracks list', 'the tracks', 'the dash',
+        'one correction', 'the instructions', 'the prompt says', 'it looks like',
+        'let me', 'i will', 'double check', 'wait,', 'wait.', 'since no',
+        'but no role', 'the user', 'here is', "here's", 'as found',
+        'i will include', 'no markdown',
+        'one object', 'keys:', 'final json', 'final check',
+    )
+    def _is_narration(s):
+        if not s:
+            return True
+        for p in _NARR_PATTERNS:
+            if p.search(s):
+                return True
+        low = s.lower()
+        return any(sub in low for sub in _NARR_SUBSTR)
+    lines = []
+    for _ln in str(raw_text).splitlines():
+        _s = _ln.strip()
+        # Gemini sometimes wraps each printed line in "- Text: ..." scaffolding
+        # (quoted or unquoted). Strip the prefix; the remainder is the real
+        # printed text. The prefix itself is narration, not printed.
+        m = re.match(r'^-\s*text:\s*(.*)$', _s, re.IGNORECASE)
         if m:
-            cat = f"{m.group(1)}-{m.group(2)}" + (m.group(3) or "")
+            _s = m.group(1).strip()
+            if len(_s) >= 2 and _s[0] == '"' and _s[-1] == '"':
+                _s = _s[1:-1].strip()
+        if _is_narration(_s):
+            continue
+        lines.append(_s)
+    # Re-scrub the working text so Artist/Title/Label/Catalog/Year/Country/
+    # Format detectors never see the model's chain-of-thought narration.
+    text = "\n".join(lines)
+
+    # --- Artist & Title -----------------------------------------------------
+    # OCR of a cassette/CD spine usually shows:
+    #   ARTIST NAME (often ALL-CAPS)
+    #   "TITLE" or Title Case title
+    #   ...then a wall of (c)/（p)/manufactured-by boilerplate.
+    # The naive "two stacked ALL-CAPS lines" heuristic matches boilerplate, so
+    # instead we:
+    #   1. artist  = the most prominent artist-name line (longest ALL-CAPS name
+    #                line, or the first recognisable name line).
+    #   2. title   = a quoted line, else a Title-Case line, else the line right
+    #                after the artist — but NEVER a (c)/(p)/manufactured boilerplate.
+    _BOILER = re.compile(
+        r'(?i)^(the\s+user|image\s*\d|refining|final\s+json|'
+        r'unauthorized|all\s+rights|distributed|manufactured|under\s+license|'
+        r'warning|cbs\s+and|trademarks|copyright|\(c\)|\(p\)|©|℗|miami|corpus|'
+        r'discogs?\b|records?\b|international|estereo|stereo\b|lado\s+[ab])')
+    # Long ALL-CAPS lines are NOT auto-boilerplate: an artist name (e.g.
+    # "RUBEN RAMOS AND THE TEXAS REVOLUTION") is also long + ALL-CAPS. Only
+    # keyword-matched lines are boilerplate.
+    _is_boiler = lambda s: bool(_BOILER.search(s or ''))
+    # Lines containing a known label/company token are never the *artist*.
+    _LABEL_TOK = re.compile(
+        r'(?i)\b(CBS|SONY|BMG|WARNER|CAPITOL|MCA|UNIVERSAL|EMI|ATLANTIC|ARISTA|'
+        r'GEFFEN|MERCURY|POLYDOR|ISLAND|ELEKTRA|EPIC|VIRGIN|COLUMBIA|DISCOS?|'
+        r'RECORDS?|INTERNATIONAL|LICENSED|LICENCE)\b')
+
+    # A line ending in a band/ensemble suffix is almost certainly the ARTIST,
+    # not a title (e.g. "Ruben Ramos and The Revolution", "X y Su Orchestra").
+    # Require the "and <article> <noun>" structure (so a bare label word like the
+    # standalone "Revolution" line near a barcode is NOT mistaken for the artist).
+    _BAND_SUFFIX = re.compile(
+        r'(?i)(?:and\s+(?:the|his|her|su)\s+(?:orchestra|band|group|grupo|'
+        r'quartet|quintet|ensemble|collective|revolution|orquesta|conjunto|'
+        r'combo|trio)|(?:orchestra|band|group|grupo|quartet|quintet|ensemble|'
+        r'collective|revolution|orquesta|conjunto|combo|trio)\s+(?:of|de|from)\b)\s*$')
+    # Side markers (Side 1 / Lado A) are format labels, never the title.
+    _SIDE_MARK = re.compile(r'(?i)^\s*(side|lado)\s*([ab\d])\b')
+
+    # Candidate title: quoted, or a title-case / ALL-CAPS printed line (the
+    # spine title is often ALL-CAPS like "EL GATO NEGRO"), reasonably short,
+    # and not boilerplate/catalog/band-suffix/side-marker. We record the line
+    # index so we can pick the album title among consecutive stacked lines
+    # (e.g. "EL GATO NEGRO" / "ON THE PROWL" -> title is the LAST of them).
+    title_cands = []
+    for _i, ln in enumerate(lines):
+        if _is_boiler(ln):
+            continue
+        if _BAND_SUFFIX.search(ln):
+            continue
+        if _SIDE_MARK.search(ln):
+            continue
+        q = re.match(r'^[\'"]+(.+?)[\'"]+$', ln)
+        if q:
+            title_cands.append((_i, 1, q.group(1).strip()))
+            continue
+        # Title-case ("El Gato Negro") OR ALL-CAPS ("EL GATO NEGRO") printed
+        # lines qualify; exclude pure catalog fragments and single tokens.
+        if (re.match(r'^[A-Z][a-z]', ln) or ln.isupper()) and len(ln.split()) >= 1 and len(ln) <= 60:
+            if re.match(r'^[\d\-\s]{3,}$', ln):
+                continue
+            title_cands.append((_i, 2, ln.strip().title()))
+    # Candidate artist: a name line (>=2 words, mostly letters) that is not the
+    # title and not boilerplate. Prefer multi-word names; exclude single short
+    # ALL-CAPS tokens (those are usually catalog fragments like "ZMC"/"CBS").
+    # Boost lines ending in a band suffix to the very top (strong artist signal).
+    artist_cands = []
+    for ln in lines:
+        if _is_boiler(ln):
+            continue
+        if any(t[2].strip().lower() == ln.strip().lower() for t in title_cands):
+            continue
+        if not re.match(r'^[A-Za-z][A-Za-z&.\'\- ]{2,}$', ln):
+            continue
+        if _LABEL_TOK.search(ln):
+            continue
+        words = ln.split()
+        # single short ALL-CAPS token (<=4 chars, 1 word) is almost never a name
+        if len(words) == 1 and (ln.isupper() and len(ln) <= 4):
+            continue
+        score = -1 if _BAND_SUFFIX.search(ln) else (0 if ln.isupper() else 1)
+        artist_cands.append((score, ln.strip()))
+
+    # Prefer the strongest artist candidate; if a band-suffix line exists it
+    # ranks first. The title is the LAST line of the initial consecutive run
+    # of title candidates (so a stacked "series / album" spine yields the
+    # album title, not the series header).
+    artist_cands.sort(key=lambda x: x[0])
+    if title_cands:
+        title_cands.sort(key=lambda x: x[0])
+        _chosen_artist = artist_cands[0][1].strip().lower() if artist_cands else None
+        _run = [t for t in title_cands if t[2].strip().lower() != _chosen_artist]
+        _last_in_run = _run[0]
+        for t in _run[1:]:
+            if t[0] == _last_in_run[0] + 1:
+                _last_in_run = t
+            else:
+                break
+        out["title"] = _last_in_run[2]
+    if artist_cands:
+        out["artist"] = _clean_name(artist_cands[0][1]).title()
+
+    # --- Label --------------------------------------------------------------
+    # Prefer an explicit label literal; else pull a known label brand token.
+    label_hits = re.findall(_LABELS, text)
+    if label_hits:
+        out["label_literal"] = re.sub(r"\s+", " ", label_hits[0]).strip().upper()
+    # Explicit label phrases the brand list doesn't enumerate (e.g.
+    # "Revolution Records", "DISCOS CBS INTERNATIONAL"). Preserve the printed
+    # spacing/casing (so "Revolution Records", not "REVOLUTIONRECORDS").
+    if not out.get("label_literal"):
+        _label_phrase = re.search(
+            r'(?i)\b((?:revolution|discos?|sony|bmc?|warner|capitol|mca|universal|'
+            r'emi|atlantic|arista|geffen|mercury|polydor|island|elektra|epic|virgin|'
+            r'columbia)\s+records?)\b', text)
+        if _label_phrase:
+            out["label_literal"] = _label_phrase.group(1).strip()
+    # Label name lines that aren't a known brand token but are clearly a label
+    # (e.g. "Sony Music Entertainment"). Catch a leading DISCOS / RECORDS /
+    # MUSIC / ENTERTAINMENT token so we don't miss regional labels the brand
+    # list doesn't enumerate.
+    if not out.get("label_literal"):
+        _label_line = re.search(
+            r'(?im)^\s*((?:DISCOS?|RECORDS?|MUSIC|ENTERTAINMENT|PRODUCTIONS)\b[\w&.\'’\- ]+?)(?=\s*$|©|\(c|\(p|under\s+license|manufactured|distributed|warning)',
+            text)
+        if _label_line:
+            out["label_literal"] = _label_line.group(1).strip()
+
+    # --- Catalog number -----------------------------------------------------
+    cat = None
+    # 1) XXX-NNNNNN  (e.g. ZMC-80005)
+    m = re.search(r'(?i)\b([A-Z]{1,4})[-\s](\d{3,6})\b', text)
+    if m:
+        cat = f"{m.group(1).upper()}-{m.group(2)}"
+    # 2) spine "0 NNNNN - NNNNN - N"  (Discogs catalogue w/ prefix digits; the
+    #    trailing N is the format suffix: -1 CD, -2 CD, -4 Cassette).
+    if not cat:
+        m = re.search(r'(?i)(?:\b0\b\s*)?(\d{4,6})\s*[-–]\s*(\d{4,6})(?:\s*[-–]\s*(\d))?', text)
+        if m and m.group(1) != m.group(2):
+            cat = f"{m.group(1).strip()}-{m.group(2).strip()}"
+            if m.group(3):
+                cat += f"-{m.group(3)}"
     if cat:
+        # normalise internal spaces in the numeric part
+        cat = re.sub(r'\s+', '', cat)
         out["cat_no_spine"] = cat
 
-    # --- Year (from copyright: (c) 1996 / © 1996) ---
-    ym = re.search(r'(?i)(?:\([cp]\)|©|\(c\)|\(p\))\s*((?:19|20)\d{2})', text)
+    # --- Barcode (UPC/EAN) --------------------------------------------------
+    # Anchor to the UPC-A shape: 1 digit, space, 5 digits, space, 5 digits,
+    # space, 1 digit  ->  "6 90647 20034 7"  (12 digits). We KEEP the printed
+    # spacing (Discogs "Barcode (Text)" shows it spaced as on the item). Also
+    # accept the contiguous form. Avoids bridging into neighbouring digits.
+    _barcode = None
+    _bar = re.search(r'(?i)\b(\d)\s(\d{5})\s(\d{5})\s(\d)\b', text)
+    if _bar:
+        _barcode = f"{_bar.group(1)} {_bar.group(2)} {_bar.group(3)} {_bar.group(4)}"
+    if not _barcode:
+        _bar = re.search(r'\b(\d{12,13})\b', text)
+        if _bar:
+            _barcode = _bar.group(1)
+    if _barcode:
+        out["barcode"] = _barcode
+
+    # --- Year ---------------------------------------------------------------
+    # (c)/©/(p) prefixed year first...
+    ym = re.search(r'(?i)(?:\([cp]\)|©|℗)\s*((?:19|20)\d{2})', text)
     if ym:
         out["year_latest"] = ym.group(1)
-        cpy = re.search(r'(?i)(?:©|\(c\))\s*((?:19|20)\d{2})\s*([A-Z][\w&.\'’\- ]+?)(?:\.|$|\n)', text)
+    # ...else a year immediately preceding a label/copyright marker in a footer
+    # (e.g. "2002 Revolution Records ... Made in USA").
+    if not out.get("year_latest"):
+        yf = re.search(r'(?i)\b((?:19|20)\d{2})\s+(?=revolution|all\s+rights|copyright|made\s+in|records?\b)', text)
+        if yf:
+            out["year_latest"] = yf.group(1)
+    if out.get("year_latest"):
+        cpy = re.search(r'(?i)(?:©|\(c\))\s*((?:19|20)\d{2})\s*([A-Z][\w&.\'’\- ]+?)(?:\.|$|$)', text)
         if cpy:
             out["c_copyright_latest"] = cpy.group(2).strip()
 
-    # --- Country (Made in USA / Printed in USA) ---
+    # --- Country (Made in USA / Printed in USA) -----------------------------
     cm = re.search(r'(?i)(?:made|printed|manufactured)\s+in\s+([A-Za-z .]{2,20})', text)
     if cm:
         c = cm.group(1).strip().rstrip(".")
         out["country_raw"] = c.upper() if c.lower() == "usa" else c
 
-    # --- Format (CD preferred; Cassette only when clearly the primary medium) ---
+    # --- Format -------------------------------------------------------------
     low = text.lower()
     _cat = out.get("cat_no_spine", "")
     _looks_cd = bool(re.search(r'\bcd\b|compact disc', low)) or _cat.endswith(("-2", "-1", "-4"))
+    # Cassette is implied by spine cat suffix -4 / "cassette" / "MC"; otherwise CD.
     if ("cassette" in low or re.search(r'\bMC\b', text)) and not _looks_cd:
+        out["core_format"] = "Cassette"
+    elif _cat.endswith("-4") or re.search(r'\bcassette\b', low):
         out["core_format"] = "Cassette"
     else:
         out["core_format"] = "CD"
@@ -125,17 +321,163 @@ def parse_raw_text(raw_text):
     return out
 
 
+def genre_style_lookup(artist, title):
+    """Resolve Genre/Style for a release. Primary source is the Discogs database
+    search API (token from DISCOGS_TOKEN in the environment) -- it returns
+    Discogs's OWN genre/style vocabulary, exactly what the submission needs.
+    Falls back to the Wikipedia infobox, then a Google snippet scan. Returns
+    (genre, style) or (None, None). Never raises; on any failure the caller
+    keeps its TRIGGER placeholder so nothing is fabricated."""
+    import os as _os
+    import urllib.request as _ur
+    import urllib.parse as _up
+    import json as _json
+    import re as _re
+    import ssl as _ssl
+    artist = (artist or "").strip()
+    title = (title or "").strip()
+    if not artist:
+        return (None, None)
+    token = _os.environ.get("DISCOGS_TOKEN", "")
+    _ctx = _ssl.create_default_context()
+    _ctx.check_hostname = False
+    _ctx.verify_mode = _ssl.CERT_NONE
+
+    def _http_json(url, headers, timeout=12):
+        req = _ur.Request(url, headers=headers)
+        with _ur.urlopen(req, timeout=timeout, context=_ctx) as r:
+            return _json.loads(r.read().decode("utf-8", "ignore"))
+
+    def _http_text(url, headers, timeout=12):
+        req = _ur.Request(url, headers=headers)
+        with _ur.urlopen(req, timeout=timeout, context=_ctx) as r:
+            return r.read().decode("utf-8", "ignore")
+
+    _auth = {"User-Agent": "WysiWyg/1.0",
+             "Authorization": f"Discogs token={token}"}
+    # 1) Discogs release search (artist + title) -> genre/style
+    try:
+        q = f"{artist} {title}".strip()
+        url = ("https://api.discogs.com/database/search?q="
+               + _up.quote(q) + "&type=release&per_page=5")
+        d = _http_json(url, _auth)
+        for res in d.get("results", []):
+            g = res.get("genre") or []
+            s = res.get("style") or []
+            if g or s:
+                return (g[0] if g else None, s[0] if s else None)
+    except Exception:
+        pass
+    # 2) Discogs artist search (genres/styles sometimes present)
+    try:
+        url = ("https://api.discogs.com/database/search?q="
+               + _up.quote(artist) + "&type=artist&per_page=5")
+        d = _http_json(url, _auth)
+        for res in d.get("results", []):
+            g = res.get("genres") or []
+            s = res.get("styles") or []
+            if g or s:
+                return (g[0] if g else None, s[0] if s else None)
+    except Exception:
+        pass
+
+    # Curated style -> parent Discogs Genre map (for Wikipedia/Google fallbacks).
+    STYLE_TO_GENRE = {
+        "tejano": "Latin", "norteño": "Latin", "norteno": "Latin",
+        "conjunto": "Latin", "cumbia": "Latin", "salsa": "Latin",
+        "banda": "Latin", "mariachi": "Latin", "latin pop": "Latin",
+        "reggaeton": "Latin", "bachata": "Latin", "merengue": "Latin",
+        "ranchera": "Latin", "bolero": "Latin", "son": "Latin",
+        "latin": "Latin", "rock": "Rock", "pop": "Pop", "jazz": "Jazz",
+        "blues": "Blues", "country": "Country", "folk": "Folk", "soul": "Soul",
+        "funk": "Funk", "r&b": "Soul", "reggae": "Reggae", "hip hop": "Hip Hop",
+        "hip-hop": "Hip Hop", "electronic": "Electronic", "dance": "Electronic",
+        "classical": "Classical", "metal": "Metal", "punk": "Punk",
+        "gospel": "Gospel", "disco": "Disco", "ska": "Reggae",
+        "bluegrass": "Country", "house": "Electronic", "techno": "Electronic",
+    }
+    genres_found = []
+    # 3) Wikipedia infobox genre
+    try:
+        q = _up.quote(artist + " musician")
+        s = _http_json("https://en.wikipedia.org/w/api.php?action=query"
+                       "&list=search&srsearch=" + q + "&format=json&srlimit=3",
+                       {"User-Agent": "Mozilla/5.0"})
+        pages = s.get("query", {}).get("search", [])
+        page_title = next((p["title"] for p in pages
+                           if "disambiguation" not in p["title"].lower()),
+                          pages[0]["title"] if pages else None)
+        if page_title:
+            wt = _http_json("https://en.wikipedia.org/w/api.php?action=parse"
+                            "&page=" + _up.quote(page_title)
+                            + "&prop=wikitext&format=json",
+                            {"User-Agent": "Mozilla/5.0"})
+            wikitext = wt.get("parse", {}).get("wikitext", {}).get("*", "")
+            gm = _re.search(r'\|\s*genre\s*=\s*(.+)', wikitext)
+            if gm:
+                for part in _re.split(r'[;,]|\[\[|\]\]', gm.group(1)):
+                    part = part.strip()
+                    if "|" in part:
+                        part = part.split("|")[-1]
+                    part = _re.sub(r"[\[\]]", "", part).strip()
+                    if part and part.lower() not in ("and", "the", "a", "music"):
+                        genres_found.append(part)
+    except Exception:
+        pass
+    # 4) Google snippet fallback
+    if not genres_found:
+        try:
+            g = _http_text("https://www.google.com/search?q="
+                           + _up.quote(f"{artist} {title} music genre")
+                           + "&hl=en", {"User-Agent": "Mozilla/5.0"})
+            for term in STYLE_TO_GENRE:
+                if _re.search(r"\b" + _re.escape(term) + r"\b", g, _re.I):
+                    genres_found.append(term)
+        except Exception:
+            pass
+    if not genres_found:
+        return (None, None)
+    cleaned = [_re.sub(r"\s*music$", "", x.strip(), flags=_re.I).strip()
+               for x in genres_found if x.strip()]
+    if not cleaned:
+        return (None, None)
+    genre = None
+    style = None
+    for c in cleaned:
+        parent = STYLE_TO_GENRE.get(c.lower())
+        if parent:
+            genre = parent
+            style = c
+            break
+    if genre is None:
+        genre = cleaned[0]
+    if style is None and len(cleaned) > 1:
+        style = cleaned[1]
+    return (genre, style)
+
+
 def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     if extracted_data is None: extracted_data = {}
-    # Phase 2: if only raw OCR text was captured (no structured fields),
-    # parse it into the structured keys the macro expects.
-    if extracted_data.get("raw_text") and not extracted_data.get("tracklist_raw"):
+    # Phase 2: if raw OCR text was captured, parse it into the structured
+    # keys the macro expects. Our parse_raw_text does the heavy lifting and is
+    # authoritative for the *spine-derived* metadata fields (artist, title,
+    # label, catalog, year, country, format, barcode). The AI's JSON is
+    # override-prone (it sent artist="El Gato Negro" / title="Side 1" on a
+    # real spine), so we let our parse win on these keys. We keep the AI's
+    # tracks/credits/tracklist_raw/raw_text as-is.
+    _SPINE_KEYS = ("artist", "title", "label_literal", "cat_no_spine",
+                   "barcode", "country_raw", "year_latest",
+                   "c_copyright_latest", "p_copyright_latest", "matrix",
+                   "mastering_sid", "mould_sid")
+    if extracted_data.get("raw_text"):
         parsed = parse_raw_text(extracted_data["raw_text"])
         for k, v in parsed.items():
-            if k not in extracted_data or not extracted_data.get(k):
+            if k in _SPINE_KEYS and v not in (None, "", [], {}):
                 extracted_data[k] = v
     # Fold explicit tracks list (list of strings) if the AI returned one.
-    if isinstance(extracted_data.get("tracks"), list) and not extracted_data.get("tracklist_raw"):
+    # Prefer the explicit list over any parsed-from-raw tracklist_raw, since
+    # the raw transcript can be polluted by model narration.
+    if isinstance(extracted_data.get("tracks"), list) and extracted_data["tracks"]:
         tr = []
         for ln in extracted_data["tracks"]:
             tm = re.match(r'^\s*(\d+)\.\s*(.*)$', str(ln))
@@ -148,7 +490,8 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
                     if dur.startswith(":"): dur = "0"+dur
                     rest = rest[:dm.start()].strip()
                 if rest: tr.append({"num": num, "title": rest, "duration": dur})
-        if tr: extracted_data["tracklist_raw"] = tr
+        if tr:
+            extracted_data["tracklist_raw"] = tr
     extracted_data["Submission Notes"] = "Added release to Discogs"
     execution_audit = []
     def log_transformation(rule, source_file, result):
@@ -687,6 +1030,31 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
             "SIDE ONE", "SIDE 1", "SIDE A", "PROGRAM ONE", "PROGRAM 1",
             "SIDE TWO", "SIDE 2", "SIDE B", "PROGRAM TWO", "PROGRAM 2"
         ]
+        # Side-prefix detection for analog media with an explicit side marker
+        # (e.g. "Side 1" / "Lado A" printed on a cassette/vinyl shell). When a
+        # single "Side A/1" marker is present we split the tracklist at the
+        # midpoint (A = first half, B = second) -- matching a 2-sided shell
+        # (audit reference: A1-A6 / B7-B11). With two+ markers we split at the
+        # track count preceding the second marker.
+        _raw_txt = str(extracted_data.get("raw_text", ""))
+        _markers = []
+        for _m in re.finditer(r'(?i)\b(side|lado)\s*([ab\d])', _raw_txt):
+            _l = _m.group(2).lower()
+            _l = {'1': 'a', '2': 'b', '3': 'c', '4': 'd'}.get(_l, _l)
+            _markers.append((_m.start(), _l))
+        _is_analog = any(fmt.get("type") in ["Cassette", "Vinyl", "LP"] for fmt in formats_found)
+        _n_tracks = len(tracks_raw)
+        _split_idx = None
+        if _markers and _is_analog:
+            if len(_markers) == 1:
+                _split_idx = (_n_tracks + 1) // 2
+            else:
+                _sec = _markers[1][0]
+                _split_idx = len(re.findall(r'(?m)^\s*\d+\.', _raw_txt[:_sec]))
+        def _side_for(i):
+            if _split_idx is None:
+                return ""
+            return "B" if i >= _split_idx else "A"
         for t in tracks_raw:
             raw_val = str(t.get("title", "")).strip()
             if ":" in raw_val or " - " in raw_val:
@@ -736,8 +1104,11 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
                 continue
             if current_side and track_num.isdigit():
                 pos_base = f"{current_side}{track_num}"
+            elif track_num.isdigit():
+                _s = _side_for(int(track_num) - 1)
+                pos_base = f"{_s}{track_num}" if _s else f"{track_num}"
             else:
-                disc_no = t.get("disc_no") 
+                disc_no = t.get("disc_no")
                 pos_base = f"{disc_no}-{track_num}" if (is_multi and disc_no) else f"{track_num}"
             has_anv = any(re.search(r'\(([^)]+)\)$', str(tr.get("title", ""))) for tr in tracks_raw)
             is_comp = len(set(str(tr.get("artist", "")).strip() for tr in tracks_raw if tr.get("artist"))) > 1
@@ -791,6 +1162,16 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         style_val = "TRIGGER_AI_STYLE_SEARCH"
     else:
         style_val = raw_style
+    # Resolve Genre/Style when not on the ink: query the Discogs database
+    # (primary) with a Wikipedia/Google fallback. Only overrides the TRIGGER
+    # placeholder -- never fabricates over a value the AI/ink already gave.
+    if "TRIGGER_AI_GENRE_SEARCH" in (genre_val, style_val):
+        _g, _s = genre_style_lookup(
+            extracted_data.get("artist", ""), extracted_data.get("title", ""))
+        if _g and genre_val == "TRIGGER_AI_GENRE_SEARCH":
+            genre_val = _g
+        if _s and style_val == "TRIGGER_AI_STYLE_SEARCH":
+            style_val = _s
     credits_genres.append(("Genre", genre_val))
     credits_genres.append(("Style", style_val))
     if engineer_from_hub:
@@ -853,6 +1234,16 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     
     genre_val = "TRIGGER_AI_GENRE_SEARCH" if not raw_genre else raw_genre
     style_val = "TRIGGER_AI_STYLE_SEARCH" if not raw_style else raw_style
+    # Resolve Genre/Style when not on the ink: query the Discogs database
+    # (primary) with a Wikipedia/Google fallback. Only overrides the TRIGGER
+    # placeholder -- never fabricates over a value the AI/ink already gave.
+    if "TRIGGER_AI_GENRE_SEARCH" in (genre_val, style_val):
+        _g, _s = genre_style_lookup(
+            extracted_data.get("artist", ""), extracted_data.get("title", ""))
+        if _g and genre_val == "TRIGGER_AI_GENRE_SEARCH":
+            genre_val = _g
+        if _s and style_val == "TRIGGER_AI_STYLE_SEARCH":
+            style_val = _s
     
     
     if engineer_from_hub:

@@ -1824,6 +1824,10 @@ async def scrape_discogs(url: str = Form(...)):
                         headerEl.textContent = titleText;
                         headerEl.title = titleText;
                     }}
+                    // Mirror the last scraped item into the top-right bar indicator.
+                    if (typeof setCurrentItem === 'function') {{
+                        setCurrentItem({json_item_title});
+                    }}
                     if (rawText) {{
                         // Populate builder tab
                         if (typeof parsePastedData === 'function') {{
@@ -1927,43 +1931,42 @@ async def serve_adds_amazon():
 
 @app.get("/adds/discogs")
 async def serve_adds_discogs():
-    """Serves the Discogs Adds tab page."""
-    return FileResponse(resource_path("Adds/discogs_add_page.html"))
+    """Serves the Discogs Adds tab page (never cached, so fixes deploy instantly)."""
+    from fastapi.responses import Response
+    path = resource_path("Adds/discogs_add_page.html")
+    with open(path, "rb") as f:
+        body = f.read()
+    return Response(
+        content=body,
+        media_type="text/html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                  "Pragma": "no-cache", "Expires": "0"},
+    )
 
 
 @app.post("/api/adds/discogs")
 async def adds_discogs_build(request: Request):
     """Same-origin endpoint: Gemini extracts data from scanned media images,
-    then runs discogs_add_macro to build the 8 Discogs submission tables."""
-    try:
-        print("DEBUG - /api/adds/discogs ENTERED")
-        form = await request.form()
-        uploads = form.getlist("images")
-        print(f"DEBUG - /api/adds/discogs: {len(uploads)} upload(s) received")
-        if not uploads:
-            return JSONResponse(status_code=400,
-                                content={"status": "error", "message": "No images uploaded."})
-        if len(uploads) > 8:
-            return JSONResponse(status_code=400,
-                                content={"status": "error", "message": "Maximum of 8 images allowed."})
+    then runs discogs_add_macro to build the 8 Discogs submission tables.
 
-        import tempfile
-        tmpdir = tempfile.mkdtemp(prefix="discogs_add_")
-        saved_paths = []
-        for up in uploads:
-            if hasattr(up, "filename") and hasattr(up, "file"):
-                dest = os.path.join(tmpdir, os.path.basename(up.filename) or f"img_{len(saved_paths)}.jpg")
-                with open(dest, "wb") as out:
-                    content = await up.read()
-                    out.write(content)
-                saved_paths.append(dest)
-            elif isinstance(up, str) and os.path.isfile(up):
-                saved_paths.append(up)
-        if not saved_paths:
-            return JSONResponse(status_code=400,
-                                content={"status": "error", "message": "Could not read uploaded images."})
+    Streams progress as NDJSON (one JSON object per line) so the client can show
+    status live (e.g. 503 busy-retries) instead of waiting for the whole call:
+      {"type":"progress","event":{"type":"start",...}}
+      {"type":"progress","event":{"type":"combo","index":0,"model":"..."}}
+      {"type":"progress","event":{"type":"busy","attempt":1,"model":"..."}}
+      ...
+      {"type":"result","status":"success","phase":...,"extracted":...,"info":...,"tables":...}
+      {"type":"error","status":502,"message":"..."}
+    """
+    import asyncio as _asyncio
+    _DONE = object()
 
-        # Extraction prompt (lives next to this file in the repo root).
+    async def _stream(form, saved_paths):
+        import json as _json
+        def _line(obj):
+            return _json.dumps(obj, ensure_ascii=False) + "\n"
+
+        # --- Extraction prompt (lives next to this file in the repo root). ---
         prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "WysiScan", "discogs_extract_prompt.txt")
         if not os.path.isfile(prompt_path):
@@ -1978,15 +1981,43 @@ async def adds_discogs_build(request: Request):
                               "numbers, barcode, matrix, credits, tracklist, etc.).")
 
         # --- Gemini extraction via shared key+model pool (gemini_pool.py) ---
-        # Uses REST ?key= (works for both AIza... and AQ... keys) and fails over
-        # across keys (per-project quota) and models, ranking by test_results.json.
+        # Run the (blocking) pool call in an executor; forward its progress
+        # events to the client as they happen via an asyncio queue.
         import gemini_pool
-        text, info = gemini_pool.gemini_generate(
-            prompt_text=extract_prompt, image_paths=saved_paths, timeout=120)
+        loop = _asyncio.get_event_loop()
+        queue = _asyncio.Queue()
+
+        def _on_progress(ev):
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, ev)
+            except Exception:
+                pass
+
+        def _run():
+            try:
+                res = gemini_pool.gemini_generate(
+                    prompt_text=extract_prompt, image_paths=saved_paths,
+                    timeout=40, on_progress=_on_progress)
+            finally:
+                try:
+                    loop.call_soon_threadsafe(queue.put_nowait, _DONE)
+                except Exception:
+                    pass
+            return res
+
+        fut = loop.run_in_executor(None, _run)
+        # Stream progress events until the pool call finishes.
+        while True:
+            ev = await queue.get()
+            if ev is _DONE:
+                break
+            yield _line({"type": "progress", "event": ev})
+
+        text, info = await fut
         if text is None:
-            return JSONResponse(status_code=502,
-                                content={"status": "error",
-                                         "message": info.get("error", "Gemini extraction failed.")})
+            yield _line({"type": "error", "status": 502,
+                         "message": info.get("error", "Gemini extraction failed.")})
+            return
         raw = text
         print(f"DEBUG - Discogs Gemini OK via {info}")
 
@@ -1999,17 +2030,38 @@ async def adds_discogs_build(request: Request):
         try:
             extracted_data = json.loads(raw)
         except Exception as e:
-            return JSONResponse(status_code=422,
-                                content={"status": "error",
-                                         "message": f"Could not parse Gemini JSON: {e}", "raw": raw[:500]})
+            # Fallback: when Gemini returns prose/transcript instead of JSON,
+            # wrap the raw text as raw_text so the macro's parse_raw_text can
+            # structure it into the 8 Discogs tables.
+            print(f"DEBUG - Gemini did not return JSON, falling back to raw text parse: {e}")
+            extracted_data = {"raw_text": raw.strip()}
+            print(f"DEBUG - fallback raw_text len: {len(extracted_data['raw_text'])}")
 
-        # --- Dump the raw OCR extraction to a file for inspection/debugging. ---
+        # User-asserted media format from the form dropdown (overrides fragile
+        # OCR detection). Valid: CD / Cassette / LP / DVD / Boxset.
         try:
-            dump_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                     "discogs_last_extract.json")
-            with open(dump_path, "w", encoding="utf-8") as dfh:
-                json.dump(extracted_data, dfh, indent=2, ensure_ascii=False)
-            print(f"DEBUG - wrote raw extraction to {dump_path}")
+            _uf = (await request.form()).get("user_format", "").strip()
+        except Exception:
+            _uf = ""
+        if _uf and _uf.lower() in ("cd", "cassette", "lp", "dvd", "boxset"):
+            extracted_data["core_format"] = _uf.capitalize()
+            print(f"DEBUG - user_format override: {extracted_data['core_format']}")
+
+        # --- Dump the raw OCR extraction to the Adds folder for inspection/debugging. ---
+        try:
+            from datetime import datetime as _dt
+            _adds_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Adds")
+            os.makedirs(_adds_dir, exist_ok=True)
+            # Latest always available as "discogs_last_extract.json"; timestamped history too.
+            _ts = _dt.now().strftime("%Y%m%d_%H%M%S")
+            _dump_paths = [
+                os.path.join(_adds_dir, "discogs_last_extract.json"),
+                os.path.join(_adds_dir, f"discogs_extract_{_ts}.json"),
+            ]
+            for _dp in _dump_paths:
+                with open(_dp, "w", encoding="utf-8") as dfh:
+                    json.dump(extracted_data, dfh, indent=2, ensure_ascii=False)
+            print(f"DEBUG - wrote raw extraction to {_dump_paths[0]}")
         except Exception as e:
             print(f"DEBUG - could not write extract dump: {e}")
 
@@ -2018,27 +2070,97 @@ async def adds_discogs_build(request: Request):
             adds_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Adds")
             if adds_dir not in sys.path:
                 sys.path.insert(0, adds_dir)
-            import importlib
-            discogs_add_mod = importlib.import_module("discogs_add")
-            importlib.reload(discogs_add_mod)
+            import importlib.util
+            # Load discogs_add.py DIRECTLY from the source file path every
+            # request. This bypasses sys.path ambiguity and the __pycache__
+            # (.pyc) entirely, so a stale/frozen copy can never be executed --
+            # every edit to Adds/discogs_add.py takes effect on the next
+            # extract (after a server restart), with no .pyc trap.
+            _adds_py = os.path.join(adds_dir, "discogs_add.py")
+            _spec = importlib.util.spec_from_file_location("discogs_add", _adds_py)
+            discogs_add_mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(discogs_add_mod)
             print("DEBUG discogs keys:", list(extracted_data.keys()))
             print("DEBUG raw_text len:", len(extracted_data.get("raw_text") or ""))
             try:
                 print("DEBUG parse artist:", discogs_add_mod.parse_raw_text(extracted_data.get("raw_text") or "").get("artist"))
             except Exception as pe:
                 print("DEBUG parse err:", pe)
-            result = discogs_add_mod.discogs_add_macro(extracted_data)
+            result = discogs_add_mod.discogs_add_macro(extracted_data=extracted_data)
         except Exception as e:
             import traceback as _tb
             print("DEBUG - Discogs macro error:\n" + _tb.format_exc())
-            return JSONResponse(status_code=500,
-                                content={"status": "error", "message": f"Macro failed: {e}"})
+            yield _line({"type": "error", "status": 500,
+                         "message": f"Macro failed: {e}"})
+            return
 
-        return {"status": "success", "extracted": extracted_data, "tables": result.get("tables", {})}
+        # Phase flag lets the client UI distinguish OCR-only vs. full macro output.
+        # 'tables' must be the 8 tables dict directly (not nested under a wrapper).
+        # 'info' carries Gemini pool diagnostics so the UI can tell the user which
+        # model/attempt actually produced the result (e.g. after 503 retries).
+        yield _line({
+            "type": "result",
+            "status": "success",
+            "phase": "tables",
+            "extracted": extracted_data,
+            "info": info if isinstance(info, dict) else {},
+            "tables": result.get("tables", result) if isinstance(result, dict) else {},
+        })
+
+    try:
+        form = await request.form()
+        uploads = form.getlist("images")
+        print(f"DEBUG - /api/adds/discogs: {len(uploads)} upload(s) received")
+        if not uploads:
+            async def _e():
+                yield json.dumps({"type": "error", "status": 400,
+                                   "message": "No images uploaded."}, ensure_ascii=False) + "\n"
+            return StreamingResponse(_e(), media_type="application/x-ndjson",
+                                     headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                                              "Pragma": "no-cache", "Expires": "0"})
+        if len(uploads) > 8:
+            async def _e():
+                yield json.dumps({"type": "error", "status": 400,
+                                   "message": "Maximum of 8 images allowed."}, ensure_ascii=False) + "\n"
+            return StreamingResponse(_e(), media_type="application/x-ndjson",
+                                     headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                                              "Pragma": "no-cache", "Expires": "0"})
+
+        import tempfile
+        tmpdir = tempfile.mkdtemp(prefix="discogs_add_")
+        saved_paths = []
+        for up in uploads:
+            if hasattr(up, "filename") and hasattr(up, "file"):
+                dest = os.path.join(tmpdir, os.path.basename(up.filename) or f"img_{len(saved_paths)}.jpg")
+                with open(dest, "wb") as out:
+                    content = await up.read()
+                    out.write(content)
+                saved_paths.append(dest)
+            elif isinstance(up, str) and os.path.isfile(up):
+                saved_paths.append(up)
+        if not saved_paths:
+            async def _e():
+                yield json.dumps({"type": "error", "status": 400,
+                                   "message": "Could not read uploaded images."}, ensure_ascii=False) + "\n"
+            return StreamingResponse(_e(), media_type="application/x-ndjson",
+                                     headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                                              "Pragma": "no-cache", "Expires": "0"})
+
+        return StreamingResponse(
+            _stream(form, saved_paths),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                     "Pragma": "no-cache", "Expires": "0"},
+        )
     except Exception as e:
         import traceback as _tb
         print("DEBUG - /api/adds/discogs error:\n" + _tb.format_exc())
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+        async def _e():
+            yield json.dumps({"type": "error", "status": 500,
+                              "message": str(e)}, ensure_ascii=False) + "\n"
+        return StreamingResponse(_e(), media_type="application/x-ndjson",
+                                 headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                                          "Pragma": "no-cache", "Expires": "0"})
 
 
 

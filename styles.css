@@ -300,3 +300,18 @@ select[multiple] { min-height: 60px; }
 .lock-checkbox:checked + .lock-icon::before {
     content: "🔒";
 }
+/* Drawer menu icons — user rule: 13px (never a scrollbar; make icons smaller instead) */
+.drawer .drawer-ico {
+    font-size: 13px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.drawer .drawer-ico-sm {
+    font-size: 13px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}

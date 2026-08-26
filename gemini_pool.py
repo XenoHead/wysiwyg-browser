@@ -168,21 +168,37 @@ def _rest_call(api_key, model, parts, timeout=120):
         return json.dumps(jr)
 
 
-def gemini_generate(prompt_text, image_paths=None, timeout=120,
-                    extra_config_keys=None, prefer_tested=True):
+def gemini_generate(prompt_text, image_paths=None, timeout=40,
+                    extra_config_keys=None, prefer_tested=True,
+                    on_progress=None):
     """Top-level helper. Builds the key+model combo list (ranked via
     test_results.json when prefer_tested=True), tries each via REST, and fails
     over on 429/401/400/503. Returns (text, info_dict).
 
     prompt_text: the text prompt.
     image_paths: optional list of local image file paths (base64 inline).
+    on_progress: optional callback(event_dict) invoked live as the pool tries
+        combos (e.g. {"type":"start"}, {"type":"combo","index":0,"total":N,
+        "model":"..."}, {"type":"busy","attempt":1}, {"type":"quota"},
+        {"type":"forbidden"}, {"type":"invalid_key"}, {"type":"other",
+        "detail":"..."}, {"type":"done"}). Lets callers surface progress
+        (e.g. 503 retries) while the call is still running. If None, no
+        callbacks fire (backwards-compatible).
     """
+    def _emit(ev):
+        if on_progress:
+            try:
+                on_progress(ev)
+            except Exception:
+                pass
     image_paths = image_paths or []
     key_pool = load_key_pool(extra_config_keys=extra_config_keys)
     model_pool = load_model_pool()
     if not key_pool:
+        _emit({"type": "error", "detail": "No Gemini API keys found (.env / keys.txt)."})
         return None, {"error": "No Gemini API keys found (.env / keys.txt)."}
     if not model_pool:
+        _emit({"type": "error", "detail": "No models in model pool (models.txt)."})
         return None, {"error": "No models in model pool (models.txt)."}
 
     parts = [{"text": prompt_text}]
@@ -196,6 +212,7 @@ def gemini_generate(prompt_text, image_paths=None, timeout=120,
                 b64 = base64.b64encode(ih.read()).decode("ascii")
             parts.append({"inline_data": {"mime_type": mime, "data": b64}})
         except Exception as e:
+            _emit({"type": "error", "detail": f"Could not read image {p}: {e}"})
             return None, {"error": f"Could not read image {p}: {e}"}
 
     if prefer_tested:
@@ -224,13 +241,20 @@ def gemini_generate(prompt_text, image_paths=None, timeout=120,
             return "busy"
         return "other"
 
+    _emit({"type": "start", "combos": len(combos),
+           "keys": len(key_pool), "models": len(model_pool)})
     for ki, (api_key, model) in enumerate(combos):
         if api_key in dropped_keys:
             continue
         if (api_key, model) in dropped_combos:
             continue
+        _emit({"type": "combo", "index": ki, "total": len(combos), "model": model})
         try:
             text = _rest_call(api_key, model, parts, timeout=timeout)
+            _emit({"type": "done", "model": model,
+                   "key_index": ki, "key_pool_size": len(key_pool),
+                   "combo_index": ki, "combo_count": len(combos),
+                   "dropped_keys": len(dropped_keys), "diagnostics": seen})
             return text, {"status": "success", "model": model,
                           "key_index": ki, "key_pool_size": len(key_pool),
                           "combo_index": ki, "combo_count": len(combos),
@@ -246,27 +270,43 @@ def gemini_generate(prompt_text, image_paths=None, timeout=120,
                 # 400/401: this key is a "no" — drop it for the whole run.
                 dropped_keys.add(api_key)
                 print(f"DEBUG - Gemini: key dropped (invalid): {api_key[:8]}...")
+                _emit({"type": "invalid_key", "attempt": seen["invalid_key"],
+                       "model": model, "detail": last_err})
                 continue
             if etype == "forbidden":
                 # 403: key can't use THIS model ("new users can't use this model")
                 # but may work on others — drop just this combo.
                 dropped_combos.add((api_key, model))
                 print(f"DEBUG - Gemini: combo dropped (forbidden): {model}")
+                _emit({"type": "forbidden", "attempt": seen["forbidden"],
+                       "model": model, "detail": last_err})
                 continue
             if etype == "not_found":
                 # 404: model name absent for this key — try next model, same key.
                 dropped_combos.add((api_key, model))
+                _emit({"type": "not_found", "attempt": seen["not_found"],
+                       "model": model, "detail": last_err})
                 continue
-            # quota (429) / busy (503): "not now" — try next key/project (and
-            # the ranker will also surface other models). Just move on.
+            # quota (429) / busy (503): "not now" — drop this combo (it's
+            # overloaded/hot) and immediately try the next one. We do NOT wait
+            # for the model to free up; a fresh combo gets a clean shot.
             print(f"DEBUG - Gemini failed ({etype}): {last_err}")
+            if etype == "busy":
+                dropped_combos.add((api_key, model))
+            _emit({"type": etype, "attempt": seen[etype],
+                   "model": model, "detail": last_err})
             continue
         except Exception as e:
             last_err = f"combo#{ki} ({model}): {type(e).__name__} {str(e)[:120]}"
             seen["other"] = seen.get("other", 0) + 1
             last_type = "other"
             print(f"DEBUG - Gemini error ({last_err})")
+            _emit({"type": "other", "attempt": seen["other"],
+                   "model": model, "detail": last_err})
             continue
+    _emit({"type": "exhausted", "combos": len(combos),
+           "last_error_type": last_type, "detail": last_err,
+           "diagnostics": seen, "dropped_keys": len(dropped_keys)})
     return None, {"error": f"Gemini failed for all {len(combos)} combos.",
                   "last_error": last_err, "last_error_type": last_type,
                   "diagnostics": seen,

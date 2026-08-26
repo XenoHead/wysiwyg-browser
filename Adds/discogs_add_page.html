@@ -80,6 +80,20 @@
     .status.err { color: #c62828; }
     .status.ok { color: #2e7d32; }
     label.lbl { font-size: 12px; font-weight: 600; color: var(--muted); display:block; margin-bottom: 8px; }
+    /* Format select (user asserts media type to skip fragile detection). */
+    select#fmtSelect {
+        padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    /* Raw post-macro diagnostic dump (so a blank GUI is never a mystery). */
+    #rawDump {
+        width: 100%; margin-top: 16px; padding: 10px; border: 1px dashed var(--border);
+        border-radius: 6px; background: var(--panel); color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+        min-height: 120px; max-height: 360px; overflow: auto;
+    }
+    #rawDump.empty { color: #b0b0b0; font-style: italic; }
 
     /* Image thumbnails */
     #thumbList { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
@@ -108,6 +122,16 @@
         flex: 1 1 auto; min-width: 0; padding: 7px 10px; border: 1px solid var(--border);
         border-radius: 6px; background: var(--panel); color: var(--text);
         font-size: 13px; font-family: inherit; resize: vertical;
+        min-height: 34px;
+    }
+    /* Brief highlight when a fresh extract lands, so it's obvious data arrived. */
+    @keyframes resultsFlash {
+        0%   { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-soft); }
+        100% { box-shadow: 0 0 0 0 transparent; background: transparent; }
+    }
+    .results-flash {
+        animation: resultsFlash 1.2s ease-out;
+        border-radius: 6px;
     }
     .copy-one {
         flex: 0 0 72px; width: 72px; padding: 7px 0; border: 1px solid var(--border);
@@ -115,7 +139,14 @@
         font-size: 12px; cursor: pointer;
     }
     .copy-one:hover { background: var(--accent-soft); }
-</style>
+    /* Small editable track-time box to the right of a track title (sized for 00:00). */
+    .track-time {
+        flex: 0 0 64px; width: 64px; padding: 6px 6px; margin-left: 8px;
+        border: 1px solid var(--border); border-radius: 6px;
+        background: var(--panel); color: var(--text); font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        text-align: center;
+    }</style>
 </head>
 <body>
     <div id="daWrap">
@@ -128,14 +159,28 @@
         <div class="row">
             <input type="file" id="imgInput" accept="image/*" multiple
                 style="flex:1; min-width:260px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text);">
+            <label class="lbl" style="margin:0; display:flex; align-items:center; gap:6px;">
+                Format:
+                <select id="fmtSelect">
+                    <option value="">Auto-detect</option>
+                    <option value="CD">CD</option>
+                    <option value="Cassette">Cassette</option>
+                    <option value="LP">LP / Vinyl</option>
+                    <option value="DVD">DVD</option>
+                    <option value="Boxset">Box Set</option>
+                </select>
+            </label>
             <button class="primary" id="buildBtn" onclick="runDiscogsAdd()">Extract &amp; Build</button>
             <button class="ghost" onclick="copyAll()">Copy All</button>
+            <button class="ghost" onclick="clearSavedExtract()">Clear Saved</button>
         </div>
         <div class="status" id="status"></div>
         <label class="lbl">Selected Images (<span id="imgCount">0</span>):</label>
         <div id="thumbList"></div>
 
         <div class="results" id="results"></div>
+        <label class="lbl" style="margin-top:18px;">Raw post-macro payload (diagnostic — what the server actually returned):</label>
+        <textarea id="rawDump" class="empty" readonly placeholder="After an extract, the full post-macro JSON (tables + extracted data) appears here. If this is also empty, the backend produced nothing (e.g. server not restarted)."></textarea>
     </div>
 
 <script>
@@ -154,9 +199,51 @@
         if (t === 'dark') document.body.classList.add('dark');
     } catch (e) {}
 
+    // Restore the last extract (if any) so the pane is never blank after a
+    // refresh / navigate-away-and-back.
+    restoreLastExtract();
+
     function setStatus(msg, kind) {
         statusEl.textContent = msg || '';
         statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    // Persist the last successful extract so results survive navigating away and
+    // back (or a refresh) instead of going blank. File blobs can't be serialized,
+    // so we only store the parsed tables + raw text + model info.
+    const LS_KEY = 'wysiwyg_discogs_last_extract';
+    function saveLastExtract(payload) {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(payload)); }
+        catch (e) { /* quota / private-mode - ignore */ }
+    }
+    function loadLastExtract() {
+        try {
+            const raw = localStorage.getItem(LS_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+    }
+    function restoreLastExtract() {
+        const saved = loadLastExtract();
+        if (!saved) return;
+        const tables = saved.tables || {};
+        const totalRows = Object.values(tables).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0);
+        const when = saved.savedAt ? new Date(saved.savedAt).toLocaleString() : '';
+        if (saved.phase === 'ocr_only') {
+            results.innerHTML = '';
+            const h = document.createElement('div');
+            h.className = 'section-title';
+            h.textContent = 'Raw Extraction (verify OCR text)';
+            results.appendChild(h);
+            const ta = document.createElement('textarea');
+            ta.className = 'field-val';
+            ta.style.height = '320px';
+            ta.value = (saved.extracted && (saved.extracted.raw_text || JSON.stringify(saved.extracted, null, 2))) || '';
+            results.appendChild(ta);
+            setStatus('Restored last raw extraction' + (when ? ' (' + when + ')' : '') + '. Re-extract to refresh.', 'ok');
+        } else if (Object.keys(tables).length && totalRows) {
+            renderTables(tables);
+            setStatus('Restored last extract' + (when ? ' (' + when + ')' : '') + '. Re-extract to refresh.', 'ok');
+        }
     }
 
     // Track selected File objects.
@@ -224,14 +311,24 @@
                     lbl.textContent = (title && title.startsWith('**')) ? 'Section' : (track ? 'Track ' + track : '');
                     const val = document.createElement('textarea');
                     val.className = 'field-val';
-                    val.value = title + (time ? '  [' + time + ']' : '');
+                    val.value = title;
                     val.rows = 1;
                     r.appendChild(lbl); r.appendChild(val);
+                    // Separate small text box for the track time (sized for 00:00),
+                    // editable so the user can correct durations. Blank if none.
+                    const timeBox = document.createElement('input');
+                    timeBox.type = 'text';
+                    timeBox.className = 'track-time';
+                    timeBox.value = time;
+                    timeBox.placeholder = '00:00';
+                    timeBox.maxLength = 6;
+                    timeBox.title = 'Track time (mm:ss)';
+                    r.appendChild(timeBox);
                     if (String(title).trim()) {
                         const btn = document.createElement('button');
                         btn.className = 'copy-one';
                         btn.textContent = 'Copy';
-                        btn.onclick = async () => { await copyText(val.value); flashCopied(btn); };
+                        btn.onclick = async () => { await copyText(val.value + (timeBox.value ? '  [' + timeBox.value + ']' : '')); flashCopied(btn); };
                         r.appendChild(btn);
                     }
                     results.appendChild(r);
@@ -241,10 +338,8 @@
                 const label = row[0];
                 const value = row[1];
                 if (value === '-' && label === '-') {
-                    // visual separator row
-                    const sep = document.createElement('div');
-                    sep.style.height = '6px';
-                    results.appendChild(sep);
+                    // Macro group-separator row: skip it (it only showed as a
+                    // blank gap once surrounding empty rows were cleaned out).
                     continue;
                 }
                 // Header rows (Item/Value, Role/Artist) render as a styled header.
@@ -277,6 +372,14 @@
 
         lastText = results.innerText;
     }
+}
+
+    window.clearSavedExtract = function () {
+        try { localStorage.removeItem('wysiwyg_discogs_last_extract'); } catch (e) {}
+        results.innerHTML = '';
+        lastText = '';
+        setStatus('Cleared saved extract. Select images and Extract to build fresh.', '');
+    };
 
     window.copyAll = function () {
         let out = '';
@@ -304,43 +407,59 @@
         buildBtn.disabled = true;
         setStatus('Extracting data from images (Gemini)...');
         results.innerHTML = '';
+        const dump = document.getElementById('rawDump');
+        if (dump) { dump.value = ''; dump.classList.add('empty'); dump.placeholder = 'Waiting for server response...'; }
         const url = API_BASE + '/api/adds/discogs';
-        console.log('Discogs add -> POST', url, 'images:', selectedFiles.length);
+        console.log('Discogs add -> POST (stream)', url, 'images:', selectedFiles.length);
         try {
             const fd = new FormData();
             selectedFiles.forEach(f => fd.append('images', f, f.name));
+            const fmt = document.getElementById('fmtSelect');
+            if (fmt && fmt.value) fd.append('user_format', fmt.value);
             const resp = await fetch(url, { method: 'POST', body: fd });
             console.log('Discogs add <- status', resp.status, resp.statusText);
-            const data = await resp.json();
-            console.log('Discogs add <- body', data);
-            if (data.status === 'success') {
-                const tables = data.tables || {};
-                if (data.phase === 'ocr_only') {
-                    // Phase 1: just show the raw OCR text for verification.
-                    results.innerHTML = '';
-                    const h = document.createElement('div');
-                    h.className = 'section-title';
-                    h.textContent = 'Raw Extraction (verify OCR text)';
-                    results.appendChild(h);
-                    const ta = document.createElement('textarea');
-                    ta.className = 'field-val';
-                    ta.style.height = '320px';
-                    ta.value = (data.extracted && (data.extracted.raw_text || JSON.stringify(data.extracted, null, 2))) || '';
-                    results.appendChild(ta);
-                    setStatus('OCR captured. Verify the text below, then we enable table-building.', 'ok');
-                } else {
-                    renderTables(tables);
-                    const n = Object.keys(tables).length;
-                    const totalRows = Object.values(tables).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0);
-                    if (n === 0 || totalRows === 0) {
-                        setStatus('Gemini responded but produced no table data. Try again or check the images.', 'err');
-                    } else {
-                        setStatus('Built ' + n + ' tables (' + totalRows + ' rows).', 'ok');
-                    }
+            if (!resp.ok || !resp.body) {
+                // Non-streaming error (e.g. server rejected the request pre-stream).
+                let msg = 'HTTP ' + resp.status;
+                try {
+                    const j = await resp.json();
+                    if (j && j.message) msg = j.message;
+                } catch (e) {}
+                setStatus('Error: ' + msg, 'err');
+                return;
+            }
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buf = '';
+            let finalResult = null;
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                // NDJSON: process complete lines (\n-terminated).
+                let nl;
+                while ((nl = buf.indexOf('\n')) >= 0) {
+                    const line = buf.slice(0, nl).trim();
+                    buf = buf.slice(nl + 1);
+                    if (!line) continue;
+                    let obj;
+                    try { obj = JSON.parse(line); } catch (e) { continue; }
+                    handleStreamMessage(obj);
+                    if (obj.type === 'result') finalResult = obj;
+                    if (obj.type === 'error') break;
                 }
-            } else {
-                setStatus('Error: ' + (data.message || 'Unknown error'), 'err');
-                if (data.raw) console.error('Gemini raw:', data.raw);
+            }
+            // Flush any trailing partial line.
+            const tail = buf.trim();
+            if (tail) {
+                try {
+                    const obj = JSON.parse(tail);
+                    handleStreamMessage(obj);
+                    if (obj.type === 'result') finalResult = obj;
+                } catch (e) {}
+            }
+            if (finalResult && finalResult.type === 'result') {
+                onExtractResult(finalResult);
             }
         } catch (e) {
             setStatus('Network error: ' + e, 'err');
@@ -349,6 +468,145 @@
             buildBtn.disabled = false;
         }
     };
+
+    // Map a streamed event to a live status line in the window.
+    function handleStreamMessage(obj) {
+        if (obj.type === 'progress') {
+            const ev = obj.event || {};
+            switch (ev.type) {
+                case 'start':
+                    setStatus('Contacting Gemini (' + (ev.combos || '?') + ' model/key combos)...');
+                    break;
+                case 'combo':
+                    setStatus('Trying model ' + (ev.model || '?') + ' (' + (ev.index + 1) + '/' + ev.total + ')...');
+                    break;
+                case 'busy':
+                    setStatus('Gemini busy (503) — retry ' + (ev.attempt || 1) + ' on ' + (ev.model || 'next combo') + '...', '');
+                    break;
+                case 'quota':
+                    setStatus('Quota hit (429) — trying next key (' + (ev.attempt || 1) + ')...', '');
+                    break;
+                case 'forbidden':
+                    setStatus('Model ' + (ev.model || '') + ' not allowed for this key — skipping...', '');
+                    break;
+                case 'invalid_key':
+                    setStatus('Key rejected (401/400) — dropping it (' + (ev.attempt || 1) + ')...', '');
+                    break;
+                case 'not_found':
+                    setStatus('Model ' + (ev.model || '') + ' not found — trying next...', '');
+                    break;
+                case 'other':
+                    setStatus('Gemini error on ' + (ev.model || '') + ' — trying next...', '');
+                    break;
+                case 'done':
+                    setStatus('Gemini responded via ' + (ev.model || '') + ' — building tables...', 'ok');
+                    break;
+                default:
+                    break;
+            }
+            return;
+        }
+        if (obj.type === 'error') {
+            setStatus('Error: ' + (obj.message || 'Unknown error'), 'err');
+            return;
+        }
+        // 'result' is handled by onExtractResult (status set there).
+    }
+
+    // Final payload handler (replaces the old inline success branch).
+    function onExtractResult(data) {
+        const tables = data.tables || {};
+        console.log('[Discogs] success payload: phase=' + data.phase +
+                    ' tableCount=' + Object.keys(tables).length +
+                    ' totalRows=' + Object.values(tables).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0));
+        // Persist this extract so it survives a refresh / navigation.
+        saveLastExtract({
+            phase: data.phase,
+            tables: tables,
+            extracted: data.extracted || {},
+            info: data.info || {},
+            savedAt: Date.now()
+        });
+        // Diagnostic: dump the FULL post-macro payload (the raw backend output)
+        // so a blank GUI is never a mystery — if tables render empty but this
+        // is full, it's a render target bug; if this is empty too, the backend
+        // produced nothing.
+        const dump = document.getElementById('rawDump');
+        if (dump) {
+            try {
+                const payload = {
+                    phase: data.phase,
+                    info: data.info || {},
+                    extracted: data.extracted || {},
+                    tables: tables
+                };
+                dump.value = JSON.stringify(payload, null, 2);
+                dump.classList.remove('empty');
+            } catch (e) {
+                dump.value = '(failed to serialize payload: ' + e + ')';
+                dump.classList.remove('empty');
+            }
+        }
+        // Friendly status about which model/attempt produced this.
+        const info = data.info || {};
+        let modelNote = '';
+        if (info.model) {
+            const busy = info.diagnostics && info.diagnostics.busy ? info.diagnostics.busy : 0;
+            const busyNote = busy ? ', after ' + busy + ' busy ' + (busy > 1 ? 'retries' : 'retry') : '';
+            modelNote = ' (model: ' + info.model + busyNote + ')';
+        }
+        if (data.phase === 'ocr_only') {
+            // Phase 1: just show the raw OCR text for verification.
+            results.innerHTML = '';
+            const h = document.createElement('div');
+            h.className = 'section-title';
+            h.textContent = 'Raw Extraction (verify OCR text)';
+            results.appendChild(h);
+            const ta = document.createElement('textarea');
+            ta.className = 'field-val';
+            ta.style.height = '320px';
+            ta.value = (data.extracted && (data.extracted.raw_text || JSON.stringify(data.extracted, null, 2))) || '';
+            results.appendChild(ta);
+            setStatus('OCR captured. Verify the text below, then we enable table-building.', 'ok');
+            flashResults();
+        } else {
+            renderTables(tables);
+            const n = Object.keys(tables).length;
+            const totalRows = Object.values(tables).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0);
+            if (n === 0 || totalRows === 0) {
+                // Never leave the pane blank: surface the raw OCR text so the
+                // user can see *something* came back and what to fix.
+                results.innerHTML = '';
+                const h = document.createElement('div');
+                h.className = 'section-title';
+                h.textContent = 'Raw Extraction (no table data parsed)';
+                results.appendChild(h);
+                const ta = document.createElement('textarea');
+                ta.className = 'field-val';
+                ta.style.height = '320px';
+                ta.value = (data.extracted && (data.extracted.raw_text || JSON.stringify(data.extracted, null, 2))) || '(no data returned)';
+                results.appendChild(ta);
+                setStatus('Gemini responded but produced no table data. Raw text shown below — try again or check the images.', 'err');
+            } else {
+                setStatus('Built ' + n + ' tables (' + totalRows + ' rows).' + modelNote, 'ok');
+            }
+            flashResults();
+        }
+    }
+
+    // Briefly highlight + scroll the results into view so it's unmistakable
+    // that data arrived (the popup may not auto-scroll to appended content).
+    function flashResults() {
+        if (!results) return;
+        results.classList.remove('results-flash');
+        // Force reflow so the animation can re-trigger on repeated extracts.
+        void results.offsetWidth;
+        results.classList.add('results-flash');
+        try {
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (window.scrollTo) window.scrollTo({ top: results.offsetTop - 20, behavior: 'smooth' });
+        } catch (e) {}
+    }
 
     window.toggleDaPin = function () {
         const w = document.getElementById('daWrap');

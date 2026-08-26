@@ -436,12 +436,16 @@ async function openAddsAmazon() {
 
 async function openAddsDiscogs() {
     try {
-        // Reuse the existing window if it's still open.
+        const url = '/adds/discogs';
+        // Reuse the existing window if it's still open, but ALWAYS reload it so the
+        // browser picks up code fixes. A focused old window would otherwise keep
+        // running stale DOM/JS even though the server sends no-cache headers. The
+        // last extract is restored from localStorage on reload, so nothing is lost.
         if (_addsDiscogsWindow && !_addsDiscogsWindow.closed) {
+            try { _addsDiscogsWindow.location.reload(); } catch (e) { /* ignore */ }
             _addsDiscogsWindow.focus();
             return;
         }
-        const url = '/adds/discogs';
         _addsDiscogsWindow = window.open(url, 'AddsDiscogsWindow', 'width=900,height=860,resizable=yes,scrollbars=yes,status=yes');
         if (_addsDiscogsWindow) {
             _addsDiscogsWindow.focus();
@@ -1552,6 +1556,8 @@ async function fullReset() {
 
     await clearWalmartCache();
 
+    clearCurrentItem(); // Clear the blue-bar last-item indicator on Reset All
+
     loadProfile(); // Revert to profile settings first (box, lister, skuFlag)
     loadVariableConditions(); // Restore saved variables after reset
     updateDynamicColors(); // Update dynamic colors using the restored values
@@ -2438,6 +2444,33 @@ function handleScrapeResult() {
     }
 }
 
+// --- Current Item indicator (top-right of the blue title bar) ---
+// Mirrors the WysiScan "last result persists" pattern: the most recently
+// scraped item (Artist - Album) is shown in the bar and survives a refresh.
+const CURRENT_ITEM_KEY = 'wysiwyg_current_item';
+function setCurrentItem(text) {
+    const el = document.getElementById('currentItem');
+    if (!el) return;
+    const v = (text || '').toString().trim();
+    if (!v) { el.innerHTML = '&nbsp;'; el.style.opacity = '0.55'; return; }
+    el.textContent = v;
+    el.style.opacity = '1';
+    try { localStorage.setItem(CURRENT_ITEM_KEY, v); } catch (e) {}
+}
+function restoreCurrentItem() {
+    let v = '';
+    try { v = localStorage.getItem(CURRENT_ITEM_KEY) || ''; } catch (e) {}
+    setCurrentItem(v);
+}
+// Clear the blue-bar "current item" indicator (text + persisted key). Used on
+// page refresh and the Reset All button so a stale item from a prior session
+// never lingers in the title bar.
+function clearCurrentItem() {
+    const el = document.getElementById('currentItem');
+    if (el) { el.innerHTML = '&nbsp;'; el.style.opacity = '0.55'; }
+    try { localStorage.removeItem(CURRENT_ITEM_KEY); } catch (e) {}
+}
+
 function shutdownApp() {
     document.getElementById('shutdownModal').style.display = 'block';
 }
@@ -2746,6 +2779,7 @@ function cancelEditCustomOption() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadCustomOptions();
+    clearCurrentItem();
 
     document.getElementById('modalCategorySelect')?.addEventListener('change', (e) => {
         currentModalCategory = e.target.value;
