@@ -1,7 +1,7 @@
 Selected Images (3):
-  - JoeEsp_1.jpg
-  - JoeEsp_3.jpg
-  - JoeEsp_2.jpg
+  - GatOnt_1.jpg
+  - GatOnt_3.jpg
+  - GatOnt_2.jpg
 
 Prompt:
 GLOBAL RULE:
@@ -55,34 +55,30 @@ A4
 Copy
 A5
 Copy
-B1
+A6
 Copy
-B2
+B7
 Copy
-B3
+B8
 Copy
-B4
+B9
 Copy
-B5
+B10
+Copy
+B11
 Copy
 EXTRA
 Barcode
 Copy
-Phonographic Copyright
-Copy
-Copyright
-Copy
 Distributed By
 Copy
-Licensed By
+Featuring
 Copy
 Address
 Copy
-Telephone
+Manufacturing
 Copy
-Fax
-Copy
-Note
+Copyright
 Copy
 MEDIA DESCRIPTION
 Copy Desc.

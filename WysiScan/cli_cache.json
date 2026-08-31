@@ -1,15 +1,5 @@
 [
   {
-    "key": "JoeEsp_1.jpg||JoeEsp_2.jpg||JoeEsp_3.jpg",
-    "files": [
-      "JoeEsp_1.jpg",
-      "JoeEsp_3.jpg",
-      "JoeEsp_2.jpg"
-    ],
-    "output": "Release:\nBand Name: Little Joe Hernandez\nAlbum Title: Espiritu\nRelease Date: 1994\nLabel: Tejano Discos International\nCatalogue Number: 4301\n\nTracks:\nA1 - La Verdad De La Verdad\nA2 - Tu Recuerdo En Cuatro Copas\nA3 - Ni El Dinero Ni Nadie\nA4 - Para Morir Iguales\nA5 - Cuatro Primaveras\nB1 - Alla Si Tu Deberas Me Olvidas\nB2 - Pobrecita\nB3 - En El Ultimo Trago\nB4 - Si Tu Tambien Te Vas\nB5 - Aconsejame Compadre\n\nExtra:\nBarcode: 786367430147\nPhonographic Copyright: 1994 Tejano Discos International, A Division Of La Familia Enterprises\nCopyright: 1994 Tejano Discos International, A Division Of La Familia Enterprises\nDistributed By: Uni Corp.\nLicensed By: Rodven\nAddress: 3191 Coral Way, Suite 110 Miami, FL 33145\nTelephone: 305-442-7273\nFax: 305-443-9516\nNote: \"Espiritu\" Is Also Available On Compact Disc\n\nMedia Description:\nShell Type: Clear Shell With Black Slip Sheet\nShell Texture: Smooth\nTiming Window: Clear Window With Five Hash Marks\nShell Color: Clear\nInk Color: White\nBinding: Five Screws\nStamps: Tejano Discos International Logo",
-    "ts": "2026-08-25T14:47:50"
-  },
-  {
     "key": "IsaMis_1.jpg||IsaMis_2.jpg",
     "files": [
       "IsaMis_2.jpg",
@@ -27,5 +17,15 @@
     ],
     "output": "Release:\nBand Name: Patsy Torres\nAlbum Name: Trenzas\nRelease Date: 1999\nLabel: Discos Joey International\nCatalogue Number: 8574\n\nTracks:\nA1 - No Es Tan Facil\nA2 - Contigo\nA3 - No Se Si Es Amor\nA4 - Amame, Besame Y Quedate\nA5 - Cumbia De Tejas\nB1 - Mas Amor\nB2 - Sepulcro Mojado\nB3 - Puro Party\nB4 - Oooh Baby\nB5 - Voy A Comprenderte\n\nExtra:\nBarcode: 0 28537 85744 7\nCopyright: © 1999 Joey Records Inc.\nPhonographic Copyright: ℗ 1999 Joey Records Inc.\nAddress: 6703 W. Commerce, San Antonio, Tx. 78227\nAll Rights Reserved: All Rights Reserved\nShell Number: 8572\n\nMedia Description:\nShell Type/Style: Clear\nShell Texture: Smooth\nTiming Window: No Timing Window\nShell Color: Clear\nInk Color: Silver\nBinding: Screws\nStamps: None",
     "ts": "2026-08-25T16:33:33"
+  },
+  {
+    "key": "GatOnt_1.jpg||GatOnt_2.jpg||GatOnt_3.jpg",
+    "files": [
+      "GatOnt_1.jpg",
+      "GatOnt_3.jpg",
+      "GatOnt_2.jpg"
+    ],
+    "output": "Release:\nBand Name: Ruben Ramos And The Revolution\nAlbum Title: El Gato Negro On The Prowl\nRelease Date: 2002\nLabel: Revolution Records\nCatalogue Number: Rev - 2003\n\nTracks:\nA1 - Quiero Una Cita\nA2 - El Canoero\nA3 - Abrazado De Un Poste\nA4 - I Wanna Dance\nA5 - La Güera Preciosa\nA6 - Barbaco Blues\nB7 - El Pescador\nB8 - Mil Noches\nB9 - El Presumido\nB10 - Tu Recuerdo\nB11 - Rixmix\n\nExtra:\nBarcode: 6 90647 20034 7\nDistributed By: Foy Lee Productions\nFeaturing: Los Tres Amigos - Ruben Ramos, Little Joe, Roberto Pulido\nAddress: 10615 Etta Lane Austin, Tx. Usa\nManufacturing: Made In Usa\nCopyright: 2002 Revolution Records\n\nMedia Description:\nShell Type: Clear Shell\nShell Texture: Smooth\nTiming Window: Clear Window No Markings\nShell Color: Clear\nInk Color: White\nBinding: Screws\nStamps: None",
+    "ts": "2026-08-26T13:35:11"
   }
 ]
