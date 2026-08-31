@@ -1,7 +1,8 @@
-Selected Images (3):
-  - GatOnt_1.jpg
-  - GatOnt_3.jpg
-  - GatOnt_2.jpg
+Selected Images (4):
+  - GorSha_4.jpg
+  - GorSha_1.jpg
+  - GorSha_2.jpg
+  - GorSha_3.jpg
 
 Prompt:
 GLOBAL RULE:
@@ -36,7 +37,7 @@ Extracted Text:
 RELEASE
 Band Name
 Copy
-Album Title
+Album Name
 Copy
 Release Date
 Copy
@@ -57,28 +58,30 @@ A5
 Copy
 A6
 Copy
-B7
+B1
 Copy
-B8
+B2
 Copy
-B9
+B3
 Copy
-B10
+B4
 Copy
-B11
+B5
 Copy
 EXTRA
-Barcode
+Tape Message
 Copy
-Distributed By
+Credits
 Copy
-Featuring
-Copy
-Address
-Copy
-Manufacturing
+Production
 Copy
 Copyright
+Copy
+Side One Total Time
+Copy
+Side Two Total Time
+Copy
+Audio System
 Copy
 MEDIA DESCRIPTION
 Copy Desc.

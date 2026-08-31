@@ -1,14 +1,5 @@
 [
   {
-    "key": "IsaMis_1.jpg||IsaMis_2.jpg",
-    "files": [
-      "IsaMis_2.jpg",
-      "IsaMis_1.jpg"
-    ],
-    "output": "Release:\nBand Name: Isabel Pantoja\nAlbum Name: Mis Mejores Canciones\nRelease Date: 1994\nLabel: Bmg U.s. Latin, Rca\nCatalogue Number: 74321-25057-4\n\nTracks:\nA1 - Marinero De Luces\nA2 - Asi Fue\nA3 - Si Te Recuerdo\nA4 - Nada\nA5 - Porque Me Gusta A Morir\nA6 - Hazme Tuya Una Vez Más\nA7 - Cambiar Por Ti\nB1 - Se Me Enamora El Alma\nB2 - Buenos Dias Tristeza\nB3 - Feriante\nB4 - Desde Que Vivo Con Otro\nB5 - Hoy Quiero Confesarme\nB6 - Era Mi Vida Él\nB7 - Virgen Del Rocio\n\nExtra:\nDolby System\n(C) & (P) 1994 Bmg Music\nManufactured And Distributed By Bmg Music, New York, N.y.\nTmk (S) (R) Registered Marca (S) Registrada (S) General Electric, Co. U.s.a.\nExcept Bmg Logo (R) Bmg Music\nMade In U.s.a.\nAll Rights Reserved\nUnauthorized Duplication Is A Violation Of Applicable Laws\n7 43212 50574 0",
-    "ts": "2026-08-25T15:06:15"
-  },
-  {
     "key": "PatTor_1.jpg||PatTor_2.jpg||PatTor_3.jpg",
     "files": [
       "PatTor_1.jpg",
@@ -27,5 +18,16 @@
     ],
     "output": "Release:\nBand Name: Ruben Ramos And The Revolution\nAlbum Title: El Gato Negro On The Prowl\nRelease Date: 2002\nLabel: Revolution Records\nCatalogue Number: Rev - 2003\n\nTracks:\nA1 - Quiero Una Cita\nA2 - El Canoero\nA3 - Abrazado De Un Poste\nA4 - I Wanna Dance\nA5 - La Güera Preciosa\nA6 - Barbaco Blues\nB7 - El Pescador\nB8 - Mil Noches\nB9 - El Presumido\nB10 - Tu Recuerdo\nB11 - Rixmix\n\nExtra:\nBarcode: 6 90647 20034 7\nDistributed By: Foy Lee Productions\nFeaturing: Los Tres Amigos - Ruben Ramos, Little Joe, Roberto Pulido\nAddress: 10615 Etta Lane Austin, Tx. Usa\nManufacturing: Made In Usa\nCopyright: 2002 Revolution Records\n\nMedia Description:\nShell Type: Clear Shell\nShell Texture: Smooth\nTiming Window: Clear Window No Markings\nShell Color: Clear\nInk Color: White\nBinding: Screws\nStamps: None",
     "ts": "2026-08-26T13:35:11"
+  },
+  {
+    "key": "GorSha_1.jpg||GorSha_2.jpg||GorSha_3.jpg||GorSha_4.jpg",
+    "files": [
+      "GorSha_4.jpg",
+      "GorSha_1.jpg",
+      "GorSha_2.jpg",
+      "GorSha_3.jpg"
+    ],
+    "output": "Release:\nBand Name: Gordon Lightfoot\nAlbum Name: Shadows\nRelease Date: 1982\nLabel: Warner Bros. Records Inc.\nCatalogue Number: M5 3633\nTracks:\nA1 - 14 Karat Gold\nA2 - In My Fashion\nA3 - Shadows\nA4 - Blackberry Wine\nA5 - Heaven Help The Devil\nA6 - Thank You For The Promises\nB1 - Baby Step Back\nB2 - All I'm After\nB3 - Triangle\nB4 - I'll Do Anything\nB5 - She's Not The Same\nExtra:\nTape Message: Blank Tape At End Of Side Two Is Necessary To Duplicate Sequence Of L.P.\nCredits: All Songs Written By Gordon Lightfoot\nProduction: Produced By Gordon Lightfoot And Ken Friesen\nCopyright: © ℗ 1982 Warner Bros. Records Inc. For The U.S. & WEA International Inc. For The World Outside Of The U.S.\nSide One Total Time: 19:17\nSide Two Total Time: 18:10\nAudio System: Dolby System\nMedia Description:\nShell Type/Style: Plastic Cassette Shell\nShell Texture: Pebbled Border Texture With Smooth Recessed Label Area\nTiming Window: Small Centered Window With 100 50 0 Markings\nShell Color: White\nInk Color: Black\nBinding: Sonic Weld\nStamps: Made In U.S.A., Warner Bros. Logo, Dolby Logo, Circled A Stamp",
+    "ts": "2026-08-31T13:13:43"
   }
 ]
