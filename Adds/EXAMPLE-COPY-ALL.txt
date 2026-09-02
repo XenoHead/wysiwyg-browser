@@ -1,0 +1,29 @@
+1. Artists & Title
+Artist 1 (Actual Name): A Polygram Company
+Title: Killer Country
+
+2. Label, Company, Catalog Number, Etc. (LCCN)
+Label: MERCURY
+Catalog Number: none
+
+3. Barcodes and Other Identifiers (BAOI)
+
+4. Format
+Format: Cassette
+Quantity: 1
+Checklist: [x] Compilation
+Checklist: [x] EP
+
+5. Country & Release Year
+Country: U.S.A
+Released: 1995
+
+6. Tracklist
+
+7. Credits & Genres
+Original sessions produced by: JERRY KENNEDY
+Genre: Rock
+Style: Rock & Roll
+
+8. Notes
+Submission Notes: Added release to Discogs.

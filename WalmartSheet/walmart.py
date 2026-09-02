@@ -42,7 +42,7 @@ async def serve_walmart_js_root():
 
 def parse_walmart_raw_text(text):
     """Parses the Discogs raw text blob for Walmart data."""
-    info = { 'artist': '', 'title': '', 'label': '', 'cat': '', 'format': '', 'year': '', 'country': '' }
+    info = { 'artist': '', 'title': '', 'label': '', 'cat': '', 'format': '', 'year': '', 'country': '', 'tracklist': [] }
     if not text: return info
     lines = text.split('\n')
     if not lines: return info
@@ -55,17 +55,19 @@ def parse_walmart_raw_text(text):
     else:
         info['artist'] = lines[0].strip()
 
-    for line in lines:
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        
         if line.startswith('Label:'):
             clean = line.replace('Label:', '').strip()
             tokens = clean.split(' ')
             cat_parts = []
             temp_label = []
             for token in tokens:
-                # Improved heuristic: look for tokens that are uppercase+digits with symbols, 
-                # but avoid short numeric tokens that are often part of label names.
-                if (re.search(r'[A-Z]', token) and re.search(r'[0-9]', token) and not any(l.islower() for l in token if l.isalpha())) or re.match(r'^[A-Z0-9\-]{4,}$', token):
-                     cat_parts.append(token)
+                # Strip trailing punctuation (commas, semicolons, colons) for detection only
+                token_clean = token.rstrip(',;:')
+                if (re.search(r'[A-Z]', token_clean) and re.search(r'[0-9]', token_clean) and not any(l.islower() for l in token_clean if l.isalpha())) or re.match(r'^[A-Z0-9\-]{4,}$', token_clean):
+                     cat_parts.append(token_clean)
                 else:
                      temp_label.append(token)
             
@@ -73,7 +75,7 @@ def parse_walmart_raw_text(text):
             info['cat'] = " / ".join(cat_parts).strip()
 
             if not info['cat'] and len(tokens) > 1:
-                info['cat'] = tokens[-1]
+                info['cat'] = tokens[-1].rstrip(',;:')
                 info['label'] = " ".join(tokens[:-1]).strip()
             if not info['label'] and info['cat']:
                 info['label'] = clean.replace(info['cat'], '').strip()
@@ -86,6 +88,14 @@ def parse_walmart_raw_text(text):
             info['year'] = line.replace('Released:', '').strip()
         elif line.startswith('Country:'):
             info['country'] = line.replace('Country:', '').strip()
+        elif i > 0 and re.match(r'^\d+[\.\)]\s+', stripped):
+            # Tracklist entry: "1. Track Title" or "1) Track Title"
+            track_title = re.sub(r'^\d+[\.\)]\s*', '', stripped)
+            info['tracklist'].append(track_title.strip())
+        elif i > 0 and re.match(r'^\d+:\d+\s+', stripped):
+            # Tracklist entry with timestamp: "3:45 Track Title"
+            track_title = re.sub(r'^\d+:\d+\s*', '', stripped)
+            info['tracklist'].append(track_title.strip())
             
     return info
 
@@ -128,8 +138,9 @@ async def process_walmart_item(data: dict = Body(...)):
         builder_cat_parts = []
         name_parts = []
         for token in tokens:
-            if (re.search(r'[A-Z]', token) and re.search(r'[0-9]', token) and not any(l.islower() for l in token if l.isalpha())) or re.match(r'^[A-Z0-9\-]{4,}$', token):
-                builder_cat_parts.append(token)
+            token_clean = token.rstrip(',;:')
+            if (re.search(r'[A-Z]', token_clean) and re.search(r'[0-9]', token_clean) and not any(l.islower() for l in token_clean if l.isalpha())) or re.match(r'^[A-Z0-9\-]{4,}$', token_clean):
+                builder_cat_parts.append(token_clean)
             else:
                 name_parts.append(token)
         
@@ -219,6 +230,7 @@ async def process_walmart_item(data: dict = Body(...)):
         "performer": artist,
         "recordLabel": label,
         "title": title,
+        "tracklist": parsed.get('tracklist', []),
     }
 
 @router.post("/api/walmart/save-pulldowns")

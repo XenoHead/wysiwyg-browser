@@ -168,6 +168,8 @@
         <div class="field-group"><label>Record Label</label><input type="text" id="recordLabel"></div>
         <div class="field-group"><label>Title</label><input type="text" id="title"></div>
         
+        <div class="field-group"><label>Tracklist</label><textarea id="tracklistDisplay" rows="3" readonly onclick="this.select()" placeholder="Tracklist will appear here after scrape..."></textarea></div>
+        
         <div class="field-group"><label>Fulfillment Lag Time</label><input type="text" id="lagTime" value="1"></div>
         <div class="field-group"><label>Must ship alone?</label><input type="text" id="shipAlone" value="No"></div>
         <div class="field-group"><label>Site Start Date</label><input type="text" id="siteStartDate"></div>
@@ -485,6 +487,9 @@
             populateFieldIfEmpty('title', data.title || '');
             populateFieldIfEmpty('recordLabel', data.recordLabel || '');
             
+            let tracklistText = data.tracklist && data.tracklist.length ? data.tracklist.join('\n') : '';
+            populateFieldIfEmpty('tracklistDisplay', tracklistText);
+            
             let cleanMpnBuilder = (data.manufacturerPartNumber || '').replace(/\//g, '').replace(/\s+/g, ' ').trim();
             populateFieldIfEmpty('mpn', cleanMpnBuilder);
             
@@ -573,7 +578,8 @@
                              `Label: ${release.labels[0]?.name} ${release.labels[0]?.catno}\n` +
                              `Format: ${release.formats[0]?.name} ${release.formats[0]?.descriptions?.join(' ')}\n` +
                              `Released: ${release.released_year || ''}\n` +
-                             `Country: ${release.country || ''}`;
+                             `Country: ${release.country || ''}\n` +
+                             (release.tracklist && release.tracklist.length ? release.tracklist.map((t, i) => `${i+1}. ${t.title}`).join('\n') + '\n' : '');
 
             const context = {
                 raw_text: raw_text,
@@ -690,6 +696,12 @@
                 if (skuVal) document.getElementById('sku').value = skuVal;
             }
             
+            // Tracklist from Discogs API
+            if (discogs.tracklist && discogs.tracklist.length) {
+                const tlText = discogs.tracklist.map((t, i) => `${i+1}. ${t.title || t}`).join('\n');
+                populateFieldIfEmpty('tracklistDisplay', tlText);
+            }
+
             populateFieldIfEmpty('performer', artist);
             populateFieldIfEmpty('title', title);
 

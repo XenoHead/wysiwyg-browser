@@ -352,40 +352,109 @@ def process_discogs_raw_data(raw_discogs_data):
         'Genre_Style': combined_genre_style,
         'Part Number': 'N/A' 
     }
-    if DISCOGS_DATA_STORAGE.get('Part Number') in ['N/A', '', None]:
-        cat_match = re.search(r'Label:.*?\s–\s*([^,\n]+)', raw_discogs_data, re.I)
-        if cat_match:
-            DISCOGS_DATA_STORAGE['Part Number'] = cat_match.group(1).strip()
-        else:
-            # Only check Matrix if Label Cat is missing
-            matrix_match = re.search(r'Matrix\s*/\s*Runout:?\s*([^\n\r,]+)', raw_discogs_data, re.I)
-            if matrix_match:
-                DISCOGS_DATA_STORAGE['Part Number'] = matrix_match.group(1).strip()
-    label_line = next((l for l in lines if l.startswith('Label:')), '').replace('Label:', '').strip()
+    # --- Part Number: defer to after label parsing (all_cat_numbers populated below) ---
+    #     We skip pre-population here; after the label parsing loop we set Part Number
+    #     from all_cat_numbers (first catalog number found).
     label_info_list = []
     brand_names_only = []
     cat_group_map = {} # Format: { 'CAT#': [Label1, Label2] }
-    raw_pairs = label_line.split(',') 
+    # Collect ALL catalog numbers found across the label line (may be multiple per label, e.g. "314-526 542-4", "C108068")
+    all_cat_numbers = []
+    # Catalog number pattern: alphanumeric prefix + digits, or C-prefix IDs like C108068
+    cat_pattern = re.compile(r'\b([A-Z]?\d{2,}[\-\u2013\u2014]?\d*(?:\s*[A-Z]?\d{2,}[\-\u2013\u2014]?\d*)*)\b|\b(C\d{4,})\b', re.I)
+    label_line = next((l for l in lines if l.startswith('Label:')), '').replace('Label:', '').strip()
+    raw_pairs = re.split(r',\s*(?=\S)', label_line)  # split on comma but not inside "314-526 542-4"
     for pair in raw_pairs:
-        if '–' in pair:
-            parts = pair.split('–')
-            lbl_name = parts[0].strip()
-            lbl_name = re.sub(r'^Label:\s*', '', lbl_name).strip()
-            cat_no = parts[1].split(',')[0].strip()
-            if lbl_name not in brand_names_only:
-                brand_names_only.append(clean_name(lbl_name))
-            if cat_no not in cat_group_map:
-                cat_group_map[cat_no] = []
-            if lbl_name not in cat_group_map[cat_no]:
-                cat_group_map[cat_no].append(lbl_name)  
-            label_info_list.append({'name': lbl_name, 'cat': cat_no})
-            if DISCOGS_DATA_STORAGE.get('Part Number') in ['N/A', '', None]:
-                DISCOGS_DATA_STORAGE['Part Number'] = cat_no
-        else:
-            lbl_name = pair.strip()
-            label_info_list.append({'name': lbl_name, 'cat': ''})
-            if lbl_name and clean_name(lbl_name) not in brand_names_only:
-                brand_names_only.append(clean_name(lbl_name))
+        pair = pair.strip()
+        if not pair:
+            continue
+        # Strategy: first try splitting on en-dash/em-dash (standard Discogs format: "Label – CAT")
+        # Hyphen is trickier because catalog numbers themselves contain hyphens (e.g. "314-526").
+        # Only use hyphen as separator if the right side starts with a digit AND the left side
+        # doesn't end with a partial catalog-number prefix (digit+hyphen).
+        lbl_name = pair
+        cat_str = ''
+        
+        # Check for en-dash/em-dash first (safe: never appears inside catalog numbers)
+        for sep in ['\u2013', '\u2014']:
+            if sep in pair:
+                parts = pair.split(sep, 1)
+                lbl_name = parts[0].strip()
+                cat_str = parts[1].strip()
+                break
+        
+        if not cat_str:
+            # Try hyphen, but only if it's not inside a catalog number
+            # A hyphen is a label/cat separator if:
+            # 1. It's followed by a digit (starts a cat number on the right)
+            # 2. The left side doesn't end with "digits-hyphen" (which would be a partial cat#)
+            hyphen_idx = pair.find('-')
+            if hyphen_idx > 0:
+                left = pair[:hyphen_idx].strip()
+                right = pair[hyphen_idx+1:].strip()
+                # Check if left side ends with a catalog-prefix pattern (e.g. "314-")
+                left_ends_with_cat_prefix = bool(re.search(r'\d+\s*$', left.rstrip('-').rstrip()))
+                # Check if right side starts with a digit (catalog number)
+                right_starts_with_digit = bool(re.match(r'\d', right))
+                if right_starts_with_digit and not left_ends_with_cat_prefix:
+                    lbl_name = left
+                    cat_str = right
+        
+        if not cat_str:
+            # No valid dash separator: use token classification
+            tokens = pair.split()
+            label_tokens = []
+            cat_tokens = []
+            for token in tokens:
+                token_clean = token.rstrip(',;:')
+                if cat_pattern.match(token_clean) and re.search(r'\d', token_clean):
+                    cat_tokens.append(token_clean)
+                else:
+                    label_tokens.append(token)
+            lbl_name = ' '.join(label_tokens)
+            cat_str = ' '.join(cat_tokens)
+        
+        # After separating lbl_name and cat_str for this pair, collect catalog numbers
+        if cat_str:
+            for cn in cat_str.split():
+                cn = cn.strip(',;:')
+                if cn and re.search(r'\d', cn) and cn not in all_cat_numbers:
+                    all_cat_numbers.append(cn)
+
+        # Build the label name (strip catalog-number tokens from the pair)
+        lbl_tokens_clean = [t for t in pair.split() if not (cat_pattern.match(t.rstrip(',;:')) and re.search(r'\d', t.rstrip(',;:')))]
+        lbl_name_final = ' '.join(lbl_tokens_clean).strip()
+        lbl_name_final = re.sub(r'^Label:\s*', '', lbl_name_final).strip()
+
+        if lbl_name_final:
+            if lbl_name_final not in brand_names_only:
+                brand_names_only.append(clean_name(lbl_name_final))
+            if cat_str:
+                for cn in cat_str.split():
+                    cn_clean = cn.strip(',;:')
+                    if cn_clean:
+                        if cn_clean not in cat_group_map:
+                            cat_group_map[cn_clean] = []
+                        if lbl_name_final not in cat_group_map[cn_clean]:
+                            cat_group_map[cn_clean].append(lbl_name_final)
+                label_info_list.append({'name': lbl_name_final, 'cat': cat_str})
+            else:
+                label_info_list.append({'name': lbl_name_final, 'cat': ''})
+    # If we found catalog numbers but Part Number is still N/A, use the first one
+    if all_cat_numbers and DISCOGS_DATA_STORAGE.get('Part Number') in ['N/A', '', None]:
+        DISCOGS_DATA_STORAGE['Part Number'] = all_cat_numbers[0]
+        # Also store all catalog numbers as a comma-separated extra field
+        DISCOGS_DATA_STORAGE['All Catalog Numbers'] = ', '.join(all_cat_numbers)
+    # Also check for standalone catalog-number-looking tokens in the raw text (Yracklist C-numbers, etc.)
+    # that may not have been attached to a Label: line
+    if not all_cat_numbers:
+        standalone_cats = re.findall(r'\b(C\d{5,6}|[A-Z]{2,4}-\d{3,6}(?:-\d+)?)\b', raw_discogs_data)
+        for sc in standalone_cats:
+            if sc not in all_cat_numbers:
+                all_cat_numbers.append(sc)
+        if all_cat_numbers and DISCOGS_DATA_STORAGE.get('Part Number') in ['N/A', '', None]:
+            DISCOGS_DATA_STORAGE['Part Number'] = all_cat_numbers[0]
+            DISCOGS_DATA_STORAGE['All Catalog Numbers'] = ', '.join(all_cat_numbers)
     label_parts = []
     for cat, labels in cat_group_map.items():
         label_string = " / ".join(labels)

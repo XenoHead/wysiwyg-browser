@@ -133,7 +133,20 @@ def parse_raw_text(raw_text):
         if (re.match(r'^[A-Z][a-z]', ln) or ln.isupper()) and len(ln.split()) >= 1 and len(ln) <= 60:
             if re.match(r'^[\d\-\s]{3,}$', ln):
                 continue
-            title_cands.append((_i, 2, ln.strip().title()))
+            # Exclude lines that are mostly numeric/catalog-number tokens
+            # (e.g. "314-526 542-4 C108068") — these are catalog data, not titles.
+            if sum(1 for w in ln.split() if re.search(r'\d', w)) >= len(ln.split()) * 0.6:
+                continue
+            cand = ln.strip().title()
+            # If the line is "Label Name - Title" and the left part matches a
+            # known label token, only the right part is the actual title.
+            for sep in [' - ', ' / ', ' : ']:
+                if sep in cand:
+                    parts = cand.split(sep, 1)
+                    if _LABEL_TOK.search(parts[0]):
+                        cand = parts[1].strip()
+                        break
+            title_cands.append((_i, 2, cand))
     # Candidate artist: a name line (>=2 words, mostly letters) that is not the
     # title and not boilerplate. Prefer multi-word names; exclude single short
     # ALL-CAPS tokens (those are usually catalog fragments like "ZMC"/"CBS").
@@ -200,24 +213,53 @@ def parse_raw_text(raw_text):
         if _label_line:
             out["label_literal"] = _label_line.group(1).strip()
 
+    # Reactive label correction: if the spine text itself contains "Mercury Nashville"
+    # or similar multi-word label, override the single-token brand hit.
+    if out.get("label_literal") and out["label_literal"] in ("MERCURY", "SONY", "WARNER", "CAPITOL", "MCA", "UNIVERSAL", "EMI", "ATLANTIC", "ARISTA", "GEFFEN", "POLYDOR", "ISLAND", "ELEKTRA", "EPIC", "VIRGIN", "COLUMBIA"):
+        _full_label = re.search(
+            r'(?i)\b(' + '|'.join(["mercury", "polydor", "sony", "warner", "capitol",
+                                     "mca", "universal", "emi", "atlantic", "arista",
+                                     "geffen", "island", "elektra", "epic", "virgin",
+                                     "columbia"]) + r')\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',
+            text)
+        if _full_label and len(_full_label.group(0)) > len(out["label_literal"]):
+            out["label_literal"] = _full_label.group(0).upper()
     # --- Catalog number -----------------------------------------------------
-    cat = None
-    # 1) XXX-NNNNNN  (e.g. ZMC-80005)
-    m = re.search(r'(?i)\b([A-Z]{1,4})[-\s](\d{3,6})\b', text)
-    if m:
-        cat = f"{m.group(1).upper()}-{m.group(2)}"
+    # Collect ALL catalog numbers found, not just the first match.
+    cats_found = []  # list of strings, normalised
+    # 1) XXX-NNNNNN  (e.g. ZMC-80005).  Prefix MUST be ALL-CAPS (case-sensitive)
+    #    so that ordinary title-case words like "Here"/"Title" don't match.
+    for _m in re.finditer(r'\b([A-Z]{2,4})[-\s](\d{3,6})\b', text):
+        _c = f"{_m.group(1).upper()}-{_m.group(2)}"
+        if _c not in cats_found:
+            cats_found.append(_c)
     # 2) spine "0 NNNNN - NNNNN - N"  (Discogs catalogue w/ prefix digits; the
     #    trailing N is the format suffix: -1 CD, -2 CD, -4 Cassette).
-    if not cat:
-        m = re.search(r'(?i)(?:\b0\b\s*)?(\d{4,6})\s*[-–]\s*(\d{4,6})(?:\s*[-–]\s*(\d))?', text)
-        if m and m.group(1) != m.group(2):
-            cat = f"{m.group(1).strip()}-{m.group(2).strip()}"
-            if m.group(3):
-                cat += f"-{m.group(3)}"
-    if cat:
-        # normalise internal spaces in the numeric part
-        cat = re.sub(r'\s+', '', cat)
+    _m2 = re.search(r'(?i)(?:\b0\b\s*)?(\d{4,6})\s*[-–]\s*(\d{4,6})(?:\s*[-–]\s*(\d))?', text)
+    if _m2 and _m2.group(1) != _m2.group(2):
+        _c = f"{_m2.group(1).strip()}-{_m2.group(2).strip()}"
+        if _m2.group(3):
+            _c += f"-{_m2.group(3)}"
+        if _c not in cats_found:
+            cats_found.append(_c)
+    # 3) bare number-number patterns WITHOUT leading letters (e.g. "314-526", "542-4").
+    #    Only match when both sides are purely numeric so we don't consume date ranges.
+    for _m in re.finditer(r'(?i)\b(\d{2,6})[-.](\d{1,6})\b', text):
+        _c = f"{_m.group(1)}-{_m.group(2)}"
+        if _c not in cats_found:
+            cats_found.append(_c)
+    # 4) C-prefix IDs like C108068 (single uppercase letter + 4+ digits, NO separator).
+    for _m in re.finditer(r'(?i)\b([A-Z])(\d{4,})\b', text):
+        _c = f"{_m.group(1).upper()}{_m.group(2)}"
+        if _c not in cats_found:
+            cats_found.append(_c)
+    if cats_found:
+        # Normalise internal spaces in the numeric part.
+        cats_found = [re.sub(r'\s+', '', _c) for _c in cats_found]
+        # Prefer the longest/most-specific catalog number as primary spine cat.
+        cat = max(cats_found, key=lambda c: (len(c), c))
         out["cat_no_spine"] = cat
+        out["cat_no_all"] = cats_found
 
     # --- Barcode (UPC/EAN) --------------------------------------------------
     # Anchor to the UPC-A shape: 1 digit, space, 5 digits, space, 5 digits,
@@ -273,15 +315,24 @@ def parse_raw_text(raw_text):
     # --- Tracklist ---
     tracks_raw = []
     for ln in lines:
-        tm = re.match(r'^\s*(\d+)\.\s*(.*)$', ln)
+        # Accept "Track 1. Title" or "1. Title" or "1  Title" (OCR variants)
+        # Strip a leading "Track" / "Side" label if present.
+        _tl = re.sub(r'(?i)^\s*track\s+', '', ln)
+        _tl = re.sub(r'(?i)^\s*side\s+\d+\s+', '', _tl)
+        # Match: "  1. Title"  or  "12. Title"
+        tm = re.match(r'^\s*(\d+)\.\s*(.+)$', _tl)
         if not tm:
-            continue
+            # Also accept "1  Title" (tab/space separated, no dot) for some OCR
+            tm = re.match(r'^\s*(\d{1,2})\s{2,}(.+)$', _tl)
+            if not tm:
+                continue
         num = tm.group(1)
         rest = tm.group(2).strip()
-        dm = re.search(r'(?<![\d:])(:?\d{0,2})?:\d{2}\s*$', rest)
+        # Duration at end: "Title 3:45" or "Title 03:45" or "Title :45"
+        dm = re.search(r'(?<![\d:])(:?\d{1,2}:\d{2})\s*$', rest)
         dur = ""
         if dm:
-            dur = dm.group(0)
+            dur = dm.group(1)
             if dur.startswith(":"):
                 dur = "0" + dur
             rest = rest[:dm.start()].strip()
@@ -289,7 +340,7 @@ def parse_raw_text(raw_text):
         # strip known non-artist parenthetical suffixes so they don't look like ANVs
         title = re.sub(r'\s*\((Reprise|Remastered|Live|Mono|Stereo|Bonus|Remix|Edit|Reissue)\)\s*$',
                        '', title, flags=re.IGNORECASE).strip()
-        if title:
+        if title and int(num) <= 99:
             tracks_raw.append({"num": num, "title": title, "duration": dur})
     if tracks_raw:
         out["tracklist_raw"] = tracks_raw
@@ -456,8 +507,52 @@ def genre_style_lookup(artist, title):
     return (genre, style)
 
 
+# Cassette spine heuristic: landscape-shaped spine images (e.g. 2160×838,
+# ~2.5:1 aspect) are almost always the authoritative source for artist/title/
+# label/catalog. When multiple images are uploaded and one matches the spine
+# aspect ratio, its OCR text should win over other images' reads.
+_SPINE_ASPECT = re.compile(r'^(\d+)\s*[xX×]\s*(\d+)')
+
+
+def _is_spine_image(pixels):
+    """Return True if pixel dimensions match a cassette spine shape
+    (landscape, aspect ratio between 2.0 and 3.5)."""
+    m = _SPINE_ASPECT.search(str(pixels))
+    if not m:
+        return False
+    w, h = int(m.group(1)), int(m.group(2))
+    if h == 0:
+        return False
+    aspect = w / h
+    return 2.0 <= aspect <= 3.5
+
+
 def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     if extracted_data is None: extracted_data = {}
+    image_sq = ', '.join(
+        str(m.get("pixels")) for m in (uploaded_media_photos or []) if m)
+    _raw_text = extracted_data.get("raw_text") or ""
+    if _raw_text and image_sq:
+        _spine_hit = False
+        _spine_ocr = ""
+        for m in (uploaded_media_photos or []):
+            px = m.get("pixels") or m.get("size") or ""
+            if _is_spine_image(px):
+                _spine_hit = True
+                _spine_ocr = m.get("raw_text") or ""
+                if _spine_ocr:
+                    _spine_ocr = _spine_ocr.strip()
+                break
+        if _spine_hit and _spine_ocr:
+            spine_parsed = parse_raw_text(_spine_ocr)
+            _spine_keys = ("artist", "title", "label_literal", "cat_no_spine",
+                           "cat_no_all", "barcode", "country_raw", "year_latest",
+                           "c_copyright_latest", "p_copyright_latest",
+                           "tracklist_raw")
+            for _k, _v in spine_parsed.items():
+                if _k in _spine_keys and _v not in (None, "", [], {}):
+                    extracted_data[_k] = _v
+            extracted_data["raw_text"] = _spine_ocr
     # Phase 2: if raw OCR text was captured, parse it into the structured
     # keys the macro expects. Our parse_raw_text does the heavy lifting and is
     # authoritative for the *spine-derived* metadata fields (artist, title,
@@ -466,8 +561,9 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     # real spine), so we let our parse win on these keys. We keep the AI's
     # tracks/credits/tracklist_raw/raw_text as-is.
     _SPINE_KEYS = ("artist", "title", "label_literal", "cat_no_spine",
-                   "barcode", "country_raw", "year_latest",
-                   "c_copyright_latest", "p_copyright_latest", "matrix",
+                   "cat_no_all", "barcode", "country_raw", "year_latest",
+                   "c_copyright_latest", "p_copyright_latest",
+                   "tracklist_raw", "matrix",
                    "mastering_sid", "mould_sid")
     if extracted_data.get("raw_text"):
         parsed = parse_raw_text(extracted_data["raw_text"])
@@ -576,15 +672,23 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
         if not spine_raw or str(spine_raw).strip() in ["", "None"]:
             return {"artist": None, "title": None, "cat": None}
         data = {"artist": None, "title": None, "cat": None}
-        cat_match = re.search(r'\b([A-Z]{1,4}\s?\d{3,10}|(?:\d{1,2}\s?){5,10})\b', str(spine_raw))
+        cat_match = re.search(r'\b([A-Z]{1,4}\s?\d{3,10}|(?:\\d{1,2}\s?){5,10})\b', str(spine_raw))
         if cat_match:
             data["cat"] = cat_match.group().strip()
             spine_raw = str(spine_raw).replace(data["cat"], "").strip()
         for delim in [" - ", " : ", " / "]:
             if delim in spine_raw:
                 parts = spine_raw.split(delim, 1)
-                data["artist"] = parts[0].strip()
-                data["title"] = parts[1].strip()
+                candidate_artist = parts[0].strip()
+                candidate_title = parts[1].strip()
+                # Don't let a label/company name masquerade as the artist.
+                # If the left side matches a known label token, it's the label,
+                # not the artist — fall through so the title-only path can apply.
+                if _LABEL_TOK.search(candidate_artist):
+                    data["title"] = candidate_title
+                    break
+                data["artist"] = candidate_artist
+                data["title"] = candidate_title
                 break
         if not data["artist"] and spine_raw:
             data["title"] = spine_raw.strip()
@@ -731,7 +835,14 @@ def discogs_add_macro(uploaded_media_photos=None, extracted_data=None):
     cat_rows = []
     primary_cat = spine_cat
     if primary_cat:
-        cat_rows.append(("Catalog Number", primary_cat))   
+        cat_rows.append(("Catalog Number", primary_cat))
+    # Also add ALL catalog numbers found in the cat_no_all list (not just primary)
+    cat_all = extracted_data.get("cat_no_all")
+    if isinstance(cat_all, list):
+        for _c in cat_all:
+            _c_clean = format_cat_no(_c)
+            if _c_clean and _c_clean != primary_cat and _c_clean not in [r[1] for r in cat_rows]:
+                cat_rows.append(("Catalog Number", _c_clean))
     if shell_cat and shell_cat != primary_cat:
         cat_rows.append(("Catalog Number", f"{shell_cat} (Shell)"))
     if inlay_cat:
