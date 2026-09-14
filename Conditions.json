@@ -252,6 +252,11 @@
             "favorite": true
         },
         {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork",
+            "favorite": true
+        },
+        {
             "title": "Shelf Wear",
             "text": "shelf-wear/scuffing",
             "favorite": true
@@ -288,10 +293,6 @@
         {
             "title": "Cut Mark (Jewel Case)",
             "text": "cut-mark to Jewel Case"
-        },
-        {
-            "title": "Discoloration (Art)",
-            "text": "discoloration to Artwork"
         },
         {
             "title": "Drill Hole (Art)",
