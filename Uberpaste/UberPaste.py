@@ -4,14 +4,20 @@ import ctypes
 import uuid
 import json
 import os
+import hashlib
+import base64
 from ctypes import wintypes
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout,
     QListWidget, QListWidgetItem, QLabel, QDialog, QMessageBox,
-    QHBoxLayout, QPushButton, QBoxLayout, QMenu, QFrame, QInputDialog, QAbstractItemView
+    QHBoxLayout, QPushButton, QBoxLayout, QMenu, QFrame, QInputDialog, QAbstractItemView,
+    QLineEdit
 )
 from PySide6.QtCore import Qt, QTimer, Slot, Signal, QCoreApplication, QPoint, QEvent
 from PySide6.QtGui import QGuiApplication, QAction, QWheelEvent, QIcon, QActionGroup
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 import pyautogui
 import pyperclip
 
@@ -119,32 +125,34 @@ class ClipboardItemWidget(QWidget):
         self.dock_font_size = font_size
 
         """Adjusts appearance based on docked state."""
-        text = self.item_data.get('text', '')
+        main_window = self.window()
+        display_text = main_window.item_display_text(self.item_data)
         if docked:
             self.layout().setContentsMargins(5, 0, 5, 0)
             self.layout().setSpacing(5)
             if self.item_type == 'folder':
-                self.label.setText(self.item_data.get('name', 'Folder'))
-            else:
-                # Show first few words (e.g., 10)
-                words = text.split()
-                display_text = " ".join(words[:10])
-                if len(words) > 10:
-                    display_text += "..."
                 self.label.setText(display_text)
+            else:
+                # Show first masked chunk up to 10 chars to avoid overflow
+                self.label.setText(display_text[:10] + ("..." if len(display_text) > 10 else ""))
             self.setMaximumWidth(350)
             self.setFixedHeight(40)
         else:
             self.layout().setContentsMargins(5, 5, 5, 5)
             self.layout().setSpacing(6)
             if self.item_type == 'folder':
-                self.label.setText(self.item_data.get('name', 'Folder'))
+                self.label.setText(display_text)
             else:
-                display_text = (text[:75] + '...') if len(text) > 75 else text
-                self.label.setText(display_text.replace('\n', ' ').replace('\r', ''))
+                truncated = (display_text[:75] + '...') if len(display_text) > 75 else display_text
+                self.label.setText(truncated.replace('\n', ' ').replace('\r', ''))
             self.setMaximumWidth(16777215)
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
+        # Mask the tooltip while locked
+        if self.item_data.get('hidden') and not main_window.password_unlocked():
+            self.setToolTip("Hidden")
+        else:
+            self.setToolTip(display_text)
         self.update_style()
 
     def update_style(self):
@@ -166,25 +174,31 @@ class ClipboardItemWidget(QWidget):
 
         if self.is_docked:
             bg_color = "#3c3c3c" if self.dock_index % 2 == 0 else "#4a4a4a"
-            text_color = "#00FFFF" if is_kept else "#e0e0e0"
+            text_color = "#00FFFF" if is_kept else "#ffffff"
+            hover_bg = "#666666"
+            hover_text_color = "#ffffff"
             self.setStyleSheet(f"""
                 ClipboardItemWidget {{ 
                     border: none; margin: 0px; padding: 0px; background-color: {bg_color}; 
                     {border_left_style}
                 }}
-                ClipboardItemWidget:hover {{ background-color: #FFFF00; }}
+                ClipboardItemWidget:hover {{ background-color: {hover_bg}; }}
                 QLabel {{ border: none; margin: 0px; padding: 0px; font-size: {self.dock_font_size}px; color: {text_color}; background: transparent; font-weight: {'bold' if is_kept else 'normal'}; }}
-                ClipboardItemWidget:hover QLabel {{ color: #000000; }}
+                ClipboardItemWidget:hover QLabel {{ color: {hover_text_color}; }}
             """)
         else:
             if is_dark:
                 bg_color = "#1e1e1e"
-                text_color = "#00FFFF" if is_kept else "#e0e0e0"
+                text_color = "#00FFFF" if is_kept else "#ffffff"
                 border_style = "1px solid #444444"
+                hover_bg = "#444444"
+                hover_text_color = "#ffffff"
             else:
                 bg_color = "#ffffff"
                 text_color = "#0000FF" if is_kept else "#333333"
                 border_style = "1px solid #cccccc"
+                hover_bg = "#FFFF00"
+                hover_text_color = "#000000"
 
             self.setStyleSheet(f"""
                 ClipboardItemWidget {{ 
@@ -192,9 +206,9 @@ class ClipboardItemWidget(QWidget):
                     border-bottom: {border_style};
                     {border_left_style}
                 }}
-                ClipboardItemWidget:hover {{ background-color: #FFFF00; }}
+                ClipboardItemWidget:hover {{ background-color: {hover_bg}; }}
                 QLabel {{ font-size: {self.dock_font_size}px; color: {text_color}; background: transparent; font-weight: {'bold' if is_kept else 'normal'}; }}
-                ClipboardItemWidget:hover QLabel {{ color: #000000; }}
+                ClipboardItemWidget:hover QLabel {{ color: {hover_text_color}; }}
             """)
 
     def update_folder_style(self):
@@ -210,29 +224,33 @@ class ClipboardItemWidget(QWidget):
 
         if self.is_docked:
             bg_color = "#555555"
-            text_color = "#FAD5A5" # Light orange for folders
+            text_color = "#ffffff" if is_dark else "#FAD5A5"
+            hover_bg = "#777777" if is_dark else "#FFFF00"
+            hover_text_color = "#ffffff" if is_dark else "#000000"
             self.setStyleSheet(f"""
                 ClipboardItemWidget {{ 
                     border: none; margin: 0px; padding: 0px; background-color: {bg_color}; 
                     {border_left_style}
                 }}
-                ClipboardItemWidget:hover {{ background-color: #FFFF00; }}
+                ClipboardItemWidget:hover {{ background-color: {hover_bg}; }}
                 QLabel {{ border: none; margin: 0px; padding: 0px; font-size: {self.dock_font_size}px; color: {text_color}; background: transparent; font-weight: bold; }}
-                ClipboardItemWidget:hover QLabel {{ color: #000000; }}
+                ClipboardItemWidget:hover QLabel {{ color: {hover_text_color}; }}
             """)
         else:
             bg_color = "#444444" if is_dark else "#e0e0e0"
-            text_color = "#FAD5A5" if is_dark else "#a16600"
+            text_color = "#ffffff" if is_dark else "#a16600"
             border_style = "1px solid #555" if is_dark else "1px solid #b0b0b0"
+            hover_bg = "#666666" if is_dark else "#FFFF00"
+            hover_text_color = "#ffffff" if is_dark else "#000000"
             self.setStyleSheet(f"""
                 ClipboardItemWidget {{ 
                     background-color: {bg_color}; 
                     border-bottom: {border_style}; 
                     {border_left_style}
                 }}
-                ClipboardItemWidget:hover {{ background-color: #FFFF00; }}
+                ClipboardItemWidget:hover {{ background-color: {hover_bg}; }}
                 QLabel {{ font-size: {self.dock_font_size}px; color: {text_color}; background: transparent; font-weight: bold; }}
-                ClipboardItemWidget:hover QLabel {{ color: #000000; }}
+                ClipboardItemWidget:hover QLabel {{ color: {hover_text_color}; }}
             """)
 
     def contextMenuEvent(self, event):
@@ -240,6 +258,26 @@ class ClipboardItemWidget(QWidget):
         menu = QMenu(self)
         main_window = self.window()
 
+        add_clip_action = QAction("Add Clip", self)
+        add_clip_action.triggered.connect(main_window.prompt_add_clip)
+        menu.addAction(add_clip_action)
+
+        add_folder_action = QAction("Add Folder", self)
+        add_folder_action.triggered.connect(main_window.prompt_add_folder)
+        menu.addAction(add_folder_action)
+        
+        menu.addSeparator()
+
+        if self.item_data.get('hidden'):
+            hide_action = QAction("Unhide", self)
+            hide_action.triggered.connect(lambda: main_window.unhide_item(self.item_data))
+        else:
+            hide_action = QAction("Hide", self)
+            hide_action.triggered.connect(lambda: main_window.hide_item(self.item_data))
+        menu.addAction(hide_action)
+        
+        menu.addSeparator()
+        
         if self.item_type == 'item':
             keep_action = QAction("Keep", self)
             keep_action.setCheckable(True)
@@ -495,6 +533,12 @@ class ClipTrayApp(QWidget):
         self.history_file = os.path.join(self.base_path, "clipboard_history.json")
         self.settings_file = os.path.join(self.base_path, "settings.json")
 
+        # Hidden item password protection state
+        self._password = None
+        self._password_salt = None
+        self._password_verifier = None
+        self._session_unlocked = False
+
         self.load_settings()
         self.init_ui()
         self.load_history()
@@ -567,8 +611,8 @@ class ClipTrayApp(QWidget):
             self.setStyleSheet("QWidget { background-color: #121212; color: #ffffff; }")
             self.list_widget.setStyleSheet("""
                 QListWidget { background-color: #1e1e1e; border: none; } 
-                QListWidget::item { border-bottom: 1px solid #444; }
-                QListWidget::item:selected { background-color: #00FFFF; }
+                QListWidget::item { border-bottom: 1px solid #444; color: #ffffff; }
+                QListWidget::item:selected { background-color: #00FFFF; color: #000000; }
                 QListWidget::item:selected * { background-color: #00FFFF; color: #000000; }
             """)
         else:
@@ -655,6 +699,10 @@ class ClipTrayApp(QWidget):
                     self.top_pins = settings.get('top_pins', False)
                     self.dark_mode = settings.get('dark_mode', False)
                     self.sort_mode = settings.get('sort_mode', False)
+                    password_salt_b64 = settings.get('password_salt')
+                    if password_salt_b64:
+                        self._password_salt = base64.b64decode(password_salt_b64)
+                        self._password_verifier = settings.get('password_verifier')
                     # Load window geometry if it exists
                     geometry = settings.get('window_geometry')
                     if geometry and not self.appbar_registered:
@@ -682,6 +730,10 @@ class ClipTrayApp(QWidget):
                 'x': g.x(), 'y': g.y(),
                 'width': g.width(), 'height': g.height()
             }
+        if self._password_salt:
+            settings['password_salt'] = base64.b64encode(self._password_salt).decode('utf-8')
+        if self._password_verifier:
+            settings['password_verifier'] = self._password_verifier
         try:
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=4)
@@ -763,6 +815,17 @@ class ClipTrayApp(QWidget):
         clear_all_action = QAction("Clear All", self)
         clear_all_action.triggered.connect(self.clear_all)
         menu.addAction(clear_all_action)
+
+        menu.addSeparator()
+
+        passwords_action = QAction("Passwords", self)
+        passwords_action.triggered.connect(self.show_password_dialog)
+        menu.addAction(passwords_action)
+
+        if self._password_verifier:
+            lock_action = QAction("Lock Hidden Items", self)
+            lock_action.triggered.connect(self.lock_session)
+            menu.addAction(lock_action)
             
         # Show menu below the button
         menu.exec(self.options_btn.mapToGlobal(QPoint(0, self.options_btn.height())))
@@ -771,8 +834,15 @@ class ClipTrayApp(QWidget):
     def save_history(self):
         """Saves clipboard history to a JSON file."""
         try:
+            data_to_save = json.loads(json.dumps(self.clipboard_history))
+            for item in data_to_save:
+                if item.get('hidden'):
+                    if 'text' in item:
+                        item.pop('text')
+                    if 'name' in item:
+                        item.pop('name')
             with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(self.clipboard_history, f, indent=4)
+                json.dump(data_to_save, f, indent=4)
         except OSError as e:
             print(f"Failed to save history: {e}")
 
@@ -847,6 +917,182 @@ class ClipTrayApp(QWidget):
             self.save_history()
             self.update_list_widget()
 
+    def derive_password_key(self, password: str, salt: bytes) -> bytes:
+        """Derive a Fernet-compatible key from a password and salt."""
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=600000,
+        )
+        return base64.urlsafe_b64encode(kdf.derive(password.encode('utf-8')))
+
+    def _get_fernet(self) -> Fernet | None:
+        if not self._password or not self._password_salt:
+            return None
+        return Fernet(self.derive_password_key(self._password, self._password_salt))
+
+    def has_password(self) -> bool:
+        """Return True if a protection password has been configured."""
+        return bool(self._password_verifier and self._password_salt)
+
+    def set_password(self, password: str):
+        """Set or change the protection password."""
+        salt = os.urandom(16)
+        key = self.derive_password_key(password, salt)
+        verifier = Fernet(key).encrypt(b"uberpaste-password-verifier")
+        self._password_salt = salt
+        self._password_verifier = verifier.decode('utf-8')
+        self._password = password
+        self._session_unlocked = True
+        self.save_settings()
+
+    def check_password(self, password: str) -> bool:
+        """Validate the protection password and unlock the session if correct."""
+        if not self._password_salt or not self._password_verifier:
+            return False
+        try:
+            key = self.derive_password_key(password, self._password_salt)
+            f = Fernet(key)
+            f.decrypt(self._password_verifier.encode('utf-8'))
+            self._password = password
+            self._session_unlocked = True
+            return True
+        except Exception:
+            return False
+
+    def password_unlocked(self) -> bool:
+        """Return True if the protection password has been entered this session."""
+        return self._session_unlocked
+
+    def prompt_for_password(self):
+        """Prompt the user for the protection password."""
+        password, ok = QInputDialog.getText(
+            self, "Unlock Hidden Items", "Enter your password:", QLineEdit.Password
+        )
+        if ok and password:
+            if self.check_password(password):
+                self.update_list_widget()
+            else:
+                QMessageBox.warning(self, "Incorrect Password", "The password you entered is incorrect.")
+
+    def lock_session(self):
+        """Lock hidden items so they require the password again."""
+        # Re-encrypt any plaintext that is currently visible before clearing password
+        for item in self.clipboard_history:
+            if item.get('hidden'):
+                if item.get('type') == 'folder':
+                    if 'name' in item and 'encrypted_name' not in item:
+                        item['encrypted_name'] = self.encrypt_value(item['name'])
+                        item.pop('name', None)
+                else:
+                    if 'text' in item and 'encrypted_text' not in item:
+                        item['encrypted_text'] = self.encrypt_value(item['text'])
+                        item.pop('text', None)
+        self._session_unlocked = False
+        self._password = None
+        self.save_history()
+        self.update_list_widget()
+
+    def encrypt_value(self, value: str) -> str:
+        """Encrypt a string with the current derived key."""
+        f = self._get_fernet()
+        if f is None:
+            raise RuntimeError("No password has been configured")
+        return f.encrypt(value.encode('utf-8')).decode('utf-8')
+
+    def decrypt_value(self, value: str) -> str:
+        """Decrypt a string with the current derived key."""
+        f = self._get_fernet()
+        if f is None:
+            raise RuntimeError("No password has been configured")
+        return f.decrypt(value.encode('utf-8')).decode('utf-8')
+
+    def show_password_dialog(self):
+        """Open a dialog to set or change the protection password."""
+        password, ok = QInputDialog.getText(
+            self, "Set Password", "Enter a password to protect hidden items:", QLineEdit.Password
+        )
+        if not ok:
+            return
+        if not password:
+            QMessageBox.warning(self, "Invalid Password", "Password cannot be empty.")
+            return
+        confirm, ok = QInputDialog.getText(
+            self, "Confirm Password", "Confirm password:", QLineEdit.Password
+        )
+        if not ok:
+            return
+        if password != confirm:
+            QMessageBox.warning(self, "Password Mismatch", "Passwords do not match.")
+            return
+
+        self.set_password(password)
+        QMessageBox.information(self, "Password Set", "Protection password has been set.")
+
+    def hide_item(self, item_data: dict):
+        """Hide a single item or folder (including children)."""
+        if not self.has_password():
+            QMessageBox.information(
+                self, "Password Required",
+                "Set a protection password under Options > Passwords before hiding items."
+            )
+            return
+
+        if not self._session_unlocked:
+            self.prompt_for_password()
+            if not self._session_unlocked:
+                return
+
+        if item_data.get('type') == 'folder':
+            if 'name' in item_data and 'encrypted_name' not in item_data:
+                item_data['hidden_len'] = len(item_data['name'])
+                item_data['encrypted_name'] = self.encrypt_value(item_data['name'])
+                item_data.pop('name', None)
+            item_data['hidden'] = True
+            for child in self.clipboard_history:
+                if child.get('parent_id') == item_data['id']:
+                    self.hide_item(child)
+        else:
+            if 'text' in item_data and 'encrypted_text' not in item_data:
+                item_data['hidden_len'] = len(item_data['text'])
+                item_data['encrypted_text'] = self.encrypt_value(item_data['text'])
+                item_data.pop('text', None)
+            item_data['hidden'] = True
+
+        self.save_history()
+        self.update_list_widget()
+
+    def unhide_item(self, item_data: dict):
+        """Unhide a single item or folder (including children)."""
+        if not self.has_password():
+            return
+
+        # Require the password to unhide - always prompt if the session is locked.
+        if not self._session_unlocked:
+            self.prompt_for_password()
+        if not self._session_unlocked:
+            return
+
+        if item_data.get('type') == 'folder':
+            if 'encrypted_name' in item_data:
+                item_data['name'] = self.decrypt_value(item_data['encrypted_name'])
+                item_data.pop('encrypted_name', None)
+            item_data.pop('hidden', None)
+            item_data.pop('hidden_len', None)
+            for child in self.clipboard_history:
+                if child.get('parent_id') == item_data['id']:
+                    self.unhide_item(child)
+        else:
+            if 'encrypted_text' in item_data:
+                item_data['text'] = self.decrypt_value(item_data['encrypted_text'])
+                item_data.pop('encrypted_text', None)
+            item_data.pop('hidden', None)
+            item_data.pop('hidden_len', None)
+
+        self.save_history()
+        self.update_list_widget()
+
     def add_clipboard_item(self, text):
         """Adds a new item to the clipboard history and updates the UI."""
         # Avoid adding duplicates if the same item is already at the top
@@ -876,6 +1122,14 @@ class ClipTrayApp(QWidget):
 
         self.save_history()
         self.update_list_widget()
+
+    def item_display_text(self, item_data: dict) -> str:
+        """Return plaintext for display, accounting for hidden/locked state."""
+        if item_data.get('hidden') and not self._session_unlocked:
+            return '*******'
+        if item_data.get('type') == 'folder':
+            return item_data.get('name', 'Folder')
+        return item_data.get('text', '')
 
     def update_list_widget(self):
         """Clears and repopulates the list widget from the history data."""
@@ -954,6 +1208,10 @@ class ClipTrayApp(QWidget):
         widget = self.list_widget.itemWidget(list_item)
         if not widget: return
         item_data = widget.item_data
+
+        if item_data.get('hidden') and not self._session_unlocked:
+            self.prompt_for_password()
+            return
 
         if item_data.get('type') == 'folder':
             self.on_folder_toggled(item_data)
@@ -1113,6 +1371,8 @@ class ClipTrayApp(QWidget):
     def closeEvent(self, event):
         """Ensure we unregister the appbar when closing."""
         self.save_settings()
+        # Lock down any plaintext for hidden items before exit
+        self.lock_session()
         self.clipboard_timer.stop()
         if self.appbar_registered:
             self.unregister_appbar()
@@ -1138,6 +1398,14 @@ class ClipTrayApp(QWidget):
             dock_action.triggered.connect(self.dock_window)
         menu.addAction(dock_action)
         
+        add_clip_action = QAction("Add Clip", self)
+        add_clip_action.triggered.connect(self.prompt_add_clip)
+        menu.addAction(add_clip_action)
+
+        add_folder_action = QAction("Add Folder", self)
+        add_folder_action.triggered.connect(self.prompt_add_folder)
+        menu.addAction(add_folder_action)
+        
         clear_action = QAction("Clear All", self)
         clear_action.triggered.connect(self.clear_all)
         menu.addAction(clear_action)
@@ -1151,6 +1419,34 @@ class ClipTrayApp(QWidget):
         menu.addAction(close_action)
         
         menu.exec(self.list_widget.mapToGlobal(pos))
+
+    def prompt_add_clip(self):
+        """Prompts the user for text and adds it as a new clip."""
+        text, ok = QInputDialog.getMultiLineText(self, "Add Clip", "Enter clip text:")
+        if ok and text:
+            self.add_clipboard_item(text)
+
+    def prompt_add_folder(self):
+        """Prompts the user for a folder name and adds a new folder."""
+        text, ok = QInputDialog.getText(self, "Add Folder", "Enter folder name:")
+        if not ok or not text:
+            return
+
+        if any(f.get('name', '').lower() == text.lower() for f in self.clipboard_history if f.get('type') == 'folder'):
+            QMessageBox.warning(self, "Duplicate Name", "A folder with that name already exists.")
+            return
+
+        new_folder = {
+            'id': str(uuid.uuid4()),
+            'type': 'folder',
+            'name': text,
+            'collapsed': True
+        }
+        self.clipboard_history.insert(0, new_folder)
+        if self.top_pins:
+            self.sort_history()
+        self.save_history()
+        self.update_list_widget()
 
     def dock_window(self):
         """Docks the window to the top of the screen and reserves space."""
@@ -1264,21 +1560,6 @@ class ClipTrayApp(QWidget):
         ctypes.windll.shell32.SHAppBarMessage(ABM_REMOVE, ctypes.byref(abd))
         self.appbar_registered = False
 
-def main():
-    # This attribute can help prevent "SetProcessDpiAwarenessContext() failed: Access is denied"
-    # errors when the application is launched from another process (like the main WYSIWYG tool)
-    # that has already set the DPI awareness for the process tree. We are telling Qt not to
-    # try and manage DPI scaling itself in this case.
-    # QCoreApplication.setAttribute(Qt.AA_DisableHighDpiScaling) # Deprecated in Qt6
-    
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-    main_window = ClipTrayApp()
-    main_window.show()
-    sys.exit(app.exec())
-
-if __name__ == "__main__":
-    main()
 def main():
     # This attribute can help prevent "SetProcessDpiAwarenessContext() failed: Access is denied"
     # errors when the application is launched from another process (like the main WYSIWYG tool)
