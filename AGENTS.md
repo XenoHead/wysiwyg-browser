@@ -168,6 +168,8 @@ content="Description of the issue"
 
 # Project Instructions
 
+**DO NOT TEST CHANGES YOURSELF.** The user tests every change themselves and reports problems back. Do not spin up servers, drive browsers, run test harnesses, or otherwise verify UI/behavior after making an edit — make the change, log it, and hand it over. (Syntax checks such as `node --check` are still fine and cheap.)
+
 Describe how this repository prefers to work with AI assistants.
 
 

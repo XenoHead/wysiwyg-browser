@@ -240,6 +240,18 @@ select[multiple] { min-height: 60px; }
 .modal-content-wide { max-width: 500px; width: 90%; text-align: left; }
 .modal-content-narrow { width: 400px; text-align: left; }
 .modal-actions { text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
+/* Tiny icon-only button beside a form label that opens a list-picker modal */
+.list-picker-open-btn {
+    padding: 1px 4px;
+    font-size: 10px;
+    height: 16px;
+    width: 22px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
 
 /* --- Hot Keys Modal --- */
 .hk-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 2px; border-bottom: 1px solid var(--border-color, #eee); }
@@ -280,6 +292,12 @@ select[multiple] { min-height: 60px; }
 .scratchpad-textarea { flex: 1; width:100%; font-family:monospace; font-size:12px; padding:8px; border:1px solid #ccc; box-sizing:border-box; resize: none; }
 .preview-column { display: flex; flex-direction: column; height: 100%; }
 .preview-box { flex: 1; width:100%; border:1px solid #6f42c1; border-radius:4px; padding:15px; overflow-y:auto; background:white; color:black; font-family: Arial, sans-serif; box-sizing: border-box; }
+.preview-box:focus { outline: 2px solid #6f42c1; outline-offset: -2px; }
+/* Live Preview formatting toolbar (B / U / I) */
+.live-preview-toolbar { display: flex; gap: 5px; }
+.live-preview-fmt-btn { min-width: 30px; height: 22px; padding: 0 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-color, #333); border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; }
+.live-preview-fmt-btn:hover { border-color: var(--accent-color, #0000FF); }
+.live-preview-fmt-btn.active { background: var(--accent-color, #0000FF); color: #fff; border-color: var(--accent-color, #0000FF); }
 .footer { text-align: center; margin-top: 20px; padding-top: 10px; color: var(--secondary-color); font-size: 11px; border-top: 1px solid var(--border-color); }
 .footer-link { color: inherit; text-decoration: none; }
 .footer-button { font-size: 10px; padding: 1px 6px; margin-left: 10px; cursor: pointer; border: 1px solid var(--border-color); background: transparent; color: var(--secondary-color); border-radius: 3px; }

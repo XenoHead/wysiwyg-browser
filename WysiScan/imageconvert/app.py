@@ -362,7 +362,7 @@ print(folder)
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description="Vivid Image Converter CLI / GUI Utility")
+    parser = argparse.ArgumentParser(description="Wysi Image Converter CLI / GUI Utility")
     parser.add_argument('--source', '-s', type=str, help="Source image folder path, or a single image path")
     parser.add_argument('--output', '-o', type=str, help="Output destination folder path (default: same as source)")
     parser.add_argument('--format', '-f', type=str, choices=['jpg', 'png', 'webp'], default='jpg', help="Output format (default: jpg)")
@@ -425,7 +425,7 @@ def main():
         
         # Create window
         active_window = webview.create_window(
-            'Vivid Image Converter',
+            'Wysi Image Converter',
             url=html_path,
             js_api=api,
             width=1150,

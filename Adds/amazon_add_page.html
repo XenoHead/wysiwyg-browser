@@ -168,7 +168,8 @@
         justify-content: flex-end;
         margin: 4px 0 2px;
     }
-    .kw-copyline {
+    .kw-copyline,
+    .kw-addnew {
         flex: 0 0 72px;
         width: 72px;
         padding: 7px 0;
@@ -181,7 +182,9 @@
         text-align: center;
         box-sizing: border-box;
     }
-    .kw-copyline:hover { background: var(--accent-soft); }
+    .kw-copyline:hover,
+    .kw-addnew:hover { background: var(--accent-soft); }
+    .kw-addnew { flex: 0 0 80px; width: 80px; }
     .kw-spacer {
         flex: 0 0 72px;
         width: 72px;
@@ -218,6 +221,11 @@
         cursor: pointer;
         max-width: 280px;
     }
+    body.dark #aapViewMode,
+    body.dark #aapSectionNav {
+        color: #000000;
+        background: #ffffff;
+    }
     #aapPinBtn {
         margin-left: auto;
         background: transparent;
@@ -252,14 +260,14 @@
     <div id="aapTopbar">
         <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
             View:
-            <select id="aapViewMode" onchange="onAapViewChange()">
+            <select id="aapViewMode">
                 <option value="Full" selected>Full</option>
                 <option value="Small">Small</option>
             </select>
         </label>
         <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
             Section:
-            <select id="aapSectionNav" onchange="onAapSectionNav(this.value)">
+            <select id="aapSectionNav">
                 <option value="">Jump to section…</option>
             </select>
         </label>
@@ -297,6 +305,32 @@
         statusEl.className = 'status' + (kind ? ' ' + kind : '');
     }
 
+    function buildKeywordLine(tok) {
+        const line = document.createElement('div');
+        line.className = 'kw-line';
+
+        const del = document.createElement('button');
+        del.className = 'kw-del';
+        del.type = 'button';
+        del.textContent = '✕';
+        del.title = 'Delete this keyword';
+
+        const ta = document.createElement('textarea');
+        ta.className = 'kw-val';
+        ta.value = tok;
+        ta.rows = 1;
+
+        const copy = document.createElement('button');
+        copy.className = 'copy-one';
+        copy.type = 'button';
+        copy.textContent = 'Copy';
+
+        line.appendChild(del);
+        line.appendChild(ta);
+        line.appendChild(copy);
+        return line;
+    }
+
     // Subject Keyword group: each comma-separated token is its own
     // deletable + editable row, with a "Copy Line" button that joins
     // the survivors into a single "item1, item2, ..." string.
@@ -314,29 +348,7 @@
         const list = document.createElement('div');
         list.className = 'kw-list';
         tokens.forEach((tok) => {
-            const line = document.createElement('div');
-            line.className = 'kw-line';
-
-            const del = document.createElement('button');
-            del.className = 'kw-del';
-            del.type = 'button';
-            del.textContent = '✕';
-            del.title = 'Delete this keyword';
-
-            const ta = document.createElement('textarea');
-            ta.className = 'kw-val';
-            ta.value = tok;
-            ta.rows = 1;
-
-            const copy = document.createElement('button');
-            copy.className = 'copy-one';
-            copy.type = 'button';
-            copy.textContent = 'Copy';
-
-            line.appendChild(del);
-            line.appendChild(ta);
-            line.appendChild(copy);
-            list.appendChild(line);
+            list.appendChild(buildKeywordLine(tok));
         });
         group.appendChild(list);
 
@@ -345,10 +357,16 @@
         const copyLine = document.createElement('button');
         copyLine.className = 'kw-copyline';
         copyLine.type = 'button';
-        copyLine.textContent = 'Copy Line';
+        copyLine.textContent = 'Copy All';
+        const addNew = document.createElement('button');
+        addNew.className = 'kw-addnew';
+        addNew.type = 'button';
+        addNew.textContent = 'Add New';
+        addNew.title = 'Add an empty keyword line';
         const spacer = document.createElement('div');
         spacer.className = 'kw-spacer';
         actions.appendChild(copyLine);
+        actions.appendChild(addNew);
         actions.appendChild(spacer);
         group.appendChild(actions);
 
@@ -518,12 +536,30 @@
             if (!ok) { /* clipboard blocked; nothing else we can do here */ }
             return;
         }
+        // Add New: append an empty keyword line to the bottom of the list.
+        const addNew = e.target.closest('.kw-addnew');
+        if (addNew) {
+            const group = addNew.closest('.kw-group');
+            const list = group ? group.querySelector('.kw-list') : null;
+            if (list) {
+                const line = buildKeywordLine('');
+                list.appendChild(line);
+                line.querySelector('.kw-val').focus();
+            }
+            return;
+        }
         // Per-row copy (Copy buttons everywhere, incl. keyword rows).
         const btn = e.target.closest('.copy-one');
         if (!btn) return;
         const ta = btn.previousElementSibling;        // the editable textarea
-        const v = ta ? ta.value : '';
+        let v = ta ? ta.value : '';
         if (!v) return;
+
+        if (ta.dataset.label === 'Genre/Style') {
+            v = v.replace(/\s*,\s*/g, ' ').trim();
+            if (!v) return;
+        }
+
         const ok = await copyText(v);
         if (!ok && ta) { ta.select(); document.execCommand('copy'); }
         flashCopied(btn);
@@ -606,6 +642,14 @@
 
     // Manual scrape button
     scrapeBtn.addEventListener('click', doScrape);
+
+    // View dropdown (Full/Small): re-render the last scrape, no re-scrape.
+    // Wired here (not via inline onchange) because these functions are scoped
+    // to this IIFE.
+    document.getElementById('aapViewMode').addEventListener('change', onAapViewChange);
+
+    // Section jump dropdown: scroll to the selected section.
+    document.getElementById('aapSectionNav').addEventListener('change', (e) => onAapSectionNav(e.target.value));
 
     // Auto-trigger when a URL is pasted manually into the box.
     urlInput.addEventListener('paste', (e) => {

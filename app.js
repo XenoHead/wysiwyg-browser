@@ -337,6 +337,16 @@ function setupEventListeners() {
     addClickListener('selectAllScratchpadBtn', () => document.getElementById('manualInputBox').select());
     addClickListener('pasteToScratchpadBtn', pasteToManualInput);
 
+    // Live Preview is editable; every change is mirrored into the HTML CODE box
+    document.getElementById('htmlPreview')?.addEventListener('input', syncLivePreviewToCode);
+    document.getElementById('mediaOptions')?.addEventListener('change', syncMediaOptionsToTextBox);
+    document.querySelectorAll('.live-preview-fmt-btn').forEach(btn => {
+        // Keep the preview's text selection when clicking a toolbar button
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', () => applyLivePreviewFormat(btn.dataset.cmd));
+    });
+    document.addEventListener('selectionchange', updateLivePreviewToolbarState);
+
     // --- Footer ---
     addClickListener('openRequestModalBtn', openRequestModal);
 
@@ -809,7 +819,7 @@ async function submitRequest() {
 // --- Counter buttons (config-driven, editable) ---
 const COUNTER_CONFIG_KEY = 'wysiwyg_counter_config';
 const COUNTER_CONFIG_VERSION = 2; // bump to discard a stale saved config
-const MAX_COUNTERS = 7; // 4 defaults + up to 3 more
+const MAX_COUNTERS = 6; // 4 defaults + up to 2 more
 const DEFAULT_COUNTERS = [
     { id: 'cnt_listed', label: 'LI', serverKey: 'Listed', color: '#28a745' },
     { id: 'cnt_amazon', label: 'AA', serverKey: 'Amazon Adds', color: '#007bff' },
@@ -908,12 +918,35 @@ function updateCounterUI(counts) {
     });
 }
 
+function commitCounterEditorInputs() {
+    document.querySelectorAll('.ctr-label').forEach(inp => {
+        const i = parseInt(inp.dataset.idx, 10);
+        if (counterConfig[i]) counterConfig[i].label = inp.value;
+    });
+    document.querySelectorAll('.ctr-color').forEach(inp => {
+        const i = parseInt(inp.dataset.idx, 10);
+        if (counterConfig[i]) counterConfig[i].color = inp.value;
+    });
+    document.querySelectorAll('.ctr-key').forEach(inp => {
+        const i = parseInt(inp.dataset.idx, 10);
+        const key = inp.value.trim();
+        // Keep the previous key when cleared, otherwise the button would
+        // increment nothing (the server tallies by this text).
+        if (counterConfig[i] && key) counterConfig[i].serverKey = key;
+    });
+}
+
+function refreshCounterEditor(focusFileText) {
+    commitCounterEditorInputs();
+    saveCounterConfig();
+    renderCounterButtons();
+    openCounterEditor(focusFileText);
+}
+
 function deleteCounter(idx) {
     if (counterConfig.length <= 1) return;
     counterConfig.splice(idx, 1);
-    saveCounterConfig();
-    renderCounterButtons();
-    openCounterEditor();
+    refreshCounterEditor();
 }
 
 function moveCounter(idx, dir) {
@@ -922,22 +955,25 @@ function moveCounter(idx, dir) {
     const tmp = counterConfig[idx];
     counterConfig[idx] = counterConfig[target];
     counterConfig[target] = tmp;
-    saveCounterConfig();
-    renderCounterButtons();
-    openCounterEditor();
+    refreshCounterEditor();
 }
 
-function openCounterEditor() {
+function openCounterEditor(focusFileText) {
     loadCounterConfig();
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const capStyle = 'font-size:10px; color:var(--secondary-color); font-weight:bold;';
     let body = '<div style="display:flex; flex-direction:column; gap:8px;">';
     counterConfig.forEach((c, i) => {
         const upDisabled = i === 0 ? 'disabled' : '';
         const downDisabled = i === counterConfig.length - 1 ? 'disabled' : '';
-        body += `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        body += `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; border:1px solid var(--border-color,#ccc); border-radius:6px; padding:6px;">
             <button type="button" class="ctr-move" data-idx="${i}" data-dir="-1" ${upDisabled} style="border:none; background:#6c757d; color:#fff; border-radius:4px; cursor:pointer; padding:4px 7px; font-size:11px;" onclick="moveCounter(${i}, -1)" ${upDisabled}>▲</button>
             <button type="button" class="ctr-move" data-idx="${i}" data-dir="1" ${downDisabled} style="border:none; background:#6c757d; color:#fff; border-radius:4px; cursor:pointer; padding:4px 7px; font-size:11px;" onclick="moveCounter(${i}, 1)" ${downDisabled}>▼</button>
-            <input type="color" value="${c.color}" data-idx="${i}" class="ctr-color" style="width:32px; height:28px; border:none; background:none; cursor:pointer;">
-            <input type="text" value="${c.label}" data-idx="${i}" class="ctr-label" placeholder="Label" style="width:50px; padding:4px; font-size:12px;">
+            <input type="color" value="${esc(c.color)}" data-idx="${i}" class="ctr-color" style="width:32px; height:28px; border:none; background:none; cursor:pointer;">
+            <span style="${capStyle}">LABEL</span>
+            <input type="text" value="${esc(c.label)}" data-idx="${i}" class="ctr-label" placeholder="Button text" style="width:60px; padding:4px; font-size:12px;">
+            <span style="${capStyle}">FILE TEXT</span>
+            <input type="text" value="${esc(c.serverKey)}" data-idx="${i}" class="ctr-key" placeholder="Text written to file" style="width:120px; padding:4px; font-size:12px;">
             ${counterConfig.length > 1 ? `<button type="button" class="ctr-del" data-idx="${i}" style="border:none; background:#dc3545; color:#fff; background:#dc3545; border-radius:4px; cursor:pointer; padding:4px 8px; font-size:11px;" onclick="deleteCounter(${i})">Delete</button>` : ''}
         </div>`;
     });
@@ -945,25 +981,25 @@ function openCounterEditor() {
     const canAdd = counterConfig.length < MAX_COUNTERS;
     showModal('Edit Counters', body, [
         ...(canAdd ? [{ text: '+ Add Counter', primary: false, onClick: () => {
-            counterConfig.push({ id: 'cnt_' + Date.now(), label: 'NEW', serverKey: 'New ' + (counterConfig.length + 1), color: '#6c757d', text: '' });
-            saveCounterConfig(); renderCounterButtons(); openCounterEditor();
+            commitCounterEditorInputs();
+            counterConfig.push({ id: 'cnt_' + Date.now(), label: 'NEW', serverKey: 'New ' + (counterConfig.length + 1), color: '#6c757d' });
+            refreshCounterEditor(true);
         } }] : []),
         { text: 'Cancel', primary: false, onClick: closeModal },
         { text: 'Save', primary: true, onClick: () => {
-            document.querySelectorAll('.ctr-label').forEach(inp => {
-                const i = parseInt(inp.dataset.idx, 10);
-                if (counterConfig[i]) counterConfig[i].label = inp.value;
-            });
-            document.querySelectorAll('.ctr-color').forEach(inp => {
-                const i = parseInt(inp.dataset.idx, 10);
-                if (counterConfig[i]) counterConfig[i].color = inp.value;
-            });
+            commitCounterEditorInputs();
             saveCounterConfig();
             renderCounterButtons();
             loadCounters();
             closeModal();
         } }
     ]);
+    if (focusFileText) {
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('.ctr-key');
+            if (inputs.length) inputs[inputs.length - 1].focus();
+        }, 0);
+    }
 }
 
 async function openListingsFolder() {
@@ -1213,6 +1249,11 @@ function showModal(title, bodyHtml, buttons) {
     });
 
     overlay.style.display = 'flex';
+}
+
+function closeModal() {
+    const overlay = document.getElementById('genericModal');
+    if (overlay) overlay.style.display = 'none';
 }
 
 window.customAlert = function (msg) {
@@ -2538,6 +2579,47 @@ function pasteToManualInput() {
     });
 }
 
+// --- Live Preview editing (contenteditable) ---
+
+function syncLivePreviewToCode() {
+    const preview = document.getElementById('htmlPreview');
+    const codeBox = document.getElementById('htmlOutputBox');
+    if (!preview || !codeBox) return;
+    codeBox.value = preview.innerHTML;
+}
+
+function updateLivePreviewToolbarState() {
+    const preview = document.getElementById('htmlPreview');
+    if (!preview) return;
+    const selection = document.getSelection();
+    const inPreview = selection && selection.anchorNode && preview.contains(selection.anchorNode);
+    document.querySelectorAll('.live-preview-fmt-btn').forEach(btn => {
+        let active = false;
+        if (inPreview) {
+            try {
+                active = document.queryCommandState(btn.dataset.cmd);
+            } catch (e) {
+                active = false;
+            }
+        }
+        btn.classList.toggle('active', !!active);
+    });
+}
+
+function applyLivePreviewFormat(command) {
+    const preview = document.getElementById('htmlPreview');
+    if (!preview) return;
+    preview.focus();
+    try {
+        document.execCommand('styleWithCSS', false, 'false');
+        document.execCommand(command, false, null);
+    } catch (e) {
+        console.error('Format command failed:', command, e);
+    }
+    syncLivePreviewToCode();
+    updateLivePreviewToolbarState();
+}
+
 function copyLivePreview() {
     const previewEl = document.getElementById('htmlPreview');
     if (!previewEl) return;
@@ -2581,7 +2663,7 @@ function updateCounterUIDeprecated() {}
 
 // --- Custom Options Logic ---
 
-let customOptionsData = { cassette: [], cd: [], lp: [] };
+let customOptionsData = { cassette: [], cd: [], lp: [], media: [] };
 let editingCustomOptionIndex = -1;
 let currentModalCategory = 'cassette';
 
@@ -2605,6 +2687,7 @@ async function loadCustomOptions() {
             if (!customOptionsData.cassette) customOptionsData.cassette = [];
             if (!customOptionsData.cd) customOptionsData.cd = [];
             if (!customOptionsData.lp) customOptionsData.lp = [];
+            if (!customOptionsData.media) customOptionsData.media = [];
             sortCustomOptionsData();
         }
     } catch (e) {
@@ -2640,7 +2723,8 @@ function renderCustomOptionsSelect() {
     const configs = [
         { id: 'customOptions', key: 'cassette' },
         { id: 'cdOptions', key: 'cd' },
-        { id: 'lpOptions', key: 'lp' }
+        { id: 'lpOptions', key: 'lp' },
+        { id: 'mediaOptions', key: 'media' }
     ];
 
     configs.forEach(config => {
@@ -2657,7 +2741,7 @@ function renderCustomOptionsSelect() {
 
         select.innerHTML = '';
 
-        customOptionsData[config.key].forEach((opt) => {
+        (customOptionsData[config.key] || []).forEach((opt) => {
             const option = document.createElement('option');
             const val = JSON.stringify(opt);
             option.value = val;
@@ -2723,7 +2807,8 @@ function renderCustomOptionsModalList() {
 const CONDITION_PICKER_CONFIGS = [
     { id: 'lpOptions', key: 'lp', label: 'LP CONDITION' },
     { id: 'cdOptions', key: 'cd', label: 'CD CONDITION' },
-    { id: 'customOptions', key: 'cassette', label: 'CASS. CONDITION' }
+    { id: 'customOptions', key: 'cassette', label: 'CASS. CONDITION' },
+    { id: 'mediaOptions', key: 'media', label: 'MEDIA DESCRIPTION' }
 ];
 
 function conditionOptionKey(opt) {
@@ -2758,7 +2843,25 @@ function toggleConditionOption(selectId, opt) {
     if (option) {
         option.selected = !option.selected;
         renderConditionPicker();
+        if (selectId === 'mediaOptions') syncMediaOptionsToTextBox();
     }
+}
+
+function syncMediaOptionsToTextBox() {
+    const select = document.getElementById('mediaOptions');
+    const box = document.getElementById('mediaDescriptionText');
+    if (!select || !box) return;
+
+    const parts = Array.from(select.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return (d.text || d.title || '').trim();
+        } catch (e) {
+            return o.text.trim();
+        }
+    }).filter(Boolean);
+
+    box.value = parts.join(' ');
 }
 
 function renderConditionPicker() {
@@ -2767,9 +2870,16 @@ function renderConditionPicker() {
 
     container.innerHTML = '';
 
+    const searchInput = document.getElementById('conditionPickerSearch');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+
     CONDITION_PICKER_CONFIGS.forEach(config => {
         const select = document.getElementById(config.id);
-        const items = customOptionsData[config.key] || [];
+        const allItems = customOptionsData[config.key] || [];
+        const items = allItems.filter(opt => {
+            if (!query) return true;
+            return ((opt.title || '') + ' ' + (opt.text || '')).toLowerCase().includes(query);
+        });
         const selectedKeys = getSelectedConditionKeys(config.id);
 
         const column = document.createElement('div');
@@ -2784,18 +2894,19 @@ function renderConditionPicker() {
         list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
 
         if (items.length === 0) {
-            list.innerHTML = '<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>';
+            const emptyMsg = allItems.length === 0 ? 'No options' : 'No matches';
+            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${emptyMsg}</div>`;
         }
 
         items.forEach(opt => {
             const isSelected = selectedKeys.includes(conditionOptionKey(opt));
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
-                (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold;' : '');
+                (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
             row.innerHTML =
                 `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
                 `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
-                `<span style="color: var(--text-muted, #666); font-weight: normal;">${opt.text || ''}</span></div>`;
+                `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
             row.onclick = () => toggleConditionOption(config.id, opt);
             list.appendChild(row);
         });
@@ -2806,13 +2917,83 @@ function renderConditionPicker() {
 }
 
 
-// Draggable by header (matches WysiScan ocr-modal behavior); the modal content
-// is resizable via CSS and its column lists flex to redraw on resize.
-(function initConditionPickerDrag() {
-    const content = document.getElementById('conditionPickerContent');
-    const header = document.getElementById('conditionPickerHeader');
-    if (!content || !header) return;
+// --- List Picker (small Open buttons beside form labels) ---
 
+const LIST_PICKER_CONFIGS = [
+    { selectId: 'packagingFeature', label: 'PACKAGING FEATURE', title: 'Select Packaging Feature' },
+    { selectId: 'edition', label: 'EDITION', title: 'Select Edition' },
+    { selectId: 'formatTags', label: 'FORMAT TAGS', title: 'Select Format Tags' },
+    { selectId: 'weightSpeed', label: 'WEIGHT/SPEED', title: 'Select Weight/Speed' },
+    { selectId: 'preFM', label: 'PRE FM', title: 'Select Pre FM' },
+    { selectId: 'postFM', label: 'POST FM', title: 'Select Post FM' },
+    { selectId: 'sleevePackaging', label: 'SLEEVE PACKAGING', title: 'Select Sleeve Packaging' }
+];
+
+let activeListPicker = null;
+
+function renderListPicker() {
+    const container = document.getElementById('listPickerColumns');
+    if (!container || !activeListPicker) return;
+    container.innerHTML = '';
+    document.getElementById('listPickerHeader').textContent = activeListPicker.title;
+
+    const select = document.getElementById(activeListPicker.selectId);
+    const options = select ? Array.from(select.options).filter(o => o.value) : [];
+    const selectedCount = options.filter(o => o.selected).length;
+
+    const column = document.createElement('div');
+    column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+
+    const header = document.createElement('div');
+    header.textContent = activeListPicker.label + (selectedCount ? ` (${selectedCount})` : '');
+    header.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+    column.appendChild(header);
+
+    const list = document.createElement('div');
+    list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+
+    if (options.length === 0) {
+        list.innerHTML = '<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>';
+    }
+
+    options.forEach(opt => {
+        const isSelected = opt.selected;
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+            (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+        row.innerHTML =
+            `<span style="flex-shrink: 0;">${isSelected ? '☑' : '☐'}</span>` +
+            `<div style="min-width: 0;"><strong>${opt.text || opt.value}</strong></div>`;
+        row.onclick = () => {
+            opt.selected = !opt.selected;
+            renderListPicker();
+        };
+        list.appendChild(row);
+    });
+
+    column.appendChild(list);
+    container.appendChild(column);
+}
+
+function openListPicker(selectId) {
+    const config = LIST_PICKER_CONFIGS.find(c => c.selectId === selectId);
+    if (!config) return;
+    activeListPicker = config;
+    window.resetListPickerPlacement?.();
+    renderListPicker();
+    document.getElementById('listPickerModal').style.display = 'block';
+}
+
+
+// Draggable by header (matches WysiScan ocr-modal behavior); each modal content
+// is resizable via CSS and its column lists flex to redraw on resize. Returns a
+// function that restores the modal's default placement and size.
+function initDraggableModal(contentId, headerId) {
+    const content = document.getElementById(contentId);
+    const header = document.getElementById(headerId);
+    if (!content || !header) return () => { };
+
+    const defaultStyle = content.getAttribute('style') || '';
     let isDragging = false;
     let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
 
@@ -2845,7 +3026,14 @@ function renderConditionPicker() {
         isDragging = false;
         header.style.cursor = 'move';
     });
-})();
+
+    return () => {
+        content.setAttribute('style', defaultStyle);
+    };
+}
+
+window.resetConditionPickerPlacement = initDraggableModal('conditionPickerContent', 'conditionPickerHeader');
+window.resetListPickerPlacement = initDraggableModal('listPickerContent', 'listPickerHeader');
 
 
 window.editCustomOption = function (index) {
@@ -2955,7 +3143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('clearCustomOptionsBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
+        ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
             const select = document.getElementById(id);
             if (select) {
                 Array.from(select.options).forEach(opt => opt.selected = false);
@@ -2965,8 +3153,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('openCustomOptionsBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
+        const search = document.getElementById('conditionPickerSearch');
+        if (search) search.value = '';
+        window.resetConditionPickerPlacement?.();
         renderConditionPicker();
         document.getElementById('conditionPickerModal').style.display = 'block';
+    });
+
+    document.getElementById('conditionPickerSearch')?.addEventListener('input', () => {
+        renderConditionPicker();
     });
 
     document.getElementById('closeConditionPickerBtn')?.addEventListener('click', () => {
@@ -2979,7 +3174,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('clearConditionPickerBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
+        ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
             const select = document.getElementById(id);
             if (select) {
                 Array.from(select.options).forEach(opt => opt.selected = false);
@@ -2988,8 +3183,34 @@ document.addEventListener('DOMContentLoaded', () => {
         renderConditionPicker();
     });
 
+    document.querySelectorAll('.list-picker-open-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openListPicker(btn.dataset.picker);
+        });
+    });
+
+    document.getElementById('closeListPickerBtn')?.addEventListener('click', () => {
+        document.getElementById('listPickerModal').style.display = 'none';
+    });
+
+    document.getElementById('doneListPickerBtn')?.addEventListener('click', () => {
+        document.getElementById('listPickerModal').style.display = 'none';
+    });
+
+    document.getElementById('clearListPickerBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (activeListPicker) {
+            const select = document.getElementById(activeListPicker.selectId);
+            if (select) {
+                Array.from(select.options).forEach(opt => opt.selected = false);
+            }
+        }
+        renderListPicker();
+    });
+
     // Context Menu for Favoriting
-    ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
+    ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
         const select = document.getElementById(id);
         if (!select) return;
 
@@ -3020,7 +3241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const select = document.getElementById(targetId);
             if (!select) return;
 
-            const key = targetId === 'lpOptions' ? 'lp' : (targetId === 'cdOptions' ? 'cd' : 'cassette');
+            const key = targetId === 'lpOptions' ? 'lp' : (targetId === 'cdOptions' ? 'cd' : (targetId === 'mediaOptions' ? 'media' : 'cassette'));
             const selectedOptions = Array.from(select.selectedOptions);
 
             if (selectedOptions.length === 0) return;

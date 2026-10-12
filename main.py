@@ -336,7 +336,17 @@ async def get_changelog_endpoint():
         for raw in raw_entries:
             if not raw.strip(): continue
             entries.append("### " + raw.strip())
-        return {"entries": entries[-3:][::-1]} # Return last 3, reversed (newest first)
+
+        def entry_sort_key(entry):
+            header = entry.splitlines()[0] if entry else ""
+            vm = re.search(r'v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?', header)
+            version = tuple(int(p) if p else 0 for p in vm.groups()) if vm else (0, 0, 0, 0)
+            dm = re.search(r'(\d{4})-(\d{2})-(\d{2})', header)
+            date = tuple(int(p) for p in dm.groups()) if dm else (0, 0, 0)
+            return (date, version)
+
+        entries.sort(key=entry_sort_key, reverse=True)
+        return {"entries": entries[:3]}
     except:
         return {"entries": []}
 

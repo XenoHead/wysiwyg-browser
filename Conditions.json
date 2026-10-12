@@ -272,6 +272,10 @@
             "text": "mark through Barcode"
         },
         {
+            "title": "Cellophane  Tearing",
+            "text": "Cellophane tearing"
+        },
+        {
             "title": "Cellophane Heavy (Tearing)",
             "text": "a fair amount of Cellophane tearing"
         },
@@ -320,10 +324,6 @@
             "text": "light shelf-wear"
         },
         {
-            "title": "Tearing",
-            "text": "Cellophane tearing"
-        },
-        {
             "title": "Water Damage (Art)",
             "text": "water damage to Artwork"
         },
@@ -334,6 +334,17 @@
         {
             "title": "Writing/Ink",
             "text": "writing on Artwork"
+        }
+    ],
+    "media": [
+        {
+            "title": "Scuffing",
+            "text": "has shell scuffing and missing ink",
+            "favorite": true
+        },
+        {
+            "title": "Audiophile",
+            "text": "audiophile pressing"
         }
     ]
 }

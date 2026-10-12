@@ -1,15 +1,5 @@
 [
   {
-    "key": "GatOnt_1.jpg||GatOnt_2.jpg||GatOnt_3.jpg",
-    "files": [
-      "GatOnt_1.jpg",
-      "GatOnt_3.jpg",
-      "GatOnt_2.jpg"
-    ],
-    "output": "Release:\nBand Name: Ruben Ramos And The Revolution\nAlbum Title: El Gato Negro On The Prowl\nRelease Date: 2002\nLabel: Revolution Records\nCatalogue Number: Rev - 2003\n\nTracks:\nA1 - Quiero Una Cita\nA2 - El Canoero\nA3 - Abrazado De Un Poste\nA4 - I Wanna Dance\nA5 - La Güera Preciosa\nA6 - Barbaco Blues\nB7 - El Pescador\nB8 - Mil Noches\nB9 - El Presumido\nB10 - Tu Recuerdo\nB11 - Rixmix\n\nExtra:\nBarcode: 6 90647 20034 7\nDistributed By: Foy Lee Productions\nFeaturing: Los Tres Amigos - Ruben Ramos, Little Joe, Roberto Pulido\nAddress: 10615 Etta Lane Austin, Tx. Usa\nManufacturing: Made In Usa\nCopyright: 2002 Revolution Records\n\nMedia Description:\nShell Type: Clear Shell\nShell Texture: Smooth\nTiming Window: Clear Window No Markings\nShell Color: Clear\nInk Color: White\nBinding: Screws\nStamps: None",
-    "ts": "2026-08-26T13:35:11"
-  },
-  {
     "key": "GorSha_1.jpg||GorSha_2.jpg||GorSha_3.jpg||GorSha_4.jpg",
     "files": [
       "GorSha_4.jpg",
@@ -29,5 +19,15 @@
     ],
     "output": "Release:\nBand Name: Cher\nAlbum Name: The Best Of Cher 20th Century Masters The Millennium Collection\nRelease Date: 2000\nLabel: Mca Records\nCatalogue Number: 088 112 154-4\n\nTracks:\nA1 - Gypsies, Tramps And Thieves\nA2 - The Way Of Love\nA3 - Take Me Home\nA4 - Dark Lady\nA5 - Half-Breed\nB1 - Train Of Thought\nB2 - Living In A House Divided\nB3 - Don't Hide Your Love\nB4 - I Saw A Man And He Danced With His Wife\nB5 - Carousel Man\nB6 - All I Ever Need Is You - Sonny & Cher\n\nExtra:\nBarcode: 0 08811 21544 6\nUniversal Music Company: A Universal Music Company\nCopyright: (P) (C) 2000 Mca Records, Inc.\nAddress: Universal City, Ca 91608 - U.S.A.\nDistribution: Distributed By Universal Music & Video Distribution, Inc.\nWarning: All Rights Reserved. Unauthorized Duplication Is A Violation Of Applicable Laws.\nHigh Quality Logo: Hq High Quality\nDolby Technology: Dolby Hx Pro B Nr\nLabel Logo: Mca Music America\n\nMedia Description:\nShell Type/Style: Clear Plastic Shell\nShell Texture: Smooth\nTiming Window: Clear Window With Seven Hatch Marks\nShell Color: Transparent\nInk Color: Silver\nBinding: Sonic Weld\nStamps: None Visible",
     "ts": "2026-10-12T12:20:15"
+  },
+  {
+    "key": "Akitsa_1.jpg||Akitsa_2.jpg||Akitsa_3.jpg",
+    "files": [
+      "Akitsa_3.jpg",
+      "Akitsa_1.jpg",
+      "Akitsa_2.jpg"
+    ],
+    "output": "Release:\nBand Name: Akitsa / Prurient\nAlbum Title: Akitsa / Prurient\nRelease Date: Fall 2005\nLabel: Hospital Productions\nCatalogue Number: Hos-133\n\nTracks:\nA1 - Terre Éternelle\nA2 - Goétie\nA3 - Fossil\n\nExtra:\nWebsite: Hospitalproductions.com\nEdition Info: First Edition Of 1000\nDesign: Design Df\n\nMedia Description:\nMatrix: Gfr/Ca 05110315 Akitsa/Prurient",
+    "ts": "2026-10-12T13:28:01"
   }
 ]

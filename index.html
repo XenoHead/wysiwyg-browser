@@ -142,6 +142,7 @@
                     <option value="cassette">Cassette</option>
                     <option value="cd">CD</option>
                     <option value="lp">LP</option>
+                    <option value="media">Media Description</option>
                 </select>
             </div>
 
@@ -175,6 +176,8 @@
             <h3 id="conditionPickerHeader"
                 style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
             <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
+            <input type="text" id="conditionPickerSearch" placeholder="Search conditions..."
+                style="flex-shrink: 0; margin-bottom: 8px;">
             <div id="conditionPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
                 <!-- columns rendered by app.js -->
             </div>
@@ -182,6 +185,23 @@
                 <button id="clearConditionPickerBtn" class="nav-btn"
                     style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
                 <button id="doneConditionPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="listPickerModal" class="modal">
+        <div id="listPickerContent" class="modal-content modal-content-wide"
+            style="max-width: 460px; width: 90%; height: 420px; min-width: 300px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            <h3 id="listPickerHeader"
+                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Options</h3>
+            <span id="closeListPickerBtn" class="close-btn">&times;</span>
+            <div id="listPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
+                <!-- column rendered by app.js -->
+            </div>
+            <div class="modal-actions" style="margin-top: 12px; flex-shrink: 0;">
+                <button id="clearListPickerBtn" class="nav-btn"
+                    style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
+                <button id="doneListPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
             </div>
         </div>
     </div>
@@ -298,21 +318,63 @@
                         <label><input type="radio" name="media_modifier" value="-"> -</label>
                     </div>
                 </div>
-                <div class="form-group"><label>PACKAGING FEATURE</label><select id="packagingFeature" multiple></select>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">PACKAGING FEATURE</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="packagingFeature"
+                            title="Open Packaging Feature List">📂</button>
+                    </div>
+                    <select id="packagingFeature" multiple></select>
                 </div>
-                <div class="form-group"><label>EDITION</label><select id="edition" multiple></select></div>
-                <div class="form-group"><label>FORMAT TAGS</label><select id="formatTags" multiple></select></div>
-                <div class="form-group"><label>WEIGHT/SPEED</label><select id="weightSpeed" multiple></select></div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">EDITION</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="edition" title="Open Edition List">📂</button>
+                    </div>
+                    <select id="edition" multiple></select>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">FORMAT TAGS</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="formatTags" title="Open Format Tags List">📂</button>
+                    </div>
+                    <select id="formatTags" multiple></select>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">WEIGHT/SPEED</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="weightSpeed" title="Open Weight/Speed List">📂</button>
+                    </div>
+                    <select id="weightSpeed" multiple></select>
+                </div>
             </div>
 
             <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
                 <div class="form-group"><label>COLOR</label><input type="text" id="mediaColor" placeholder="e.g. Red">
                 </div>
-                <div class="form-group"><label>PRE FM</label><select id="preFM" multiple></select></div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">PRE FM</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="preFM" title="Open Pre FM List">📂</button>
+                    </div>
+                    <select id="preFM" multiple></select>
+                </div>
                 <div class="form-group"><label>MEDIA FORMAT</label><select id="mediaFormat"></select></div>
-                <div class="form-group"><label>MEDIA DESCRIPTION</label><input type="text" id="mediaDescriptionText"
-                        placeholder="e.g. Dolby"></div>
-                <div class="form-group"><label>POST FM</label><select id="postFM" multiple></select></div>
+                <div class="form-group"><label>MEDIA DESCRIPTION</label>
+                    <div style="display: flex; gap: 6px; align-items: stretch; flex: 1; min-height: 0;">
+                        <input type="text" id="mediaDescriptionText" placeholder="e.g. Dolby"
+                            style="flex: 1; min-width: 0; height: 65px;">
+                        <select id="mediaOptions" multiple title="Media Description options"
+                            style="flex: 0 0 110px; width: 110px; height: 65px; font-size: 11px;"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">POST FM</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="postFM" title="Open Post FM List">📂</button>
+                    </div>
+                    <select id="postFM" multiple></select>
+                </div>
             </div>
             <div id="formatLine" style="display:none;"></div>
 
@@ -327,7 +389,13 @@
                         <label><input type="radio" name="sleeve_modifier" value="-"> -</label>
                     </div>
                 </div>
-                <div class="form-group"><label>SLEEVE PACKAGING</label><select id="sleevePackaging" multiple></select></div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">SLEEVE PACKAGING</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="sleevePackaging" title="Open Sleeve Packaging List">📂</button>
+                    </div>
+                    <select id="sleevePackaging" multiple></select>
+                </div>
                 <div class="form-group"><label>SLEEVE DESCRIPTION</label><input type="text" id="sleeveDesc"
                         placeholder="e.g. Jcard"></div>
             </div>
@@ -463,9 +531,19 @@
 
                             <!-- Right Column: Live Preview -->
                             <div class="preview-column">
-                                <label class="details-box-label" style="display:block; margin-bottom:5px;">LIVE
-                                    PREVIEW</label>
-                                <div id="htmlPreview" class="preview-box"></div>
+                                <div class="details-box-header" style="margin-bottom:5px;">
+                                    <label class="details-box-label">LIVE PREVIEW</label>
+                                    <div class="live-preview-toolbar">
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="bold"
+                                            title="Bold (Ctrl+B)"><b>B</b></button>
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="underline"
+                                            title="Underline (Ctrl+U)"><u>U</u></button>
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="italic"
+                                            title="Italic (Ctrl+I)"><i>I</i></button>
+                                    </div>
+                                </div>
+                                <div id="htmlPreview" class="preview-box" contenteditable="true" spellcheck="false"
+                                    aria-label="Live Preview (editable)"></div>
                             </div>
                         </div>
                     </div>
@@ -516,7 +594,7 @@
                 <button id="addsToggleBtn" class="drawer-btn drawer-submenu-toggle"><span class="drawer-ico drawer-ico-sm">➕</span> Adds</button>
                 <div class="drawer-submenu-items" id="addsSubmenuItems" style="display:none;">
                     <button id="addsAmazonBtn" class="drawer-btn drawer-submenu-item"><span class="drawer-ico drawer-ico-sm">📦</span> Amazon</button>
-                    <button id="addsDiscogsBtn" class="drawer-btn drawer-submenu-item"><span class="drawer-ico drawer-ico-sm">💿</span> Discogs</button>
+                    <button id="addsDiscogsBtn" class="drawer-btn drawer-submenu-item" style="display:none;"><span class="drawer-ico drawer-ico-sm">💿</span> Discogs</button>
                 </div>
             </div>
             <button id="openCalcBtn" class="drawer-btn"><span class="drawer-ico">💲</span> Cost Calculator</button>

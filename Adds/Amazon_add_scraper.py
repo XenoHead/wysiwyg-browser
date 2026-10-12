@@ -235,9 +235,14 @@ def process_discogs_raw_data(raw_discogs_data):
         'Worldwide': 'United States'
     }
     
-    # Country/Region of Origin is ALWAYS United States (our selling origin),
-    # regardless of the release's pressing country.
-    final_origin = 'United States'
+    # Country/Region of Origin is the release's Discogs country, normalized
+    # through the map; falls back to United States when the API gives none.
+    country_lookup = {k.lower(): v for k, v in country_map.items()}
+    raw_country = raw_country_line.strip()
+    if raw_country and raw_country.lower() not in ['none', 'unknown', 'n/a', '']:
+        final_origin = country_lookup.get(raw_country.lower(), raw_country)
+    else:
+        final_origin = 'United States'
     tags_found = []
     for e in EDITION_LOG:
         if re.search(r'\b' + re.escape(e) + r'\b', raw_discogs_data, re.IGNORECASE):
@@ -349,7 +354,7 @@ def process_discogs_raw_data(raw_discogs_data):
         'Vinyl Record Details 2': v_detail_2,
         'Vinyl Record Details 3': v_detail_3,
 	'Series': series_line if series_line else None, # Add this to storage
-        'Genre_Style': combined_genre_style,
+        'Genre/Style': combined_genre_style,
         'Part Number': 'N/A' 
     }
     # --- Part Number: defer to after label parsing (all_cat_numbers populated below) ---
@@ -555,8 +560,14 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
     else:
         final_brand = primary_label
         final_manufacturer = primary_label
-    final_output['Brand Name'] = final_brand
-    final_output['Manufacturer'] = final_manufacturer
+
+    def shorten_brand(value):
+        text = str(value).strip()
+        head = re.split(r'\s+[-\u2013\u2014]\s*', text, maxsplit=1)[0].strip()
+        return head if head else text
+
+    final_output['Brand Name'] = shorten_brand(final_brand)
+    final_output['Manufacturer'] = shorten_brand(final_manufacturer)
     if final_output.get('UPC/GTIN (Scanned)') == '*(Not found)*':
         # Only flag "no brand name" when there is genuinely no label
         if is_self_released or not final_brand or final_brand == 'Unknown':
@@ -665,7 +676,7 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
         candidates.append('dvd')
         if 'CDV' in str(final_output.get('Raw Data', '')):
             candidates.append('cd video')
-    for g in [x.strip() for x in str(final_output.get('Genre_Style', '')).split(',') if x.strip()]:
+    for g in [x.strip() for x in str(final_output.get('Genre/Style', '')).split(',') if x.strip()]:
         cg = _clean_kw(g)
         if cg and not _bad(cg):
             candidates.append(cg)
@@ -708,7 +719,7 @@ def generate_final_amazon_table(condition_choice, apply_spelling):
             "Edition", 
             "Format:", 
             "Publication Date", 
-            "Genre_Style", 
+            "Genre/Style", 
             "Binding",
             "Vinyl Record Details 1", 
             "Vinyl Record Details 2", 
