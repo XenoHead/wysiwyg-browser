@@ -169,6 +169,23 @@
         </div>
     </div>
 
+    <div id="conditionPickerModal" class="modal">
+        <div id="conditionPickerContent" class="modal-content modal-content-wide"
+            style="max-width: 780px; width: 90%; height: 420px; min-width: 320px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            <h3 id="conditionPickerHeader"
+                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
+            <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
+            <div id="conditionPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
+                <!-- columns rendered by app.js -->
+            </div>
+            <div class="modal-actions" style="margin-top: 12px; flex-shrink: 0;">
+                <button id="clearConditionPickerBtn" class="nav-btn"
+                    style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
+                <button id="doneConditionPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
 
     <div class="container">
         <div class="sticky-header">
@@ -345,17 +362,21 @@
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
                                 <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Cass.
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">CASS.
                                     CONDITION</span>
                                 <select id="customOptions" multiple
                                     style="width: 135px; height: 65px; font-size: 11px;"></select>
                             </div>
-                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end; justify-content: flex-end;">
+                            <div style="display: flex; flex-direction: column; gap: 3px; align-items: flex-end; justify-content: flex-end;">
                                 <button id="editCustomOptionsBtn" class="nav-btn"
-                                    style="padding: 3px 6px; font-size: 11px; height: 26px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">✏️ Edit</button>
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Edit Condition Lists">✏️ Edit</button>
                                 <button id="clearCustomOptionsBtn" class="nav-btn"
-                                    style="padding: 3px 6px; font-size: 11px; height: 26px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;" title="Clear Selections">❌
-                                    Clear</button>
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Clear Selections">❌ Clear</button>
+                                <button id="openCustomOptionsBtn" class="nav-btn"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Open Condition Picker">📂 Open</button>
                             </div>
                         </div>
 

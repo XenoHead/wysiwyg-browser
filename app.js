@@ -2718,6 +2718,136 @@ function renderCustomOptionsModalList() {
 }
 
 
+// --- Condition Picker (Open button) ---
+
+const CONDITION_PICKER_CONFIGS = [
+    { id: 'lpOptions', key: 'lp', label: 'LP CONDITION' },
+    { id: 'cdOptions', key: 'cd', label: 'CD CONDITION' },
+    { id: 'customOptions', key: 'cassette', label: 'CASS. CONDITION' }
+];
+
+function conditionOptionKey(opt) {
+    return (opt ? opt.title + '|||' + opt.text : '');
+}
+
+function getSelectedConditionKeys(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return [];
+    return Array.from(select.selectedOptions).map(o => {
+        try {
+            return conditionOptionKey(JSON.parse(o.value));
+        } catch (e) {
+            return '';
+        }
+    });
+}
+
+function toggleConditionOption(selectId, opt) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const key = conditionOptionKey(opt);
+    const option = Array.from(select.options).find(o => {
+        try {
+            return conditionOptionKey(JSON.parse(o.value)) === key;
+        } catch (e) {
+            return false;
+        }
+    });
+
+    if (option) {
+        option.selected = !option.selected;
+        renderConditionPicker();
+    }
+}
+
+function renderConditionPicker() {
+    const container = document.getElementById('conditionPickerColumns');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    CONDITION_PICKER_CONFIGS.forEach(config => {
+        const select = document.getElementById(config.id);
+        const items = customOptionsData[config.key] || [];
+        const selectedKeys = getSelectedConditionKeys(config.id);
+
+        const column = document.createElement('div');
+        column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+
+        const header = document.createElement('div');
+        header.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+        header.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+        column.appendChild(header);
+
+        const list = document.createElement('div');
+        list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+
+        if (items.length === 0) {
+            list.innerHTML = '<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>';
+        }
+
+        items.forEach(opt => {
+            const isSelected = selectedKeys.includes(conditionOptionKey(opt));
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+                (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold;' : '');
+            row.innerHTML =
+                `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+                `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+                `<span style="color: var(--text-muted, #666); font-weight: normal;">${opt.text || ''}</span></div>`;
+            row.onclick = () => toggleConditionOption(config.id, opt);
+            list.appendChild(row);
+        });
+
+        column.appendChild(list);
+        container.appendChild(column);
+    });
+}
+
+
+// Draggable by header (matches WysiScan ocr-modal behavior); the modal content
+// is resizable via CSS and its column lists flex to redraw on resize.
+(function initConditionPickerDrag() {
+    const content = document.getElementById('conditionPickerContent');
+    const header = document.getElementById('conditionPickerHeader');
+    if (!content || !header) return;
+
+    let isDragging = false;
+    let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+
+    header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button, .close-btn')) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = content.getBoundingClientRect();
+        content.style.position = 'fixed';
+        content.style.margin = '0';
+        content.style.left = rect.left + 'px';
+        content.style.top = rect.top + 'px';
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        content.style.left = (initialLeft + (e.clientX - startX)) + 'px';
+        content.style.top = (initialTop + (e.clientY - startY)) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        header.style.cursor = 'move';
+    });
+})();
+
+
 window.editCustomOption = function (index) {
     editingCustomOptionIndex = index;
     const opt = customOptionsData[currentModalCategory][index];
@@ -2831,6 +2961,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 Array.from(select.options).forEach(opt => opt.selected = false);
             }
         });
+    });
+
+    document.getElementById('openCustomOptionsBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        renderConditionPicker();
+        document.getElementById('conditionPickerModal').style.display = 'block';
+    });
+
+    document.getElementById('closeConditionPickerBtn')?.addEventListener('click', () => {
+        document.getElementById('conditionPickerModal').style.display = 'none';
+    });
+
+    document.getElementById('doneConditionPickerBtn')?.addEventListener('click', () => {
+        document.getElementById('conditionPickerModal').style.display = 'none';
+    });
+
+    document.getElementById('clearConditionPickerBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                Array.from(select.options).forEach(opt => opt.selected = false);
+            }
+        });
+        renderConditionPicker();
     });
 
     // Context Menu for Favoriting

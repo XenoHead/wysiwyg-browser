@@ -4,7 +4,7 @@ pip install pyinstaller
 
 echo.
 echo Building UberPaste.exe...
-pyinstaller --noconsole --onefile --name="UberPaste" --icon="UberPaste.ico" --clean cliptray.py
+pyinstaller --noconsole --onefile --name="UberPaste" --icon="UberPaste.ico" --clean UberPaste.py
 
 echo.
 echo Cleaning up build files...

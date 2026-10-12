@@ -1,15 +1,5 @@
 [
   {
-    "key": "PatTor_1.jpg||PatTor_2.jpg||PatTor_3.jpg",
-    "files": [
-      "PatTor_1.jpg",
-      "PatTor_3.jpg",
-      "PatTor_2.jpg"
-    ],
-    "output": "Release:\nBand Name: Patsy Torres\nAlbum Name: Trenzas\nRelease Date: 1999\nLabel: Discos Joey International\nCatalogue Number: 8574\n\nTracks:\nA1 - No Es Tan Facil\nA2 - Contigo\nA3 - No Se Si Es Amor\nA4 - Amame, Besame Y Quedate\nA5 - Cumbia De Tejas\nB1 - Mas Amor\nB2 - Sepulcro Mojado\nB3 - Puro Party\nB4 - Oooh Baby\nB5 - Voy A Comprenderte\n\nExtra:\nBarcode: 0 28537 85744 7\nCopyright: © 1999 Joey Records Inc.\nPhonographic Copyright: ℗ 1999 Joey Records Inc.\nAddress: 6703 W. Commerce, San Antonio, Tx. 78227\nAll Rights Reserved: All Rights Reserved\nShell Number: 8572\n\nMedia Description:\nShell Type/Style: Clear\nShell Texture: Smooth\nTiming Window: No Timing Window\nShell Color: Clear\nInk Color: Silver\nBinding: Screws\nStamps: None",
-    "ts": "2026-08-25T16:33:33"
-  },
-  {
     "key": "GatOnt_1.jpg||GatOnt_2.jpg||GatOnt_3.jpg",
     "files": [
       "GatOnt_1.jpg",
@@ -29,5 +19,15 @@
     ],
     "output": "Release:\nBand Name: Gordon Lightfoot\nAlbum Name: Shadows\nRelease Date: 1982\nLabel: Warner Bros. Records Inc.\nCatalogue Number: M5 3633\nTracks:\nA1 - 14 Karat Gold\nA2 - In My Fashion\nA3 - Shadows\nA4 - Blackberry Wine\nA5 - Heaven Help The Devil\nA6 - Thank You For The Promises\nB1 - Baby Step Back\nB2 - All I'm After\nB3 - Triangle\nB4 - I'll Do Anything\nB5 - She's Not The Same\nExtra:\nTape Message: Blank Tape At End Of Side Two Is Necessary To Duplicate Sequence Of L.P.\nCredits: All Songs Written By Gordon Lightfoot\nProduction: Produced By Gordon Lightfoot And Ken Friesen\nCopyright: © ℗ 1982 Warner Bros. Records Inc. For The U.S. & WEA International Inc. For The World Outside Of The U.S.\nSide One Total Time: 19:17\nSide Two Total Time: 18:10\nAudio System: Dolby System\nMedia Description:\nShell Type/Style: Plastic Cassette Shell\nShell Texture: Pebbled Border Texture With Smooth Recessed Label Area\nTiming Window: Small Centered Window With 100 50 0 Markings\nShell Color: White\nInk Color: Black\nBinding: Sonic Weld\nStamps: Made In U.S.A., Warner Bros. Logo, Dolby Logo, Circled A Stamp",
     "ts": "2026-08-31T13:13:43"
+  },
+  {
+    "key": "Cher_2.jpg||Cher_3.jpg||Cher_4.jpg",
+    "files": [
+      "Cher_4.jpg",
+      "Cher_2.jpg",
+      "Cher_3.jpg"
+    ],
+    "output": "Release:\nBand Name: Cher\nAlbum Name: The Best Of Cher 20th Century Masters The Millennium Collection\nRelease Date: 2000\nLabel: Mca Records\nCatalogue Number: 088 112 154-4\n\nTracks:\nA1 - Gypsies, Tramps And Thieves\nA2 - The Way Of Love\nA3 - Take Me Home\nA4 - Dark Lady\nA5 - Half-Breed\nB1 - Train Of Thought\nB2 - Living In A House Divided\nB3 - Don't Hide Your Love\nB4 - I Saw A Man And He Danced With His Wife\nB5 - Carousel Man\nB6 - All I Ever Need Is You - Sonny & Cher\n\nExtra:\nBarcode: 0 08811 21544 6\nUniversal Music Company: A Universal Music Company\nCopyright: (P) (C) 2000 Mca Records, Inc.\nAddress: Universal City, Ca 91608 - U.S.A.\nDistribution: Distributed By Universal Music & Video Distribution, Inc.\nWarning: All Rights Reserved. Unauthorized Duplication Is A Violation Of Applicable Laws.\nHigh Quality Logo: Hq High Quality\nDolby Technology: Dolby Hx Pro B Nr\nLabel Logo: Mca Music America\n\nMedia Description:\nShell Type/Style: Clear Plastic Shell\nShell Texture: Smooth\nTiming Window: Clear Window With Seven Hatch Marks\nShell Color: Transparent\nInk Color: Silver\nBinding: Sonic Weld\nStamps: None Visible",
+    "ts": "2026-10-12T12:20:15"
   }
 ]

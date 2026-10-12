@@ -126,6 +126,16 @@
             "favorite": true
         },
         {
+            "title": "Shelf Wear (Light)",
+            "text": "light shelf-wear",
+            "favorite": true
+        },
+        {
+            "title": "Tab Wear (Light)",
+            "text": "light Tab-wear",
+            "favorite": true
+        },
+        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
@@ -198,17 +208,8 @@
             "text": "shelf-wear"
         },
         {
-            "title": "Shelf Wear (Light)",
-            "text": "light shelf-wear"
-        },
-        {
             "title": "Tab Wear",
             "text": "Tab-wear"
-        },
-        {
-            "title": "Tab Wear (Light)",
-            "text": "light Tab-wear",
-            "favorite": false
         },
         {
             "title": "Tearing",
