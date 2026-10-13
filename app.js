@@ -1846,6 +1846,9 @@ function generateListingData() {
             ...Array.from(document.getElementById('lpOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('cdOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('customOptions')?.selectedOptions || []).map(o => o.value)
+        ],
+        mediaCustomOptionsSelected: [
+            ...Array.from(document.getElementById('mediaConditionOptions')?.selectedOptions || []).map(o => o.value)
         ]
     };
 
@@ -1925,7 +1928,7 @@ function processCountry(country) {
 }
 
 function processFormatData(inputs) {
-    let { formatLineRaw, mediaDesc, colorVal, preFM, weightSpeed, mediaFormat, postFM, sleevePkg, pkgFeature, edition, formatTags, customOptionsSelected, sleeveDesc, sleeveCond } = inputs;
+    let { formatLineRaw, mediaDesc, colorVal, preFM, weightSpeed, mediaFormat, postFM, sleevePkg, pkgFeature, edition, formatTags, customOptionsSelected, sleeveDesc, sleeveCond, mediaCustomOptionsSelected } = inputs;
 
     // Color
     let colorPhrase = colorVal ? `Colored (${colorVal})` : "";
@@ -2100,6 +2103,73 @@ function processFormatData(inputs) {
         }
     }
 
+    // Media Condition Logic (mirrors Sleeve Condition logic)
+    // The Media Description text box text is the FIRST entry of
+    // mediaconditionPhrase when entered; Media Condition multiselect choices
+    // follow using the same " & " / " / " separators as Sleeve Condition.
+    // The phrase region gets exactly ONE "with ": it is added only when neither
+    // the phrase itself nor the immediately preceding text already supplies one
+    // (the Sleeve Condition fallback appends " with ..." to finalFormatString
+    // when there is no text box text for the sleeve flaws to attach to).
+    // Final Sale keeps its bare leading text (mirrors the Sleeve rule).
+    let mediaconditionPhrase = "";
+    const hasMediaDesc = mediaDesc && mediaDesc.trim() !== "";
+    const hasMediaCustomOptions = mediaCustomOptionsSelected && mediaCustomOptionsSelected.length > 0;
+
+    if (hasMediaDesc || hasMediaCustomOptions) {
+        let mediaFlaws = [];
+        let finalSaleText = "";
+
+        if (hasMediaCustomOptions) {
+            mediaCustomOptionsSelected.forEach(optJson => {
+                try {
+                    const opt = JSON.parse(optJson);
+                    if (opt.title === "Final Sale") {
+                        finalSaleText = (finalSaleText ? finalSaleText + " " : "") + opt.text;
+                    } else {
+                        if (opt.text) mediaFlaws.push(opt.text);
+                        else mediaFlaws.push(opt.title);
+                    }
+                } catch (e) { }
+            });
+        }
+
+        if (hasMediaDesc) {
+            // Text box text is always the first entry of the phrase
+            mediaFlaws.unshift(mediaDesc.trim());
+            mediaDesc = "";
+        }
+
+        if (mediaFlaws.length > 0) {
+            // Group flaws to combine duplicates (e.g. "water damage to Booklet/Inlay")
+            mediaFlaws = groupFlaws(mediaFlaws);
+
+            // Join: first separator = " & ", all subsequent = " / "
+            let flawPhrase = mediaFlaws.length === 1
+                ? mediaFlaws[0]
+                : mediaFlaws[0] + " & " + mediaFlaws.slice(1).join(" / ");
+
+            // Exactly one "with " in this region: add one only when the phrase
+            // does not already start with one AND the text immediately before
+            // it does not already end in a with-clause (the Sleeve Condition
+            // fallback appends " with ..." to finalFormatString when there is
+            // no text box text to attach the sleeve flaws to).
+            const priorEndsWithWith = /\swith\s\S/i.test(finalFormatString);
+            if (!/^with\s/i.test(flawPhrase) && !priorEndsWithWith) {
+                flawPhrase = "with " + flawPhrase;
+            }
+
+            mediaconditionPhrase = flawPhrase;
+        }
+
+        // Final Sale keeps its bare leading text, ahead of the flaw portion
+        if (finalSaleText) {
+            mediaconditionPhrase = mediaconditionPhrase
+                ? finalSaleText + " " + mediaconditionPhrase
+                : finalSaleText;
+        }
+    }
+
     if (sleevePkg && sleevePkg.toLowerCase().includes('gatefold') && sleeveDesc) {
         sleevePkg = sleevePkg.replace(/gatefold/ig, 'Gatefold Sleeve');
     }
@@ -2112,7 +2182,8 @@ function processFormatData(inputs) {
         sleeveDesc,
         pkgFeature,
         edition,
-        conditionPhrase   // NEW: condition text to inject after sleevePkg when sleeveDesc is blank
+        conditionPhrase,
+        mediaconditionPhrase
     };
 }
 
@@ -2134,6 +2205,7 @@ function assembleDescription(inputs, country, fmtData) {
             inputs.year,
             country,
             fmtData.finalFormatString,
+            fmtData.mediaconditionPhrase || '',
             fmtData.mediaDesc,
             inputs.sleeveCond,
             fmtData.sleeveTypeLabel,
@@ -2149,6 +2221,7 @@ function assembleDescription(inputs, country, fmtData) {
             inputs.year,
             country,
             fmtData.finalFormatString,
+            fmtData.mediaconditionPhrase || '',
             fmtData.mediaDesc,
             inputs.sleeveCond,
             fmtData.sleevePkg,
@@ -2291,6 +2364,7 @@ function assembleWalmartDescription(inputs, country, fmtData) {
         inputs.year,
         country, // Keep country
         fmtData.finalFormatString,
+        fmtData.mediaconditionPhrase || '', // Include media condition phrase
         fmtData.mediaDesc, // Include media description
         inputs.sleeveCond, // Include sleeve condition
         fmtData.sleevePkg,

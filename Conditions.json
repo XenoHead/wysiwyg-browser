@@ -351,37 +351,28 @@
     ],
     "mediaCondition": [
         {
-            "title": "Ink/Writng",
-            "text": "has writing on shell",
-            "media_type": "cassette",
-            "favorite": true
+            "title": "Holes",
+            "text": "holes in the Shell",
+            "media_type": "cassette"
         },
         {
-            "title": "Scuffing/Ink",
-            "text": "has scuff marks and missing ink",
-            "media_type": "cassette",
-            "favorite": true
+            "title": "Missing Ink",
+            "text": "missing ink",
+            "media_type": "cassette"
         },
         {
-            "title": "worn print",
-            "text": "has worn of print",
-            "media_type": "cd",
-            "favorite": true
-        },
-        {
-            "title": "Shell scuffing/missing ink",
-            "text": "has shell scuffing and missing ink",
-            "media_type": "cassette",
-            "favorite": false
+            "title": "Scuffs",
+            "text": "scuff marks",
+            "media_type": "cassette"
         },
         {
             "title": "Stains (Shell)",
-            "text": "has stained Shell",
+            "text": "stained Shell",
             "media_type": "cassette"
         },
         {
             "title": "wrinkles",
-            "text": "has wrinkled tape",
+            "text": "wrinkled tape",
             "media_type": "cassette"
         }
     ]
