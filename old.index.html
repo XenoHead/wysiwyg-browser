@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WYSIWYG</title>
+    <link rel="icon" type="image/png" href="/fyrlogo.png">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span id="closePasswordModalBtn" class="close-btn">&times;</span>
+            <h3>Admin Access</h3>
+            <input type="password" id="adminPasswordInput" placeholder="Enter Password">
+            <button id="submitPasswordBtn" class="btn-search" style="padding: 8px 15px;">Submit</button>
+        </div>
+    </div>
+
+    <div id="shutdownModal" class="modal">
+        <div class="modal-content">
+            <span id="closeShutdownModalBtn" class="close-btn">&times;</span>
+            <h3 style="color: var(--danger-color);">🔌 Shut Down?</h3>
+            <p>Are you sure you want to stop the server and close the app?</p>
+            <div class="modal-actions" style="justify-content: center; margin-top: 15px;">
+                <button id="confirmShutdownBtn" class="shutdown-btn" style="padding: 8px 20px; font-weight: bold;">Yes,
+                    Shut Down</button>
+                <button id="cancelShutdownBtn" class="nav-btn"
+                    style="padding: 8px 20px; font-weight: bold;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Themed Modal -->
+    <div id="genericModal" class="modal" style="display:none; align-items:center; justify-content:center;">
+        <div class="modal-content modal-content-wide">
+            <h3 id="genericModalTitle" style="margin-top: 0; color: var(--wysiwyg-blue);">Title</h3>
+            <div id="genericModalBody"
+                style="margin-bottom: 20px; white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></div>
+            <div id="genericModalActions" class="modal-actions">
+                <!-- Buttons injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hot Keys Modal -->
+    <div id="hotkeysModal" class="modal" style="display:none; align-items:center; justify-content:center;">
+        <div class="modal-content" style="width: 420px; max-width: 92%; text-align: left;">
+            <span id="closeHotkeysBtn" class="close-btn" title="Close">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">⌨️ Hot Keys</h3>
+            <p style="font-size: 12px; margin: 0 0 10px; color: var(--text-muted, #666);">
+                Click a key box, then press the shortcut you want. Combos like Ctrl+Shift+K work.
+            </p>
+            <div id="hotkeysList" style="margin-bottom: 12px;"></div>
+            <p id="hotkeysHint" style="display:none; font-size: 12px; color: var(--danger-color, #dc3545); margin: 0 0 10px;">
+                Press the keys for this action… (Esc to cancel)
+            </p>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <button id="resetHotkeysBtn" class="nav-btn" style="padding: 8px 15px;">Reset to Defaults</button>
+                <button id="closeHotkeysDoneBtn" class="btn-search" style="padding: 8px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="requestModal" class="modal">
+        <div class="modal-content modal-content-narrow">
+            <span id="closeRequestModalBtn" class="close-btn">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Feature Request</h3>
+
+            <label class="form-label">Name:</label>
+            <input type="text" id="reqName" class="full-width-input" placeholder="Your Name">
+
+            <label class="form-label">Request:</label>
+            <textarea id="reqText" rows="5" style="width: 100%; margin-bottom: 15px; resize: vertical;"
+                placeholder="Describe your feature request..."></textarea>
+
+            <div class="modal-actions" style="justify-content: flex-end;">
+                <button id="submitRequestBtn" class="btn-search" style="padding: 8px 15px;">OK</button>
+                <button id="cancelRequestBtn" class="nav-btn"
+                    style="padding: 8px 15px; margin-left: 5px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="calcModal" class="modal">
+        <div class="modal-content modal-content-narrow">
+            <span id="closeCalcModalBtn" class="close-btn">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Cost Calculator</h3>
+            <div style="display:none;">
+                <label class="form-label">Condition:</label>
+                <select id="calcCondition" class="full-width-input" style="margin-bottom: 10px;"></select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+
+                <div>
+                    <label class="form-label">Comp. $:</label>
+                    <input type="text" id="calcCompPrice" class="full-width-input">
+                </div>
+                <div>
+                    <label class="form-label">Comp. Ship:</label>
+                    <input type="text" id="calcCompShip" class="full-width-input">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label class="form-label">Comp Total:</label>
+                    <input type="text" id="calcCompTotal" class="full-width-input" readonly
+                        style="background: #e9ecef; color: black; cursor: text;">
+                </div>
+                <hr style="grid-column: span 2; width: 100%; border-top: 1px solid var(--border-color); margin: 5px 0;">
+                <div>
+                    <label class="form-label">Our $:</label>
+                    <input type="text" id="calcOurPrice" class="full-width-input">
+                </div>
+                <div style="display:flex; align-items:flex-end; justify-content:center;">
+                    <button id="copyOurPriceBtn" class="btn-search"
+                        style="padding: 8px 12px; font-size: 12px; width: 100%; max-width: 120px;">Copy</button>
+                </div>
+                <div>
+                    <label class="form-label">Our Total:</label>
+                    <input type="text" id="calcOurTotal" class="full-width-input" readonly
+                        style="background: #e9ecef; color: black; cursor: text;">
+                </div>
+                <div class="modal-actions" style="margin-top: 15px; grid-column: span 2;">
+                    <button id="calculateBtn" class="btn-search" style="width: 100%;">Calculate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="customOptionsModal" class="modal">
+        <div class="modal-content modal-content-narrow">
+            <span id="closeCustomOptionsModalBtn" class="close-btn">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Edit Conditions</h3>
+
+            <div style="margin-bottom: 10px;">
+                <label class="form-label">Category:</label>
+                <select id="modalCategorySelect" class="full-width-input" style="padding: 4px;">
+                    <option value="cassette">Cassette</option>
+                    <option value="cd">CD</option>
+                    <option value="lp">LP</option>
+                    <option value="media">Media Description</option>
+                </select>
+            </div>
+
+            <div id="customOptionsList"
+                style="margin-bottom: 15px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
+
+                <!-- list of options -->
+            </div>
+
+            <hr style="border-top: 1px solid var(--border-color); margin: 10px 0;">
+            <h4 style="margin-top: 0; margin-bottom: 5px; font-size: 13px;">Add New Option</h4>
+
+            <label class="form-label">Title:</label>
+            <input type="text" id="newOptionTitle" class="full-width-input" placeholder="e.g. Water Damage">
+
+            <label class="form-label" style="margin-top: 5px;">Text:</label>
+            <input type="text" id="newOptionText" class="full-width-input"
+                placeholder="e.g. slight water damage on sleeve">
+
+            <div class="modal-actions" style="justify-content: flex-end; margin-top: 10px;">
+                <button id="cancelEditCustomOptionBtn" class="nav-btn"
+                    style="padding: 5px 15px; margin-right: 5px; display: none;">Cancel</button>
+                <button id="addCustomOptionBtn" class="btn-search" style="padding: 5px 15px;">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="conditionPickerModal" class="modal">
+        <div id="conditionPickerContent" class="modal-content modal-content-wide"
+            style="max-width: 780px; width: 90%; height: 420px; min-width: 320px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            <h3 id="conditionPickerHeader"
+                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
+            <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
+            <input type="text" id="conditionPickerSearch" placeholder="Search conditions..."
+                style="flex-shrink: 0; margin-bottom: 8px;">
+            <div id="conditionPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
+                <!-- columns rendered by app.js -->
+            </div>
+            <div class="modal-actions" style="margin-top: 12px; flex-shrink: 0;">
+                <button id="clearConditionPickerBtn" class="nav-btn"
+                    style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
+                <button id="doneConditionPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="listPickerModal" class="modal">
+        <div id="listPickerContent" class="modal-content modal-content-wide"
+            style="max-width: 460px; width: 90%; height: 420px; min-width: 300px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            <h3 id="listPickerHeader"
+                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Options</h3>
+            <span id="closeListPickerBtn" class="close-btn">&times;</span>
+            <div id="listPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
+                <!-- column rendered by app.js -->
+            </div>
+            <div class="modal-actions" style="margin-top: 12px; flex-shrink: 0;">
+                <button id="clearListPickerBtn" class="nav-btn"
+                    style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
+                <button id="doneListPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="container">
+        <div class="sticky-header">
+            <div id="updateBanner" class="blink-update" style="display:none;">
+                ⚠️ NEW VERSION AVAILABLE! CLICK HERE TO UPDATE ⚠️
+            </div>
+
+            <h2 id="appTitle" style="cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative;" title="Click to view Changelog">
+                <button id="hamburgerBtn" class="nav-btn" title="Open Menu" style="position: absolute; left: 2px; background: var(--wysiwyg-yellow, #FFFF00); color: var(--wysiwyg-blue, #0000FF); border: 1px solid #0000FF; border-radius: 4px; padding: 4px 12px; font-weight: bold; cursor: pointer;">☰ Menu</button>
+                <span id="appTitleText">WYSIWYG</span>
+                <span id="currentItem" title="Last scraped item"
+                    style="position: absolute; right: 6px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: normal; font-size: 0.8rem; color: var(--wysiwyg-yellow, #FFFF00); opacity: 0.55;">&nbsp;</span>
+            </h2>
+
+            <div class="tab-container">
+                <button class="tab-btn active" data-tab="listingTool">Builder</button>
+                <button class="tab-btn" data-tab="futureTool" hx-get="/history-list"
+                    hx-target="#historyList">HTML</button>
+            </div>
+
+            <!-- Scraper Section (Sticky) -->
+            <div id="scraperSection"
+                style="margin-bottom: 5px; padding: 10px; background: var(--background-color, #f8f9fa); border-radius: 6px; border: 1px solid var(--border-color, #ccc); color: var(--text-main, #a89292);">
+                <form hx-post="/scrape" hx-target="#scraperOutput"
+                    hx-on:htmx:before-request="this.querySelector('button[type=submit]').innerText = 'Scraping...'; this.querySelector('button[type=submit]').disabled = true;"
+                    hx-on:htmx:after-request="this.querySelector('button[type=submit]').innerText = 'Scrape'; this.querySelector('button[type=submit]').disabled = false;"
+                    class="scraper-form">
+                    <div class="scraper-form-container">
+                        <label>Paste Discogs URL:</label>
+                        <div class="nav-item-group" style="gap: 10px;">
+                            <label class="nav-item-group" style="font-weight:normal; font-size:11px; cursor:pointer;">
+                                <input type="checkbox" id="autoPasteToggle" checked> Autopaste
+                            </label>
+                            <label class="nav-item-group" style="font-weight:normal; font-size:11px; cursor:pointer;">
+                                <input type="checkbox" id="autoGenerateToggle"> Auto Generate
+                            </label>
+                        </div>
+                    </div>
+                    <div class="scraper-input-group">
+                        <input type="url" name="url" id="discogsUrlInput" style="width:100%;"
+                            placeholder="https://www.discogs.com/release/... or /shop/item/..." required>
+                        <button type="submit" id="scrapeBtn" class="scraper-button">Scrape</button>
+                    </div>
+                </form>
+                <div id="scraperError" style="margin-top:10px;"></div>
+                <div id="scraperOutput" style="display:none;" hx-on:htmx:after-swap="handleScrapeResult()"></div>
+            </div>
+        </div>
+        <div id="lookUpTab" class="tab-content">
+            <div class="search-container-styles">
+                <div class="form-group"><label>ARTIST</label><input type="text" id="lookupArtist"></div>
+                <div class="form-group"><label>TITLE</label><input type="text" id="lookupTitle"></div>
+                <div class="form-group"><label>BARCODE / UPC</label><input type="text" id="lookupUPC"
+                        placeholder="Scan here..."></div>
+                <div class="form-group"><label>CATALOG #</label><input type="text" id="lookupCat"></div>
+                <div class="form-group"><label>LABEL</label><input type="text" id="lookupLabel"></div>
+                <div class="form-group">
+                    <label>FORMAT</label>
+                    <select id="lookupFormat">
+                        <option value="all">Search All Formats</option>
+                        <option value="vinyl">Only Vinyl</option>
+                        <option value="cd">Only CD</option>
+                        <option value="other">Exclude Vinyl/CD</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CONDITION (DEFAULT)</label>
+                    <select id="lookupCondition">
+                        <option value="all" selected>All</option>
+                        <option value="M">Mint (M)</option>
+                        <option value="NM">Near Mint (NM)</option>
+                        <option value="VG+">Very Good Plus (VG+)</option>
+                        <option value="VG">Very Good (VG)</option>
+                    </select>
+                </div>
+                <div class="search-button-row">
+                    <button id="runMarketSearchBtn" class="search-button">🔍 SEARCH MARKET (DISCOGS & AMAZON)</button>
+                    <button id="resetLookupBtn" class="reset-button">Reset</button>
+                </div>
+            </div>
+
+            <div id="lookupResults" style="margin-top: 20px;">
+                <p style="text-align: center; color: #666;">Enter details above to see market data.</p>
+            </div>
+        </div>
+
+        <div id="listingTool" class="tab-content" style="display: block;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="form-group">
+                    <label>BOX NUMBER</label>
+                    <div class="nav-item-group">
+                        <input type="text" id="boxNumber">
+                        <button id="saveProfileBtn" type="button" title="Save Profile" class="scraper-button"
+                            style="width:auto; padding:0 8px;">💾</button>
+                    </div>
+                </div>
+                <div class="form-group"><label>LISTER INITIALS</label><input type="text" id="lister" maxlength="3">
+                </div>
+                <div class="form-group"><label>SKU FLAGS</label><select id="skuFlag"></select></div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
+                <div class="form-group">
+                    <label>MEDIA CONDITION</label>
+                    <select id="conditionOfMedia"></select>
+                    <div class="radio-group">
+                        <label><input type="radio" name="media_modifier" value="" checked> None</label>
+                        <label><input type="radio" name="media_modifier" value="++"> ++</label>
+                        <label><input type="radio" name="media_modifier" value="+"> +</label>
+                        <label><input type="radio" name="media_modifier" value="-"> -</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">PACKAGING FEATURE</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="packagingFeature"
+                            title="Open Packaging Feature List">📂</button>
+                    </div>
+                    <select id="packagingFeature" multiple></select>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">EDITION</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="edition" title="Open Edition List">📂</button>
+                    </div>
+                    <select id="edition" multiple></select>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">FORMAT TAGS</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="formatTags" title="Open Format Tags List">📂</button>
+                    </div>
+                    <select id="formatTags" multiple></select>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">WEIGHT/SPEED</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="weightSpeed" title="Open Weight/Speed List">📂</button>
+                    </div>
+                    <select id="weightSpeed" multiple></select>
+                </div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
+                <div class="form-group"><label>COLOR</label><input type="text" id="mediaColor" placeholder="e.g. Red">
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">PRE FM</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="preFM" title="Open Pre FM List">📂</button>
+                    </div>
+                    <select id="preFM" multiple></select>
+                </div>
+                <div class="form-group"><label>MEDIA FORMAT</label><select id="mediaFormat"></select></div>
+                <div class="form-group"><label>MEDIA DESCRIPTION</label>
+                    <div style="display: flex; gap: 6px; align-items: stretch; flex: 1; min-height: 0;">
+                        <input type="text" id="mediaDescriptionText" placeholder="e.g. Dolby"
+                            style="flex: 1; min-width: 0; height: 65px;">
+                        <select id="mediaOptions" multiple title="Media Description options"
+                            style="flex: 0 0 110px; width: 110px; height: 65px; font-size: 11px;"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">POST FM</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="postFM" title="Open Post FM List">📂</button>
+                    </div>
+                    <select id="postFM" multiple></select>
+                </div>
+            </div>
+            <div id="formatLine" style="display:none;"></div>
+
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="form-group">
+                    <label>SLEEVE CONDITION</label>
+                    <select id="sleeveCondition"></select>
+                    <div class="radio-group">
+                        <label><input type="radio" name="sleeve_modifier" value="" checked> None</label>
+                        <label><input type="radio" name="sleeve_modifier" value="++"> ++</label>
+                        <label><input type="radio" name="sleeve_modifier" value="+"> +</label>
+                        <label><input type="radio" name="sleeve_modifier" value="-"> -</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="margin: 0;">SLEEVE PACKAGING</label>
+                        <button class="nav-btn list-picker-open-btn" data-picker="sleevePackaging" title="Open Sleeve Packaging List">📂</button>
+                    </div>
+                    <select id="sleevePackaging" multiple></select>
+                </div>
+                <div class="form-group"><label>SLEEVE DESCRIPTION</label><input type="text" id="sleeveDesc"
+                        placeholder="e.g. Jcard"></div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: 1fr 0.5fr 0.5fr 1fr;">
+                <div class="form-group"><label>LABEL / CAT#</label><input type="text" id="recordLabel"></div>
+                <div class="form-group"><label>YEAR</label><input type="text" id="Year"></div>
+                <div class="form-group"><label>COUNTRY</label><input type="text" id="country" value="USA"></div>
+                <div class="form-group">
+                    <label>OPTIONS</label>
+                    <div style="display:flex; flex-wrap:nowrap; gap:5px; align-items:center; margin-top:5px;">
+                        <label id="oopLabel"
+                            style="font-weight:normal; font-size:11px; display: flex; align-items: center; gap: 4px; white-space: nowrap;"><input
+                                type="checkbox" id="oopToggle"> OOP</label>
+                        <input type="text" id="trackTimeInfo" placeholder="Tracks"
+                            style="width:45px; padding:2px; font-size:11px;">
+                        <div
+                            style="display:flex; align-items:center; gap: 6px; flex-grow: 1; justify-content: flex-end;">
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                                <span
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">LP
+                                    CONDITION</span>
+                                <select id="lpOptions" multiple
+                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                                <span
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">CD
+                                    CONDITION</span>
+                                <select id="cdOptions" multiple
+                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                                <span
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">CASS.
+                                    CONDITION</span>
+                                <select id="customOptions" multiple
+                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 3px; align-items: flex-end; justify-content: flex-end;">
+                                <button id="editCustomOptionsBtn" class="nav-btn"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Edit Condition Lists">✏️ Edit</button>
+                                <button id="clearCustomOptionsBtn" class="nav-btn"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Clear Selections">❌ Clear</button>
+                                <button id="openCustomOptionsBtn" class="nav-btn"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    title="Open Condition Picker">📂 Open</button>
+                            </div>
+                        </div>
+
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="generateBtn" class="btn-search" style="flex: 2; font-size: 14px;">Generate</button>
+                <button id="clearBtn" class="shutdown-btn" style="flex: 1; font-size: 14px;">🗑️ Reset All</button>
+            </div>
+
+            <div class="form-group">
+                <label>Generated Listing Data</label>
+                <div class="nav-item-group" style="margin-bottom: 5px;">
+                    <button type="button" class="lock-padlock" id="lockSkuBtn" title="Lock SKU">🔓</button>
+                    <input type="checkbox" id="lockSku" style="display:none;">
+                    <button id="copySkuBtn" class="copy-button">Copy SKU</button>
+                    <input type="text" id="outputSku" style="flex: 1 1 auto; font-weight: bold;">
+                </div>
+                <div class="nav-item-group" style="align-items: flex-start; margin-bottom: 5px;">
+                    <button type="button" class="lock-padlock" id="lockDescBtn" title="Lock Description">🔓</button>
+                    <input type="checkbox" id="lockDesc" style="display:none;">
+                    <button id="copyDescBtn" class="copy-button">Copy Desc</button>
+                    <textarea id="outputDesc" rows="3" style="flex: 1 1 auto; min-width: 200px; resize: vertical;"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="futureTool" class="tab-content">
+            <div class="scraper-layout">
+                <div class="history-sidebar">
+                    <h4 style="margin-top:0;">📜 Session History</h4>
+                    <div id="historyList">Loading...</div>
+                </div>
+
+                <div class="scraper-main">
+                    <!-- Scraper Form Moved to Tab 1 -->
+
+                    <div style="margin-top:10px;">
+                        <!-- Buttons Row -->
+                        <div class="details-button-row">
+                            <button id="htmlGenBtn" hx-post="/format-html" hx-swap="none"
+                                hx-vals='js:{"raw_text": document.getElementById("manualInputBox")?.value || document.getElementById("scraperResultText")?.textContent || ""}'
+                                hx-on:htmx:after-request="if(event.detail.successful) { var r = event.detail.xhr.responseText; document.getElementById('htmlOutputBox').value = r; document.getElementById('htmlPreview').innerHTML = r; }"
+                                class="details-button" style="background:#6f42c1;">
+                                ✨ Generate HTML Description
+                            </button>
+                            <button id="copyLivePreviewBtn" class="details-button" style="background:#17a2b8;">
+                                📋 Copy Live Preview
+                            </button>
+                        </div>
+
+                        <!-- Main Content Grid -->
+                        <div class="details-grid">
+                            <!-- Left Column: HTML Code & Manual Input -->
+                            <div class="details-column">
+                                <div class="details-box">
+                                    <div class="details-box-header">
+                                        <label class="details-box-label">HTML CODE</label>
+                                        <button id="copyHtmlBtn" class="scratchpad-button"
+                                            style="background:#28a745;">📋 Copy Code</button>
+                                    </div>
+                                    <textarea id="htmlOutputBox" class="details-box-textarea"></textarea>
+                                </div>
+
+                                <div class="details-box">
+                                    <div class="details-box-header">
+                                        <label class="details-box-label" style="font-size: 12px;">MANUAL INPUT /
+                                            SCRATCHPAD</label>
+                                        <div class="scratchpad-header-buttons">
+                                            <button id="copyScratchpadBtn" type="button" class="scratchpad-button"
+                                                style="background:#17a2b8;">Copy All</button>
+                                            <button id="selectAllScratchpadBtn" type="button"
+                                                class="scratchpad-button">Select All</button>
+                                            <button id="pasteToScratchpadBtn" type="button" class="scratchpad-button"
+                                                style="background:#6c757d;">📋 Paste</button>
+                                        </div>
+                                    </div>
+                                    <textarea id="manualInputBox" class="scratchpad-textarea"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Right Column: Live Preview -->
+                            <div class="preview-column">
+                                <div class="details-box-header" style="margin-bottom:5px;">
+                                    <label class="details-box-label">LIVE PREVIEW</label>
+                                    <div class="live-preview-toolbar">
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="bold"
+                                            title="Bold (Ctrl+B)"><b>B</b></button>
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="underline"
+                                            title="Underline (Ctrl+U)"><u>U</u></button>
+                                        <button type="button" class="live-preview-fmt-btn" data-cmd="italic"
+                                            title="Italic (Ctrl+I)"><i>I</i></button>
+                                    </div>
+                                </div>
+                                <div id="htmlPreview" class="preview-box" contenteditable="true" spellcheck="false"
+                                    aria-label="Live Preview (editable)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+    <div id="customContextMenu"
+        style="display:none; position:fixed; z-index:10000; background:var(--bg-color, white); color:var(--text-color, #333); border:1px solid var(--border-color, #ccc); box-shadow: 2px 2px 5px rgba(0,0,0,0.2); padding: 5px 0; min-width: 150px; border-radius: 4px; font-family: sans-serif;">
+        <div id="favoriteContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            ⭐ Favorite / Unfavorite</div>
+    </div>
+
+    <script>
+        // Initialize Cost Calculator conditions from the server-side JSON
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/cost_calc.json');
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('calcCondition');
+                    if (select && data.Cost_calulation) {
+                        select.innerHTML = data.Cost_calulation.map(c => `<option value="${c}">${c}</option>`).join('');
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load cost calculator config:", err);
+            }
+        });
+    </script>
+    <!-- Hamburger Drawer (replaces the old header button row) -->
+    <div id="drawerOverlay" class="drawer-overlay"></div>
+    <nav id="hamburgerDrawer" class="drawer" aria-label="Main menu" aria-hidden="true">
+        <div class="drawer-header">
+            <span>Menu</span>
+            <button id="drawerCloseBtn" class="close-btn" title="Close">&times;</button>
+        </div>
+        <div class="drawer-actions">
+            <button id="runUberPasteBtn" class="drawer-btn"><span class="drawer-ico">📋</span> UberPaste</button>
+            <button id="runWysiScanBtn" class="drawer-btn"><span class="drawer-ico">🔍</span> WysiScan</button>
+            <button id="runWalmartSheetBtn" class="drawer-btn"><span class="drawer-ico">🛒</span> Walmart Sheet</button>
+            <div class="drawer-submenu" id="addsSubmenu">
+                <button id="addsToggleBtn" class="drawer-btn drawer-submenu-toggle"><span class="drawer-ico drawer-ico-sm">➕</span> Adds</button>
+                <div class="drawer-submenu-items" id="addsSubmenuItems" style="display:none;">
+                    <button id="addsAmazonBtn" class="drawer-btn drawer-submenu-item"><span class="drawer-ico drawer-ico-sm">📦</span> Amazon</button>
+                    <button id="addsDiscogsBtn" class="drawer-btn drawer-submenu-item" style="display:none;"><span class="drawer-ico drawer-ico-sm">💿</span> Discogs</button>
+                </div>
+            </div>
+            <button id="openCalcBtn" class="drawer-btn"><span class="drawer-ico">💲</span> Cost Calculator</button>
+            <hr class="drawer-sep">
+            <button id="hotkeysBtn" class="drawer-btn"><span class="drawer-ico">⌨️</span> Hot Keys</button>
+            <button id="themeBtn" class="drawer-btn"><span class="drawer-ico">🌓</span> Toggle Dark/Light</button>
+            <button id="refreshBtn" class="drawer-btn refresh-btn"><span class="drawer-ico">🔄</span> Refresh</button>
+            <button id="updateMenusBtn" class="drawer-btn"><span class="drawer-ico">🔃</span> Update Menus</button>
+            <button id="editorBtn" class="drawer-btn"><span class="drawer-ico">⚙️</span> Settings Editor</button>
+            <hr class="drawer-sep">
+            <div class="drawer-section-title">📊 Daily Count</div>
+            <div class="counter-button-group" id="drawerCounterGroup" style="width: 100%;">
+                <!-- Counter buttons rendered dynamically by JS -->
+            </div>
+            <button id="editCountersBtn" class="drawer-btn"><span class="drawer-ico">✏️</span> Edit Counters</button>
+            <button id="openListingsFolderBtn" class="drawer-btn"><span class="drawer-ico">📂</span> Open Listings</button>
+            <hr class="drawer-sep">
+            <button id="aboutBtn" class="drawer-btn"><span class="drawer-ico">ℹ️</span> About</button>
+            <button id="reportsBtn" class="drawer-btn"><span class="drawer-ico">📝</span> Reports</button>
+            <button id="shutdownBtn" class="drawer-btn shutdown-btn"><span class="drawer-ico">🔌</span> Shut Down</button>
+        </div>
+    </nav>
+    <style>
+        .drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 9990;
+        }
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 280px;
+            max-width: 85vw;
+            background: var(--background-color, #fff);
+            color: var(--text-main, #333);
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            z-index: 9991;
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.open {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            font-weight: bold;
+            font-size: 16px;
+            border-bottom: 1px solid var(--border-color, #ccc);
+        }
+        .drawer-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px;
+        }
+        .drawer-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+        }
+        .drawer-btn:hover {
+            background: var(--wysiwyg-blue-soft, #eef3fb);
+        }
+        .drawer-btn .drawer-ico {
+            font-size: 13px;
+            width: 18px;
+            text-align: center;
+        }
+        .drawer-submenu { width: 100%; }
+        .drawer-submenu-items { padding-left: 18px; }
+        .drawer-submenu-item { font-size: 13px; padding: 9px 12px; }
+        .drawer-ico-sm { font-size: 13px; width: 18px; }
+        .drawer-submenu-toggle .drawer-ico { transition: transform 0.15s ease; }
+        .drawer-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted, #888);
+            margin: 10px 4px 4px;
+        }
+        .drawer-sep {
+            border: none;
+            border-top: 1px solid var(--border-color, #eee);
+            margin: 4px 0;
+        }
+    </style>
+    <script src="app.js" defer></script>
+</body>
+
+</html>

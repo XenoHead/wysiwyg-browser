@@ -1,73 +1,26 @@
-Selected Images (3):
-  - Cher_4.jpg
-  - Cher_2.jpg
-  - Cher_3.jpg
-
-Prompt:
-GLOBAL RULE:
-Always place each labeled item in the images on to its own separate line.
-List all attributes on consecutive lines without empty line returns between them.
-FORMATTING: ** SINGLE SPACED PRINTING **
-Group 'Media Description:'.
-For CASSETTE SHELL images: get the following: Shell Type/Style, Shell Texture, Timing Window, Shell Color, Ink Color, Binding (screws or sonic weld), Stamps.
-For CD images get Matrix, Runout, IFPI, etc.
-Capitalize the first letter of every word.
-List all Media attributes on consecutive lines without empty line returns between them.
-Include all labels for the data. Do not include 'Category names
-
-Extracted Text:
-RELEASE
-Band Name
-Copy
-Album Name
-Copy
-Release Date
-Copy
-Label
-Copy
-Catalogue Number
-Copy
-TRACKS
-A1
-Copy
-A2
-Copy
-A3
-Copy
-A4
-Copy
-A5
-Copy
-B1
-Copy
-B2
-Copy
-B3
-Copy
-B4
-Copy
-B5
-Copy
-B6
-Copy
-EXTRA
-Barcode
-Copy
-Universal Music Company
-Copy
-Copyright
-Copy
-Address
-Copy
-Distribution
-Copy
-Warning
-Copy
-High Quality Logo
-Copy
-Dolby Technology
-Copy
-Label Logo
-Copy
-MEDIA DESCRIPTION
-Copy Desc.
+Release:
+Band Name: Monty Python
+Album Name: The Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
+Release Date: 1975
+Label: Arista
+Catalogue Number: AC5-8157
+Tracks:
+A1: Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
+B1: Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
+Extra:
+Executive Version
+New From Arista
+Qualitape
+Optimum Sound
+Dolby System
+Arista Records, Inc. 6 West 57th Street, New York, N.y. 10019
+Printed In U.s.a.
+Mfg. U.s.a.
+Barcode: 0 7822-18157-4
+Shell Type: Opaque
+Shell Texture: Smooth
+Timing Window: Small
+Shell Color: Off White
+Ink Color: Black
+Binding: Sonic Weld
+Stamps: None

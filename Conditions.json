@@ -1,17 +1,19 @@
 {
     "lp": [
         {
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode",
+            "favorite": true
+        },
+        {
             "title": "Corner (Creasing)",
             "text": "Corner creasing",
             "favorite": true
         },
         {
-            "title": "Barcode (Mark)",
-            "text": "mark through Barcode"
-        },
-        {
             "title": "Cellophane (Tearing)",
-            "text": "Cellophane tearing"
+            "text": "Cellophane tearing",
+            "favorite": false
         },
         {
             "title": "Corner (Denting Light)",
@@ -145,7 +147,8 @@
         },
         {
             "title": "Cellophane (Tearing)",
-            "text": "Cellophane tearing"
+            "text": "Cellophane tearing",
+            "favorite": false
         },
         {
             "title": "Corner (Wear Light)",
@@ -213,7 +216,8 @@
         },
         {
             "title": "Tearing",
-            "text": "Cellophane tearing"
+            "text": "Cellophane tearing",
+            "media_type": "cd"
         },
         {
             "title": "Water Damage (Art)",
@@ -237,19 +241,15 @@
             "text": "waviness/bending to Insert"
         },
         {
-            "title": "Writing/Ink",
-            "text": "writing on Artwork"
+            "title": "Writing/Ink (Inside)",
+            "text": "writing on inside Artwork",
+            "media_type": "cd"
         }
     ],
     "cassette": [
         {
             "title": "Barcode (Hole Punch)",
             "text": "hole-punch through Barcode",
-            "favorite": true
-        },
-        {
-            "title": "Cellophane (Tearing)",
-            "text": "Cellophane tearing",
             "favorite": true
         },
         {
@@ -263,17 +263,18 @@
             "favorite": true
         },
         {
-            "title": "Waviness/Bending (Jcard)",
-            "text": "waviness/bending to Jcard",
-            "favorite": true
-        },
-        {
             "title": "Barcode (Mark)",
-            "text": "mark through Barcode"
+            "text": "mark through Barcode",
+            "favorite": false
         },
         {
             "title": "Cellophane  Tearing",
             "text": "Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing",
+            "favorite": false
         },
         {
             "title": "Cellophane Heavy (Tearing)",
@@ -329,7 +330,13 @@
         },
         {
             "title": "Water Damage (Jcard)",
-            "text": "water damage to Jcard"
+            "text": "water damage to Jcard",
+            "favorite": false
+        },
+        {
+            "title": "Waviness/Bending (Jcard)",
+            "text": "waviness/bending to Jcard",
+            "favorite": false
         },
         {
             "title": "Writing/Ink",
@@ -338,13 +345,44 @@
     ],
     "media": [
         {
-            "title": "Scuffing",
-            "text": "has shell scuffing and missing ink",
+            "title": "Shell scuffing/missing ink",
+            "text": "has shell scuffing and missing ink"
+        }
+    ],
+    "mediaCondition": [
+        {
+            "title": "Ink/Writng",
+            "text": "has writing on shell",
+            "media_type": "cassette",
             "favorite": true
         },
         {
-            "title": "water",
-            "text": "water damage"
+            "title": "Scuffing/Ink",
+            "text": "has scuff marks and missing ink",
+            "media_type": "cassette",
+            "favorite": true
+        },
+        {
+            "title": "worn print",
+            "text": "has worn of print",
+            "media_type": "cd",
+            "favorite": true
+        },
+        {
+            "title": "Shell scuffing/missing ink",
+            "text": "has shell scuffing and missing ink",
+            "media_type": "cassette",
+            "favorite": false
+        },
+        {
+            "title": "Stains (Shell)",
+            "text": "has stained Shell",
+            "media_type": "cassette"
+        },
+        {
+            "title": "wrinkles",
+            "text": "has wrinkled tape",
+            "media_type": "cassette"
         }
     ]
 }

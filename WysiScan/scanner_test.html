@@ -977,6 +977,7 @@
             listDiv.innerHTML = checked.map(p => `<div>📄 ${p.split(/[\\/]/).pop()}</div>`).join('');
             document.getElementById('cliSelectedCount').innerText = checked.length;
             document.getElementById('cliResultBox').innerHTML = '';
+            lastCliResultText = '';
             document.getElementById('cliStatusMsg').innerText = '';
 
             // Load selectable prompt presets from prompts.json
@@ -1135,20 +1136,53 @@
             btn.textContent = on ? '❒ Restore' : '□ Max';
         }
 
-        // Gather the full Extract Text content and open it in Notepad (server
+        // Rebuild the extraction output as clean plain text straight from the
+        // rendered rows (current textarea values, no button labels/UI chrome):
+        //   "Label: value" entry rows under "Group:" headers with a blank line
+        //   between groups, and the Media Description block under its own
+        //   "Media Description:" header. Falls back to the raw AI output.
+        function buildCliPlainText() {
+            const box = document.getElementById('cliResultBox');
+            const lines = [];
+            const gap = () => { if (lines.length) lines.push(''); };
+            if (box) {
+                box.querySelectorAll(':scope > div').forEach(el => {
+                    const ta = el.querySelector('textarea');
+                    if (el.dataset.cliMedia !== undefined) {
+                        gap();
+                        const name = el.dataset.cliMediaHeader || 'Media Description';
+                        lines.push(/:\s*$/.test(name) ? name : name + ':');
+                        const val = ta ? ta.value.trim() : '';
+                        if (val) lines.push(val);
+                        return;
+                    }
+                    if (el.dataset.cliLabel !== undefined) {
+                        const val = ta ? ta.value.trim() : '';
+                        if (!val) return;
+                        const label = el.dataset.cliLabel || '';
+                        lines.push(label ? label + ': ' + val : val);
+                        return;
+                    }
+                    if (el.dataset.cliHeader !== undefined) {
+                        gap();
+                        lines.push(el.dataset.cliHeader + ':');
+                        return;
+                    }
+                    // Skip anything else (status/placeholder messages)
+                });
+            }
+            const built = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+            return built || (lastCliResultText || '').trim();
+        }
+
+        // Gather the Extract Text result and open it in Notepad (server
         // writes a temp .txt and launches it with focus).
         async function openCliInNotepad() {
-            const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value.split(/[\\/]/).pop());
-            const prompt = document.getElementById('cliPromptText').value.trim();
-            const resultText = document.getElementById('cliResultBox').innerText || '';
-            let out = '';
-            if (checked.length) {
-                out += 'Selected Images (' + checked.length + '):\n  - ' + checked.join('\n  - ') + '\n\n';
+            const out = buildCliPlainText();
+            if (!out) {
+                showToast('Nothing to open yet - run an extraction first.', 'warn');
+                return;
             }
-            if (prompt) {
-                out += 'Prompt:\n' + prompt + '\n\n';
-            }
-            out += 'Extracted Text:\n' + resultText.trim() + '\n';
             try {
                 const res = await fetch('/open-in-notepad', {
                     method: 'POST',
@@ -1225,6 +1259,7 @@
             function renderCliResults(text) {
                 const box = document.getElementById('cliResultBox');
                 box.innerHTML = '';
+                lastCliResultText = text || '';
                 if (!text || !text.trim()) {
                     box.innerHTML = '<div style="font-size:12px;color:var(--muted-color,#888);">No text returned.</div>';
                     return;
@@ -1254,6 +1289,8 @@
                     wrap.appendChild(head);
                     wrap.appendChild(ta);
                     wrap.appendChild(btn);
+                    wrap.dataset.cliMedia = '1';
+                    wrap.dataset.cliMediaHeader = head.textContent;
                     box.appendChild(wrap);
                     inMediaDesc = false;
                     mediaLines = [];
@@ -1274,6 +1311,7 @@
                         const h = document.createElement('div');
                         h.style.cssText = 'font-size:12px;font-weight:700;color:var(--accent,#6f42c1);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px;';
                         h.textContent = name;
+                        h.dataset.cliHeader = name;
                         box.appendChild(h);
                         continue;
                     }
@@ -1298,8 +1336,11 @@
                     if (entryLabel) {
                         const lbl = document.createElement('div');
                         lbl.textContent = entryLabel;
+                        row.dataset.cliLabel = entryLabel;
                         lbl.style.cssText = 'flex:0 0 130px;font-size:12px;font-weight:600;color:var(--text-main);padding-top:8px;text-align:right;';
                         row.appendChild(lbl);
+                    } else {
+                        row.dataset.cliLabel = '';
                     }
                     const ta = document.createElement('textarea');
                     ta.value = entryValue;
@@ -1326,6 +1367,7 @@
         setInterval(sendHeartbeat, 3000);
         const PLACEHOLDER_SVG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg==";
         let scanCounter = 0;
+        let lastCliResultText = '';
         let groupStarted = false;
         let lastOriginalPath = '';
         let lastCroppedPath = '';

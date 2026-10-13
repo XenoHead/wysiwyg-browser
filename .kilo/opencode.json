@@ -1,0 +1,9 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "plugin": [
+    "opencode-models-discovery"
+  ],
+  "indexing": {
+    "model": "intfloat/e5-base-v2"
+  }
+}

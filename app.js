@@ -339,7 +339,6 @@ function setupEventListeners() {
 
     // Live Preview is editable; every change is mirrored into the HTML CODE box
     document.getElementById('htmlPreview')?.addEventListener('input', syncLivePreviewToCode);
-    document.getElementById('mediaOptions')?.addEventListener('change', syncMediaOptionsToTextBox);
     document.querySelectorAll('.live-preview-fmt-btn').forEach(btn => {
         // Keep the preview's text selection when clicking a toolbar button
         btn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -1718,6 +1717,32 @@ function parsePastedData(input) {
                         break;
                     }
                 }
+                
+                // Auto-populate Media Type dropdown for condition multiselects based on media format
+                const conditionMediaTypeSelect = document.getElementById('conditionMediaType');
+                if (conditionMediaTypeSelect) {
+                    const selectedFormat = mSel.value;
+                    let conditionMediaType = 'lp'; // default
+                    
+                    if (selectedFormat.includes('Vinyl') || selectedFormat.includes('LP') || selectedFormat === 'Vinyl') {
+                        conditionMediaType = 'lp';
+                    } else if (selectedFormat.includes('CD') || selectedFormat.includes('SACD') || selectedFormat.includes('DVD') || selectedFormat.includes('Blu-ray') || selectedFormat.includes('HD DVD') || selectedFormat.includes('Minidisc')) {
+                        conditionMediaType = 'cd';
+                    } else if (selectedFormat.includes('Cassette')) {
+                        conditionMediaType = 'cassette';
+                    }
+                    
+                    conditionMediaTypeSelect.value = conditionMediaType;
+                    currentConditionMediaType = conditionMediaType;
+                    
+                    // Update modal category to match
+                    const modalCatSelect = document.getElementById('modalCategorySelect');
+                    if (modalCatSelect) modalCatSelect.value = conditionMediaType;
+                    currentModalCategory = conditionMediaType;
+                    
+                    // Re-render condition multiselects with new media type
+                    renderConditionMultiselects();
+                }
             }
 
             ['formatTags', 'edition', 'preFM', 'postFM', 'packagingFeature', 'sleevePackaging', 'weightSpeed'].forEach(id => {
@@ -2663,9 +2688,11 @@ function updateCounterUIDeprecated() {}
 
 // --- Custom Options Logic ---
 
-let customOptionsData = { cassette: [], cd: [], lp: [], media: [] };
+let customOptionsData = { cassette: [], cd: [], lp: [], media: [], mediaCondition: [] };
 let editingCustomOptionIndex = -1;
 let currentModalCategory = 'cassette';
+let currentConditionMediaType = 'lp'; // Track current media type for condition dropdowns
+let conditionPickerViewMode = 'single'; // 'single' or 'dual'
 
 function sortCustomOptionsData() {
     Object.keys(customOptionsData).forEach(cat => {
@@ -2688,6 +2715,7 @@ async function loadCustomOptions() {
             if (!customOptionsData.cd) customOptionsData.cd = [];
             if (!customOptionsData.lp) customOptionsData.lp = [];
             if (!customOptionsData.media) customOptionsData.media = [];
+            if (!customOptionsData.mediaCondition) customOptionsData.mediaCondition = [];
             sortCustomOptionsData();
         }
     } catch (e) {
@@ -2723,8 +2751,7 @@ function renderCustomOptionsSelect() {
     const configs = [
         { id: 'customOptions', key: 'cassette' },
         { id: 'cdOptions', key: 'cd' },
-        { id: 'lpOptions', key: 'lp' },
-        { id: 'mediaOptions', key: 'media' }
+        { id: 'lpOptions', key: 'lp' }
     ];
 
     configs.forEach(config => {
@@ -2752,14 +2779,119 @@ function renderCustomOptionsSelect() {
             select.appendChild(option);
         });
     });
+
+    // Also render the new Media Condition / Sleeve Condition multiselects based on current media type
+    renderConditionMultiselects();
+}
+
+function renderConditionMultiselects() {
+    const mediaSelect = document.getElementById('mediaConditionOptions');
+    const sleeveSelect = document.getElementById('sleeveConditionOptions');
+    const mediaTypeSelect = document.getElementById('conditionMediaType');
+    
+    if (!mediaSelect || !sleeveSelect || !mediaTypeSelect) return;
+    
+    // Update current media type from dropdown
+    currentConditionMediaType = mediaTypeSelect.value;
+    
+    // Get the media condition data (defects like scratched, warped, etc.) filtered by current media type
+    const mediaConditionData = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === currentConditionMediaType);
+    
+    // Get the sleeve condition data from the original condition arrays (lp, cd, cassette) filtered by media type
+    const sleeveData = customOptionsData[currentConditionMediaType] || [];
+    
+    // Helper to render a multiselect
+    const renderSelect = (select, selectedKeys, data) => {
+        select.innerHTML = '';
+        data.forEach((opt) => {
+            const option = document.createElement('option');
+            const val = JSON.stringify(opt);
+            option.value = val;
+            option.text = (opt.favorite ? '⭐ ' : '') + opt.title;
+            if (selectedKeys.includes(opt.title + '|||' + opt.text)) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    };
+    
+    // Get currently selected keys from the new multiselects (to preserve selection on re-render)
+    const mediaSelectedKeys = Array.from(mediaSelect.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    });
+    const sleeveSelectedKeys = Array.from(sleeveSelect.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    });
+    
+    renderSelect(mediaSelect, mediaSelectedKeys, mediaConditionData);
+    renderSelect(sleeveSelect, sleeveSelectedKeys, sleeveData);
+    
+    // Sync to hidden legacy multiselects
+    syncConditionMultiselectsToLegacy();
+}
+
+function syncConditionMultiselectsToLegacy() {
+    const sleeveSelect = document.getElementById('sleeveConditionOptions');
+    const legacySelect = document.getElementById(currentConditionMediaType === 'lp' ? 'lpOptions' : 
+                                               currentConditionMediaType === 'cd' ? 'cdOptions' : 'customOptions');
+    
+    if (!sleeveSelect || !legacySelect) return;
+    
+    // Only sync Sleeve Condition selections to legacy (Media Condition uses different data)
+    const sleeveSelectedKeys = Array.from(sleeveSelect.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    });
+    
+    // Update legacy multiselect
+    Array.from(legacySelect.options).forEach(opt => {
+        try {
+            const d = JSON.parse(opt.value);
+            opt.selected = sleeveSelectedKeys.includes(d.title + '|||' + d.text);
+        } catch (e) {}
+    });
 }
 
 function renderCustomOptionsModalList() {
     const list = document.getElementById('customOptionsList');
     if (!list) return;
 
+    // Both categories always show media type filter
+    const mediaTypeFilter = document.getElementById('modalMediaTypeFilter');
+    const newOptionMediaTypeContainer = document.getElementById('newOptionMediaTypeContainer');
+    if (mediaTypeFilter) mediaTypeFilter.style.display = 'block';
+    if (newOptionMediaTypeContainer) newOptionMediaTypeContainer.style.display = 'block';
+
+    // Auto-populate media type from main form's media format if not already set
+    const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
+    const conditionMediaTypeSelect = document.getElementById('conditionMediaType');
+    if (modalMediaTypeSelect && conditionMediaTypeSelect && !modalMediaTypeSelect.dataset.userChanged) {
+        modalMediaTypeSelect.value = conditionMediaTypeSelect.value;
+    }
+
+    // Get data based on category
+    let currentData;
+    const selectedMediaType = modalMediaTypeSelect?.value || currentConditionMediaType;
+    
+    if (currentModalCategory === 'mediaCondition') {
+        // Filter mediaCondition by selected media type
+        currentData = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === selectedMediaType);
+    } else if (currentModalCategory === 'sleeveCondition') {
+        // Filter sleeve conditions (lp, cd, cassette arrays) by selected media type
+        currentData = customOptionsData[selectedMediaType] || [];
+    } else {
+        currentData = [];
+    }
+
     list.innerHTML = '';
-    const currentData = customOptionsData[currentModalCategory];
 
     if (!currentData || currentData.length === 0) {
         list.innerHTML = '<div style="font-size: 11px; color: #666; text-align: center;">No options found for this category. Add one below.</div>';
@@ -2778,7 +2910,16 @@ function renderCustomOptionsModalList() {
         textCol.style.cssText = 'font-size:11px; flex-grow:1; cursor:pointer; min-width:0;';
         textCol.title = 'Click to Edit';
         textCol.onclick = () => editCustomOption(index);
-        textCol.innerHTML = `<strong>${opt.title}</strong><br><span style="color:#666;">${opt.text}</span>`;
+        // Show media_type for mediaCondition entries
+        let mediaTypeDisplay = '';
+        if (currentModalCategory === 'mediaCondition' && opt.media_type) {
+            mediaTypeDisplay = `<br><span style="color:#0066cc; font-size:10px;">[${opt.media_type.toUpperCase()}]</span>`;
+        }
+        // For sleeveCondition, show which media type it belongs to
+        if (currentModalCategory === 'sleeveCondition') {
+            mediaTypeDisplay = `<br><span style="color:#0066cc; font-size:10px;">[${selectedMediaType.toUpperCase()}]</span>`;
+        }
+        textCol.innerHTML = `<strong>${opt.title}</strong><br><span style="color:#666;">${opt.text}</span>${mediaTypeDisplay}`;
 
         const starBtn = document.createElement('button');
         starBtn.innerHTML = opt.favorite ? '⭐' : '☆';
@@ -2804,12 +2945,21 @@ function renderCustomOptionsModalList() {
 
 // --- Condition Picker (Open button) ---
 
-const CONDITION_PICKER_CONFIGS = [
-    { id: 'lpOptions', key: 'lp', label: 'LP CONDITION' },
-    { id: 'cdOptions', key: 'cd', label: 'CD CONDITION' },
-    { id: 'customOptions', key: 'cassette', label: 'CASS. CONDITION' },
-    { id: 'mediaOptions', key: 'media', label: 'MEDIA DESCRIPTION' }
-];
+function getConditionPickerConfigs() {
+    // Return configs based on current media type and view mode
+    const mediaType = currentConditionMediaType;
+    if (conditionPickerViewMode === 'dual') {
+        return [
+            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: 'Media Condition', useMediaCondition: true },
+            { id: 'sleeveConditionOptions', key: mediaType, label: 'Sleeve Condition' }
+        ];
+    } else {
+        // Single column mode - only Media Condition
+        return [
+            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: 'Media Condition', useMediaCondition: true }
+        ];
+    }
+}
 
 function conditionOptionKey(opt) {
     return (opt ? opt.title + '|||' + opt.text : '');
@@ -2843,7 +2993,8 @@ function toggleConditionOption(selectId, opt) {
     if (option) {
         option.selected = !option.selected;
         renderConditionPicker();
-        if (selectId === 'mediaOptions') syncMediaOptionsToTextBox();
+        // Sync to legacy multiselects
+        syncConditionMultiselectsToLegacy();
     }
 }
 
@@ -2873,9 +3024,20 @@ function renderConditionPicker() {
     const searchInput = document.getElementById('conditionPickerSearch');
     const query = (searchInput?.value || '').trim().toLowerCase();
 
-    CONDITION_PICKER_CONFIGS.forEach(config => {
+    const configs = getConditionPickerConfigs();
+    configs.forEach(config => {
         const select = document.getElementById(config.id);
-        const allItems = customOptionsData[config.key] || [];
+        
+        // Get data based on config type
+        let allItems;
+        if (config.useMediaCondition) {
+            // Filter mediaCondition by media_type
+            allItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === config.mediaType);
+        } else {
+            // Use original condition arrays (lp, cd, cassette)
+            allItems = customOptionsData[config.key] || [];
+        }
+        
         const items = allItems.filter(opt => {
             if (!query) return true;
             return ((opt.title || '') + ' ' + (opt.text || '')).toLowerCase().includes(query);
@@ -2908,6 +3070,31 @@ function renderConditionPicker() {
                 `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
                 `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
             row.onclick = () => toggleConditionOption(config.id, opt);
+            // Add context menu for favoriting
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const menu = document.getElementById('customContextMenu');
+                if (menu) {
+                    // Only show favorite option for modal rows
+                    document.getElementById('favoriteContextItem').style.display = 'block';
+                    document.getElementById('openMediaContextItem').style.display = 'none';
+                    document.getElementById('openSleeveContextItem').style.display = 'none';
+                    document.getElementById('openAllMediaContextItem').style.display = 'none';
+                    document.getElementById('openAllSleeveContextItem').style.display = 'none';
+                    document.getElementById('editConditionContextItem').style.display = 'none';
+                    document.getElementById('clearConditionContextItem').style.display = 'none';
+                    
+                    // Store the option data and config for the favorite toggle
+                    menu.dataset.targetId = config.id;
+                    menu.dataset.optionKey = conditionOptionKey(opt);
+                    menu.dataset.optionMediaType = opt.media_type || '';
+                    
+                    menu.style.display = 'block';
+                    menu.style.left = e.pageX + 'px';
+                    menu.style.top = e.pageY + 'px';
+                }
+            });
             list.appendChild(row);
         });
 
@@ -3038,9 +3225,27 @@ window.resetListPickerPlacement = initDraggableModal('listPickerContent', 'listP
 
 window.editCustomOption = function (index) {
     editingCustomOptionIndex = index;
-    const opt = customOptionsData[currentModalCategory][index];
+    
+    // Get the correct data array based on category
+    let currentData;
+    const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
+    
+    if (currentModalCategory === 'mediaCondition') {
+        currentData = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === selectedMediaType);
+    } else if (currentModalCategory === 'sleeveCondition') {
+        currentData = customOptionsData[selectedMediaType] || [];
+    }
+    
+    const opt = currentData[index];
     document.getElementById('newOptionTitle').value = opt.title;
     document.getElementById('newOptionText').value = opt.text;
+    
+    // Set the media type dropdown
+    const mediaTypeSelect = document.getElementById('newOptionMediaType');
+    if (mediaTypeSelect && opt.media_type) {
+        mediaTypeSelect.value = opt.media_type;
+    }
+    
     document.getElementById('addCustomOptionBtn').innerText = 'Update';
 
     const cancelBtn = document.getElementById('cancelEditCustomOptionBtn');
@@ -3051,7 +3256,24 @@ window.editCustomOption = function (index) {
 
 window.deleteCustomOption = function (event, index) {
     event.stopPropagation();
-    customOptionsData[currentModalCategory].splice(index, 1);
+    
+    // Get the correct data array based on category
+    const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
+    let targetArray;
+    
+    if (currentModalCategory === 'mediaCondition') {
+        targetArray = customOptionsData.mediaCondition;
+        // Find the actual index in the full array (since we filter for display)
+        const filtered = targetArray.filter(opt => opt.media_type === selectedMediaType);
+        const actualIndex = targetArray.findIndex(opt => opt.title === filtered[index].title && opt.text === filtered[index].text && opt.media_type === filtered[index].media_type);
+        if (actualIndex !== -1) {
+            targetArray.splice(actualIndex, 1);
+        }
+    } else if (currentModalCategory === 'sleeveCondition') {
+        targetArray = customOptionsData[selectedMediaType];
+        targetArray.splice(index, 1);
+    }
+    
     if (editingCustomOptionIndex === index) {
         cancelEditCustomOption();
     } else if (editingCustomOptionIndex > index) {
@@ -3064,20 +3286,26 @@ window.deleteCustomOption = function (event, index) {
 
 window.toggleFavoriteCustomOption = function (event, index) {
     event.stopPropagation();
-    const item = customOptionsData[currentModalCategory][index];
-    if (item) {
-        item.favorite = !item.favorite;
-        if (editingCustomOptionIndex === index) {
-            // Keep editing index in sync if it moves after sorting
-            const tempItem = item;
-            saveCustomOptions(); // sorts list
-            editingCustomOptionIndex = customOptionsData[currentModalCategory].findIndex(i => i.title === tempItem.title && i.text === tempItem.text);
-        } else {
-            saveCustomOptions();
+    
+    // Get the correct data array based on category
+    const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
+    let targetArray;
+    
+    if (currentModalCategory === 'mediaCondition') {
+        targetArray = customOptionsData.mediaCondition;
+        const filtered = targetArray.filter(opt => opt.media_type === selectedMediaType);
+        const actualIndex = targetArray.findIndex(opt => opt.title === filtered[index].title && opt.text === filtered[index].text && opt.media_type === filtered[index].media_type);
+        if (actualIndex !== -1) {
+            targetArray[actualIndex].favorite = !targetArray[actualIndex].favorite;
         }
-        renderCustomOptionsSelect();
-        renderCustomOptionsModalList();
+    } else if (currentModalCategory === 'sleeveCondition') {
+        targetArray = customOptionsData[selectedMediaType];
+        targetArray[index].favorite = !targetArray[index].favorite;
     }
+    
+    saveCustomOptions();
+    renderCustomOptionsSelect();
+    renderCustomOptionsModalList();
 };
 
 function cancelEditCustomOption() {
@@ -3099,9 +3327,36 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCustomOptions();
     clearCurrentItem();
 
+    // Media type dropdown for condition multiselects
+    document.getElementById('conditionMediaType')?.addEventListener('change', (e) => {
+        currentConditionMediaType = e.target.value;
+        // Update modal category to match
+        currentModalCategory = currentConditionMediaType;
+        const modalCatSelect = document.getElementById('modalCategorySelect');
+        if (modalCatSelect) modalCatSelect.value = currentModalCategory;
+        renderCustomOptionsSelect();
+    });
+
+    // Sync new multiselects to legacy on selection change
+    ['mediaConditionOptions', 'sleeveConditionOptions'].forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+            select.addEventListener('change', () => {
+                syncConditionMultiselectsToLegacy();
+            });
+        }
+    });
+
     document.getElementById('modalCategorySelect')?.addEventListener('change', (e) => {
         currentModalCategory = e.target.value;
         cancelEditCustomOption();
+        renderCustomOptionsModalList();
+    });
+
+    // Media type filter for modal - track user changes
+    document.getElementById('modalMediaTypeSelect')?.addEventListener('change', (e) => {
+        e.target.dataset.userChanged = 'true';
+        renderCustomOptionsModalList();
     });
 
     document.getElementById('editCustomOptionsBtn')?.addEventListener('click', (e) => {
@@ -3130,20 +3385,42 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        let newOption = { title, text };
+        // For both categories, add media_type from the dropdown
+        const mediaTypeSelect = document.getElementById('newOptionMediaType');
+        const selectedMediaType = mediaTypeSelect ? mediaTypeSelect.value : currentConditionMediaType;
+        newOption.media_type = selectedMediaType;
+
+        let targetArray;
+        if (currentModalCategory === 'mediaCondition') {
+            targetArray = customOptionsData.mediaCondition;
+        } else if (currentModalCategory === 'sleeveCondition') {
+            targetArray = customOptionsData[selectedMediaType];
+        }
+
         if (editingCustomOptionIndex !== -1) {
-            customOptionsData[currentModalCategory][editingCustomOptionIndex] = { title, text };
+            targetArray[editingCustomOptionIndex] = newOption;
         } else {
-            customOptionsData[currentModalCategory].push({ title, text });
+            targetArray.push(newOption);
         }
 
         saveCustomOptions();
         cancelEditCustomOption();
         renderCustomOptionsSelect();
+        renderCustomOptionsModalList();
     });
 
     document.getElementById('clearCustomOptionsBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
+        // Clear new multiselects
+        ['mediaConditionOptions', 'sleeveConditionOptions'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                Array.from(select.options).forEach(opt => opt.selected = false);
+            }
+        });
+        // Clear legacy multiselects
+        ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
             const select = document.getElementById(id);
             if (select) {
                 Array.from(select.options).forEach(opt => opt.selected = false);
@@ -3156,7 +3433,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const search = document.getElementById('conditionPickerSearch');
         if (search) search.value = '';
         window.resetConditionPickerPlacement?.();
+        
+        // Reset to single column default
+        conditionPickerViewMode = 'single';
+        const dualCheckbox = document.getElementById('dualColumnMode');
+        if (dualCheckbox) dualCheckbox.checked = false;
+        
+        const mediaType = currentConditionMediaType;
+        
+        // Open single column - default to Media Condition
+        currentModalCategory = 'mediaCondition';
+        const modalCatSelect = document.getElementById('modalCategorySelect');
+        if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
         renderConditionPicker();
+        const header = document.getElementById('conditionPickerHeader');
+        if (header) header.textContent = currentConditionMediaType.toUpperCase() + ' MEDIA CONDITION';
         document.getElementById('conditionPickerModal').style.display = 'block';
     });
 
@@ -3164,8 +3455,28 @@ document.addEventListener('DOMContentLoaded', () => {
         renderConditionPicker();
     });
 
+    // Handle dual column mode toggle in modal
+    document.getElementById('dualColumnMode')?.addEventListener('change', () => {
+        const dualColumn = document.getElementById('dualColumnMode').checked;
+        const mediaType = currentConditionMediaType;
+        if (dualColumn) {
+            conditionPickerViewMode = 'dual';
+            openDualColumnConditionPicker(mediaType);
+        } else {
+            conditionPickerViewMode = 'single';
+            // Default back to single column Media Condition
+            currentModalCategory = 'mediaCondition';
+            const modalCatSelect = document.getElementById('modalCategorySelect');
+            if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
+            renderConditionPicker();
+            const header = document.getElementById('conditionPickerHeader');
+            if (header) header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
+        }
+    });
+
     document.getElementById('closeConditionPickerBtn')?.addEventListener('click', () => {
         document.getElementById('conditionPickerModal').style.display = 'none';
+        window.currentThreeColumnMode = null;
     });
 
     document.getElementById('doneConditionPickerBtn')?.addEventListener('click', () => {
@@ -3174,7 +3485,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('clearConditionPickerBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
+        // Clear new multiselects
+        ['mediaConditionOptions', 'sleeveConditionOptions'].forEach(id => {
+            const select = document.getElementById(id);
+            if (select) {
+                Array.from(select.options).forEach(opt => opt.selected = false);
+            }
+        });
+        // Clear legacy multiselects
+        ['lpOptions', 'cdOptions', 'customOptions'].forEach(id => {
             const select = document.getElementById(id);
             if (select) {
                 Array.from(select.options).forEach(opt => opt.selected = false);
@@ -3210,7 +3529,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Context Menu for Favoriting
-    ['lpOptions', 'cdOptions', 'customOptions', 'mediaOptions'].forEach(id => {
+    ['lpOptions', 'cdOptions', 'customOptions', 'mediaConditionOptions', 'sleeveConditionOptions'].forEach(id => {
         const select = document.getElementById(id);
         if (!select) return;
 
@@ -3218,6 +3537,20 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const menu = document.getElementById('customContextMenu');
             if (menu) {
+                // Show/hide menu items based on target
+                const isMediaCondition = id === 'mediaConditionOptions';
+                const isSleeveCondition = id === 'sleeveConditionOptions';
+                const isConditionMultiselect = isMediaCondition || isSleeveCondition;
+                
+                document.getElementById('openMediaContextItem').style.display = isMediaCondition ? 'block' : 'none';
+                document.getElementById('openSleeveContextItem').style.display = isSleeveCondition ? 'block' : 'none';
+                document.getElementById('openAllMediaContextItem').style.display = isMediaCondition ? 'block' : 'none';
+                document.getElementById('openAllSleeveContextItem').style.display = isSleeveCondition ? 'block' : 'none';
+                document.getElementById('editConditionContextItem').style.display = isConditionMultiselect ? 'block' : 'none';
+                document.getElementById('clearConditionContextItem').style.display = isConditionMultiselect ? 'block' : 'none';
+                // Show favorite item for condition multiselects and legacy options
+                document.getElementById('favoriteContextItem').style.display = (isConditionMultiselect || id === 'lpOptions' || id === 'cdOptions' || id === 'customOptions') ? 'block' : 'none';
+                
                 menu.style.display = 'block';
                 menu.style.left = e.pageX + 'px';
                 menu.style.top = e.pageY + 'px';
@@ -3238,10 +3571,64 @@ document.addEventListener('DOMContentLoaded', () => {
         favItem.onclick = () => {
             const menu = document.getElementById('customContextMenu');
             const targetId = menu.dataset.targetId;
+            const optionKey = menu.dataset.optionKey;
+            const optionMediaType = menu.dataset.optionMediaType;
+            
+            // Handle modal rows (have optionKey but no select element)
+            if (optionKey && !document.getElementById(targetId)) {
+                // Find the item in the appropriate data array
+                let targetArray;
+                if (targetId === 'mediaConditionOptions') {
+                    targetArray = customOptionsData.mediaCondition;
+                    // Filter by media_type if available
+                    if (optionMediaType) {
+                        targetArray = targetArray.filter(opt => opt.media_type === optionMediaType);
+                    }
+                } else if (targetId === 'sleeveConditionOptions') {
+                    targetArray = customOptionsData[currentConditionMediaType] || [];
+                } else if (['lp', 'cd', 'cassette'].includes(targetId)) {
+                    targetArray = customOptionsData[targetId] || [];
+                } else {
+                    // Fallback: search all arrays
+                    targetArray = [...customOptionsData.lp, ...customOptionsData.cd, ...customOptionsData.cassette, ...customOptionsData.mediaCondition];
+                }
+                
+                const [title, text] = optionKey.split('|||');
+                const item = targetArray.find(i => i.title === title && i.text === text);
+                if (item) {
+                    item.favorite = !item.favorite;
+                    saveCustomOptions();
+                    renderCustomOptionsSelect();
+                    // Re-render modal if open
+                    if (document.getElementById('conditionPickerModal').style.display === 'block') {
+                        if (window.currentThreeColumnMode === 'mediaCondition') {
+                            openMediaConditionThreeColumnModal();
+                        } else if (window.currentThreeColumnMode === 'sleeveCondition') {
+                            openSleeveConditionThreeColumnModal();
+                        } else if (window.currentThreeColumnMode === 'dualColumn') {
+                            openDualColumnConditionPicker(currentConditionMediaType);
+                        } else if (conditionPickerViewMode === 'dual') {
+                            openDualColumnConditionPicker(currentConditionMediaType);
+                        } else {
+                            renderConditionPicker();
+                        }
+                    }
+                }
+                menu.style.display = 'none';
+                return;
+            }
+            
+            // Original logic for select elements
             const select = document.getElementById(targetId);
             if (!select) return;
 
-            const key = targetId === 'lpOptions' ? 'lp' : (targetId === 'cdOptions' ? 'cd' : (targetId === 'mediaOptions' ? 'media' : 'cassette'));
+            let key;
+            if (targetId === 'lpOptions') key = 'lp';
+            else if (targetId === 'cdOptions') key = 'cd';
+            else if (targetId === 'mediaConditionOptions') key = 'mediaCondition';
+            else if (targetId === 'sleeveConditionOptions') key = currentConditionMediaType;
+            else key = 'cassette';
+            
             const selectedOptions = Array.from(select.selectedOptions);
 
             if (selectedOptions.length === 0) return;
@@ -3249,7 +3636,8 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedOptions.forEach(opt => {
                 try {
                     const data = JSON.parse(opt.value);
-                    const item = customOptionsData[key].find(i => i.title === data.title && i.text === data.text);
+                    const item = (customOptionsData[key] || []).find(i => i.title === data.title && i.text === data.text &&
+                        (!data.media_type || i.media_type === data.media_type));
                     if (item) {
                         item.favorite = !item.favorite;
                     }
@@ -3260,4 +3648,666 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCustomOptionsSelect();
         };
     }
+
+    // Open Media (Current Type) context menu
+    const openMediaContextItem = document.getElementById('openMediaContextItem');
+    if (openMediaContextItem) {
+        openMediaContextItem.onmouseover = () => openMediaContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        openMediaContextItem.onmouseout = () => openMediaContextItem.style.background = 'transparent';
+        openMediaContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            if (targetId === 'mediaConditionOptions') {
+                openConditionPickerForMedia(currentConditionMediaType);
+            }
+            menu.style.display = 'none';
+        };
+    }
+
+    // Open Sleeve (Current Type) context menu
+    const openSleeveContextItem = document.getElementById('openSleeveContextItem');
+    if (openSleeveContextItem) {
+        openSleeveContextItem.onmouseover = () => openSleeveContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        openSleeveContextItem.onmouseout = () => openSleeveContextItem.style.background = 'transparent';
+        openSleeveContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            if (targetId === 'sleeveConditionOptions') {
+                openConditionPickerForSleeve(currentConditionMediaType);
+            }
+            menu.style.display = 'none';
+        };
+    }
+
+    // Open Media (All Types) context menu
+    const openAllMediaContextItem = document.getElementById('openAllMediaContextItem');
+    if (openAllMediaContextItem) {
+        openAllMediaContextItem.onmouseover = () => openAllMediaContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        openAllMediaContextItem.onmouseout = () => openAllMediaContextItem.style.background = 'transparent';
+        openAllMediaContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            if (targetId === 'mediaConditionOptions') {
+                openMediaConditionThreeColumnModal();
+            }
+            menu.style.display = 'none';
+        };
+    }
+
+    // Open Sleeve (All Types) context menu
+    const openAllSleeveContextItem = document.getElementById('openAllSleeveContextItem');
+    if (openAllSleeveContextItem) {
+        openAllSleeveContextItem.onmouseover = () => openAllSleeveContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        openAllSleeveContextItem.onmouseout = () => openAllSleeveContextItem.style.background = 'transparent';
+        openAllSleeveContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            if (targetId === 'sleeveConditionOptions') {
+                openSleeveConditionThreeColumnModal();
+            }
+            menu.style.display = 'none';
+        };
+    }
+
+    // Edit List context menu
+    const editContextItem = document.getElementById('editConditionContextItem');
+    if (editContextItem) {
+        editContextItem.onmouseover = () => editContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        editContextItem.onmouseout = () => editContextItem.style.background = 'transparent';
+        editContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            if (targetId === 'mediaConditionOptions') {
+                currentModalCategory = 'mediaCondition';
+                document.getElementById('customOptionsModal').style.display = 'block';
+                const modalCatSelect = document.getElementById('modalCategorySelect');
+                if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
+                const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
+                if (modalMediaTypeSelect) modalMediaTypeSelect.value = currentConditionMediaType;
+            } else if (targetId === 'sleeveConditionOptions') {
+                currentModalCategory = 'sleeveCondition';
+                document.getElementById('customOptionsModal').style.display = 'block';
+                const modalCatSelect = document.getElementById('modalCategorySelect');
+                if (modalCatSelect) modalCatSelect.value = 'sleeveCondition';
+                const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
+                if (modalMediaTypeSelect) modalMediaTypeSelect.value = currentConditionMediaType;
+            }
+            renderCustomOptionsModalList();
+            menu.style.display = 'none';
+        };
+    }
+
+    // Clear Selection context menu
+    const clearContextItem = document.getElementById('clearConditionContextItem');
+    if (clearContextItem) {
+        clearContextItem.onmouseover = () => clearContextItem.style.background = 'rgba(128, 128, 128, 0.2)';
+        clearContextItem.onmouseout = () => clearContextItem.style.background = 'transparent';
+        clearContextItem.onclick = () => {
+            const menu = document.getElementById('customContextMenu');
+            const targetId = menu.dataset.targetId;
+            const select = document.getElementById(targetId);
+            if (select) {
+                Array.from(select.options).forEach(opt => opt.selected = false);
+                if (targetId === 'sleeveConditionOptions') {
+                    syncConditionMultiselectsToLegacy();
+                }
+            }
+            menu.style.display = 'none';
+        };
+    }
 });
+
+// Three-column Media Condition Modal
+function openMediaConditionThreeColumnModal() {
+    const modal = document.getElementById('conditionPickerModal');
+    const container = document.getElementById('conditionPickerColumns');
+    const header = document.getElementById('conditionPickerHeader');
+    const searchInput = document.getElementById('conditionPickerSearch');
+    
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+    
+    // Get selected options from inline multiselect and group by media_type
+    const inlineSelect = document.getElementById('mediaConditionOptions');
+    const selectedByMediaType = { lp: [], cd: [], cassette: [] };
+    if (inlineSelect) {
+        Array.from(inlineSelect.selectedOptions).forEach(o => {
+            try {
+                const d = JSON.parse(o.value);
+                const key = d.title + '|||' + d.text;
+                const mediaType = d.media_type;
+                if (selectedByMediaType[mediaType]) {
+                    selectedByMediaType[mediaType].push(key);
+                }
+            } catch (e) {}
+        });
+    }
+    
+    const mediaTypes = [
+        { key: 'lp', label: 'LP MEDIA CONDITION' },
+        { key: 'cd', label: 'CD MEDIA CONDITION' },
+        { key: 'cassette', label: 'CASSETTE MEDIA CONDITION' }
+    ];
+    
+    mediaTypes.forEach(config => {
+        const allItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === config.key);
+        const selectedKeys = selectedByMediaType[config.key] || [];
+        
+        const column = document.createElement('div');
+        column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+        
+        const headerEl = document.createElement('div');
+        headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+        headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+        column.appendChild(headerEl);
+        
+        const list = document.createElement('div');
+        list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+        
+        if (allItems.length === 0) {
+            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+        }
+        
+        allItems.forEach(opt => {
+            const isSelected = selectedKeys.includes(conditionOptionKey(opt));
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+                (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+            row.innerHTML =
+                `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+                `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+                `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+            row.onclick = () => {
+                toggleMediaConditionOption(opt);
+                openMediaConditionThreeColumnModal();
+            };
+            // Add context menu for favoriting
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const menu = document.getElementById('customContextMenu');
+                if (menu) {
+                    document.getElementById('favoriteContextItem').style.display = 'block';
+                    document.getElementById('openMediaContextItem').style.display = 'none';
+                    document.getElementById('openSleeveContextItem').style.display = 'none';
+                    document.getElementById('openAllMediaContextItem').style.display = 'none';
+                    document.getElementById('openAllSleeveContextItem').style.display = 'none';
+                    document.getElementById('editConditionContextItem').style.display = 'none';
+                    document.getElementById('clearConditionContextItem').style.display = 'none';
+                    menu.dataset.targetId = 'mediaConditionOptions';
+                    menu.dataset.optionKey = conditionOptionKey(opt);
+                    menu.dataset.optionMediaType = opt.media_type || '';
+                    menu.style.display = 'block';
+                    menu.style.left = e.pageX + 'px';
+                    menu.style.top = e.pageY + 'px';
+                }
+            });
+            list.appendChild(row);
+        });
+        
+        column.appendChild(list);
+        container.appendChild(column);
+    });
+    
+    header.textContent = 'Select Media Condition (All Types)';
+    modal.style.display = 'block';
+    window.currentThreeColumnMode = 'mediaCondition';
+}
+
+function openSleeveConditionThreeColumnModal() {
+    const modal = document.getElementById('conditionPickerModal');
+    const container = document.getElementById('conditionPickerColumns');
+    const header = document.getElementById('conditionPickerHeader');
+    const searchInput = document.getElementById('conditionPickerSearch');
+    
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+    
+    // Get selected options from hidden legacy multiselects (one per media type)
+    const legacySelects = {
+        lp: document.getElementById('lpOptions'),
+        cd: document.getElementById('cdOptions'),
+        cassette: document.getElementById('customOptions')
+    };
+    const selectedByMediaType = { lp: [], cd: [], cassette: [] };
+    Object.entries(legacySelects).forEach(([mediaType, select]) => {
+        if (select) {
+            Array.from(select.selectedOptions).forEach(o => {
+                try {
+                    const d = JSON.parse(o.value);
+                    selectedByMediaType[mediaType].push(d.title + '|||' + d.text);
+                } catch (e) {}
+            });
+        }
+    });
+    
+    const mediaTypes = [
+        { key: 'lp', label: 'LP SLEEVE CONDITION' },
+        { key: 'cd', label: 'CD SLEEVE CONDITION' },
+        { key: 'cassette', label: 'CASSETTE SLEEVE CONDITION' }
+    ];
+    
+    mediaTypes.forEach(config => {
+        const allItems = customOptionsData[config.key] || [];
+        const selectedKeys = selectedByMediaType[config.key] || [];
+        
+        const column = document.createElement('div');
+        column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+        
+        const headerEl = document.createElement('div');
+        headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+        headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+        column.appendChild(headerEl);
+        
+        const list = document.createElement('div');
+        list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+        
+        if (allItems.length === 0) {
+            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+        }
+        
+        allItems.forEach(opt => {
+            const isSelected = selectedKeys.includes(conditionOptionKey(opt));
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+                (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+            row.innerHTML =
+                `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+                `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+                `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+            row.onclick = () => {
+                toggleSleeveConditionOption(config.key, opt);
+                openSleeveConditionThreeColumnModal();
+            };
+            // Add context menu for favoriting
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const menu = document.getElementById('customContextMenu');
+                if (menu) {
+                    document.getElementById('favoriteContextItem').style.display = 'block';
+                    document.getElementById('openMediaContextItem').style.display = 'none';
+                    document.getElementById('openSleeveContextItem').style.display = 'none';
+                    document.getElementById('openAllMediaContextItem').style.display = 'none';
+                    document.getElementById('openAllSleeveContextItem').style.display = 'none';
+                    document.getElementById('editConditionContextItem').style.display = 'none';
+                    document.getElementById('clearConditionContextItem').style.display = 'none';
+                    menu.dataset.targetId = 'sleeveConditionOptions';
+                    menu.dataset.optionKey = conditionOptionKey(opt);
+                    menu.dataset.optionMediaType = config.key;
+                    menu.style.display = 'block';
+                    menu.style.left = e.pageX + 'px';
+                    menu.style.top = e.pageY + 'px';
+                }
+            });
+            list.appendChild(row);
+        });
+        
+        column.appendChild(list);
+        container.appendChild(column);
+    });
+    
+    header.textContent = 'Select Sleeve Condition (All Types)';
+    modal.style.display = 'block';
+    window.currentThreeColumnMode = 'sleeveCondition';
+}
+
+function toggleMediaConditionOption(opt) {
+    const select = document.getElementById('mediaConditionOptions');
+    if (!select) return;
+    
+    const key = conditionOptionKey(opt);
+    const option = Array.from(select.options).find(o => {
+        try {
+            return conditionOptionKey(JSON.parse(o.value)) === key;
+        } catch (e) {
+            return false;
+        }
+    });
+    
+    if (option) {
+        option.selected = !option.selected;
+    }
+}
+
+function toggleSleeveConditionOption(mediaType, opt) {
+    const select = document.getElementById('sleeveConditionOptions');
+    if (!select) return;
+    
+    const key = conditionOptionKey(opt);
+    const option = Array.from(select.options).find(o => {
+        try {
+            return conditionOptionKey(JSON.parse(o.value)) === key;
+        } catch (e) {
+            return false;
+        }
+    });
+    
+    if (option) {
+        option.selected = !option.selected;
+        syncConditionMultiselectsToLegacy();
+    }
+}
+
+// Handle Done button for three-column mode
+const doneConditionPickerBtn = document.getElementById('doneConditionPickerBtn');
+if (doneConditionPickerBtn) {
+    const originalClick = doneConditionPickerBtn.onclick;
+    doneConditionPickerBtn.onclick = (e) => {
+        if (window.currentThreeColumnMode) {
+            document.getElementById('conditionPickerModal').style.display = 'none';
+            const mode = window.currentThreeColumnMode;
+            window.currentThreeColumnMode = null;
+            if (mode === 'sleeveCondition') {
+                syncConditionMultiselectsToLegacy();
+            }
+            renderConditionMultiselects();
+        } else if (originalClick) {
+            originalClick(e);
+        }
+    };
+}
+
+// Handle Clear button for three-column mode
+const clearConditionPickerBtn = document.getElementById('clearConditionPickerBtn');
+if (clearConditionPickerBtn) {
+    const originalClick = clearConditionPickerBtn.onclick;
+    clearConditionPickerBtn.onclick = (e) => {
+        if (window.currentThreeColumnMode) {
+            const mode = window.currentThreeColumnMode;
+            if (mode === 'mediaCondition') {
+                const select = document.getElementById('mediaConditionOptions');
+                if (select) {
+                    Array.from(select.options).forEach(opt => opt.selected = false);
+                }
+            } else if (mode === 'sleeveCondition') {
+                const select = document.getElementById('sleeveConditionOptions');
+                if (select) {
+                    Array.from(select.options).forEach(opt => opt.selected = false);
+                    syncConditionMultiselectsToLegacy();
+                }
+            } else if (mode === 'dualColumn') {
+                const mediaSelect = document.getElementById('mediaConditionOptions');
+                const sleeveSelect = document.getElementById('sleeveConditionOptions');
+                if (mediaSelect) Array.from(mediaSelect.options).forEach(opt => opt.selected = false);
+                if (sleeveSelect) {
+                    Array.from(sleeveSelect.options).forEach(opt => opt.selected = false);
+                    syncConditionMultiselectsToLegacy();
+                }
+            }
+            if (mode === 'mediaCondition') {
+                openMediaConditionThreeColumnModal();
+            } else if (mode === 'sleeveCondition') {
+                openSleeveConditionThreeColumnModal();
+            } else if (mode === 'dualColumn') {
+                openDualColumnConditionPicker(currentConditionMediaType);
+            }
+        } else if (originalClick) {
+            originalClick(e);
+        }
+    };
+}
+
+// Open single-column condition picker for Media Condition (current media type) - same as OPEN button
+function openConditionPickerForMedia(mediaType) {
+    const modal = document.getElementById('conditionPickerModal');
+    const container = document.getElementById('conditionPickerColumns');
+    const header = document.getElementById('conditionPickerHeader');
+    const searchInput = document.getElementById('conditionPickerSearch');
+    
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+    
+    // Get media condition data for the specific media type
+    const allItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === mediaType);
+    const select = document.getElementById('mediaConditionOptions');
+    const selectedKeys = select ? Array.from(select.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    }) : [];
+    
+    const column = document.createElement('div');
+    column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+    
+    const headerEl = document.createElement('div');
+    headerEl.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+    headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+    column.appendChild(headerEl);
+    
+    const list = document.createElement('div');
+    list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+    
+    if (allItems.length === 0) {
+        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    }
+    
+    allItems.forEach(opt => {
+        const isSelected = selectedKeys.includes(conditionOptionKey(opt));
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+            (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+        row.innerHTML =
+            `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+            `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+            `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+        row.onclick = () => {
+            toggleMediaConditionOption(opt);
+            // Check if dual column mode was active
+            if (window.currentThreeColumnMode === 'dualColumn') {
+                openDualColumnConditionPicker(mediaType);
+            } else {
+                openConditionPickerForMedia(mediaType);
+            }
+        };
+        list.appendChild(row);
+    });
+    
+    column.appendChild(list);
+    container.appendChild(column);
+    
+    header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
+    modal.style.display = 'block';
+    window.currentThreeColumnMode = null;
+}
+
+// Open single-column condition picker for Sleeve Condition (current media type) - same as OPEN button
+function openConditionPickerForSleeve(mediaType) {
+    const modal = document.getElementById('conditionPickerModal');
+    const container = document.getElementById('conditionPickerColumns');
+    const header = document.getElementById('conditionPickerHeader');
+    const searchInput = document.getElementById('conditionPickerSearch');
+    
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+    
+    // Get sleeve condition data for the specific media type
+    const allItems = customOptionsData[mediaType] || [];
+    const select = document.getElementById('sleeveConditionOptions');
+    const selectedKeys = select ? Array.from(select.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    }) : [];
+    
+    const column = document.createElement('div');
+    column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+    
+    const headerEl = document.createElement('div');
+    headerEl.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+    headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+    column.appendChild(headerEl);
+    
+    const list = document.createElement('div');
+    list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+    
+    if (allItems.length === 0) {
+        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    }
+    
+    allItems.forEach(opt => {
+        const isSelected = selectedKeys.includes(conditionOptionKey(opt));
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+            (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+        row.innerHTML =
+            `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+            `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+            `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+        row.onclick = () => {
+            toggleSleeveConditionOption(mediaType, opt);
+            // Check if dual column mode was active
+            if (window.currentThreeColumnMode === 'dualColumn') {
+                openDualColumnConditionPicker(mediaType);
+            } else {
+                openConditionPickerForSleeve(mediaType);
+            }
+        };
+        list.appendChild(row);
+    });
+    
+    column.appendChild(list);
+    container.appendChild(column);
+    
+    header.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION';
+    modal.style.display = 'block';
+    window.currentThreeColumnMode = null;
+}
+
+// Open dual-column condition picker for both Media and Sleeve conditions (current media type)
+function openDualColumnConditionPicker(mediaType) {
+    const modal = document.getElementById('conditionPickerModal');
+    const container = document.getElementById('conditionPickerColumns');
+    const header = document.getElementById('conditionPickerHeader');
+    const searchInput = document.getElementById('conditionPickerSearch');
+    
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    if (searchInput) searchInput.value = '';
+    
+    // Media Condition column
+    const mediaItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === mediaType);
+    const mediaSelect = document.getElementById('mediaConditionOptions');
+    const mediaSelectedKeys = mediaSelect ? Array.from(mediaSelect.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    }) : [];
+    
+    // Sleeve Condition column
+    const sleeveItems = customOptionsData[mediaType] || [];
+    const sleeveSelect = document.getElementById('sleeveConditionOptions');
+    const sleeveSelectedKeys = sleeveSelect ? Array.from(sleeveSelect.selectedOptions).map(o => {
+        try {
+            const d = JSON.parse(o.value);
+            return d.title + '|||' + d.text;
+        } catch (e) { return ''; }
+    }) : [];
+    
+    // Media Condition Column
+    const mediaColumn = document.createElement('div');
+    mediaColumn.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+    
+    const mediaHeaderEl = document.createElement('div');
+    mediaHeaderEl.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION' + (mediaSelectedKeys.length ? ` (${mediaSelectedKeys.length})` : '');
+    mediaHeaderEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+    mediaColumn.appendChild(mediaHeaderEl);
+    
+    const mediaList = document.createElement('div');
+    mediaList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+    
+    if (mediaItems.length === 0) {
+        mediaList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    }
+    
+    mediaItems.forEach(opt => {
+        const isSelected = mediaSelectedKeys.includes(conditionOptionKey(opt));
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+            (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+        row.innerHTML =
+            `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+            `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+            `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+        row.onclick = () => {
+            toggleMediaConditionOption(opt);
+            openDualColumnConditionPicker(mediaType);
+        };
+        // Add context menu for favoriting
+        row.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu = document.getElementById('customContextMenu');
+            if (menu) {
+                document.getElementById('favoriteContextItem').style.display = 'block';
+                document.getElementById('openMediaContextItem').style.display = 'none';
+                document.getElementById('openSleeveContextItem').style.display = 'none';
+                document.getElementById('openAllMediaContextItem').style.display = 'none';
+                document.getElementById('openAllSleeveContextItem').style.display = 'none';
+                document.getElementById('editConditionContextItem').style.display = 'none';
+                document.getElementById('clearConditionContextItem').style.display = 'none';
+                menu.dataset.targetId = 'mediaConditionOptions';
+                menu.dataset.optionKey = conditionOptionKey(opt);
+                menu.dataset.optionMediaType = opt.media_type || mediaType;
+                menu.style.display = 'block';
+                menu.style.left = e.pageX + 'px';
+                menu.style.top = e.pageY + 'px';
+            }
+        });
+        mediaList.appendChild(row);
+    });
+    
+    mediaColumn.appendChild(mediaList);
+    container.appendChild(mediaColumn);
+    
+    // Sleeve Condition Column
+    const sleeveColumn = document.createElement('div');
+    sleeveColumn.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
+    
+    const sleeveHeaderEl = document.createElement('div');
+    sleeveHeaderEl.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION' + (sleeveSelectedKeys.length ? ` (${sleeveSelectedKeys.length})` : '');
+    sleeveHeaderEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+    sleeveColumn.appendChild(sleeveHeaderEl);
+    
+    const sleeveList = document.createElement('div');
+    sleeveList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
+    
+    if (sleeveItems.length === 0) {
+        sleeveList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    }
+    
+    sleeveItems.forEach(opt => {
+        const isSelected = sleeveSelectedKeys.includes(conditionOptionKey(opt));
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
+            (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
+        row.innerHTML =
+            `<span style="flex-shrink: 0;">${opt.favorite ? '⭐' : (isSelected ? '☑' : '☐')}</span>` +
+            `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
+            `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
+        row.onclick = () => {
+            toggleSleeveConditionOption(mediaType, opt);
+            openDualColumnConditionPicker(mediaType);
+        };
+        sleeveList.appendChild(row);
+    });
+    
+    sleeveColumn.appendChild(sleeveList);
+    container.appendChild(sleeveColumn);
+    
+    header.textContent = mediaType.toUpperCase() + ' CONDITIONS';
+    modal.style.display = 'block';
+    window.currentThreeColumnMode = 'dualColumn';
+}

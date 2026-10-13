@@ -139,10 +139,18 @@
             <div style="margin-bottom: 10px;">
                 <label class="form-label">Category:</label>
                 <select id="modalCategorySelect" class="full-width-input" style="padding: 4px;">
-                    <option value="cassette">Cassette</option>
-                    <option value="cd">CD</option>
+                    <option value="mediaCondition">Media Condition</option>
+                    <option value="sleeveCondition">Sleeve Condition</option>
+                </select>
+            </div>
+
+            <!-- Media Type filter for both categories -->
+            <div id="modalMediaTypeFilter" style="margin-bottom: 10px;">
+                <label class="form-label">Media Type:</label>
+                <select id="modalMediaTypeSelect" class="full-width-input" style="padding: 4px;">
                     <option value="lp">LP</option>
-                    <option value="media">Media Description</option>
+                    <option value="cd">CD</option>
+                    <option value="cassette">Cassette</option>
                 </select>
             </div>
 
@@ -162,6 +170,16 @@
             <input type="text" id="newOptionText" class="full-width-input"
                 placeholder="e.g. slight water damage on sleeve">
 
+            <!-- Media Type for new entries (both categories) -->
+            <div id="newOptionMediaTypeContainer" style="margin-top: 5px;">
+                <label class="form-label">Media Type:</label>
+                <select id="newOptionMediaType" class="full-width-input" style="padding: 4px;">
+                    <option value="lp">LP</option>
+                    <option value="cd">CD</option>
+                    <option value="cassette">Cassette</option>
+                </select>
+            </div>
+
             <div class="modal-actions" style="justify-content: flex-end; margin-top: 10px;">
                 <button id="cancelEditCustomOptionBtn" class="nav-btn"
                     style="padding: 5px 15px; margin-right: 5px; display: none;">Cancel</button>
@@ -173,9 +191,16 @@
     <div id="conditionPickerModal" class="modal">
         <div id="conditionPickerContent" class="modal-content modal-content-wide"
             style="max-width: 780px; width: 90%; height: 420px; min-width: 320px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
-            <h3 id="conditionPickerHeader"
-                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
-            <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; margin-bottom: 4px;">
+                <h3 id="conditionPickerHeader"
+                    style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 11px; color: var(--text-color, #444); cursor: pointer; white-space: nowrap;">
+                        <input type="checkbox" id="dualColumnMode" style="width: 14px; height: 14px; margin-right: 4px;"> Both
+                    </label>
+                    <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
+                </div>
+            </div>
             <input type="text" id="conditionPickerSearch" placeholder="Search conditions..."
                 style="flex-shrink: 0; margin-bottom: 8px;">
             <div id="conditionPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
@@ -361,12 +386,8 @@
                 </div>
                 <div class="form-group"><label>MEDIA FORMAT</label><select id="mediaFormat"></select></div>
                 <div class="form-group"><label>MEDIA DESCRIPTION</label>
-                    <div style="display: flex; gap: 6px; align-items: stretch; flex: 1; min-height: 0;">
-                        <input type="text" id="mediaDescriptionText" placeholder="e.g. Dolby"
-                            style="flex: 1; min-width: 0; height: 65px;">
-                        <select id="mediaOptions" multiple title="Media Description options"
-                            style="flex: 0 0 110px; width: 110px; height: 65px; font-size: 11px;"></select>
-                    </div>
+                    <input type="text" id="mediaDescriptionText" placeholder="e.g. Dolby"
+                        style="flex: 1; min-width: 0; height: 65px;">
                 </div>
                 <div class="form-group">
                     <div style="display: flex; align-items: center; gap: 4px;">
@@ -413,37 +434,37 @@
                         <input type="text" id="trackTimeInfo" placeholder="Tracks"
                             style="width:45px; padding:2px; font-size:11px;">
                         <div
-                            style="display:flex; align-items:center; gap: 6px; flex-grow: 1; justify-content: flex-end;">
-                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
-                                <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">LP
-                                    CONDITION</span>
-                                <select id="lpOptions" multiple
-                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                            style="display:flex; align-items:flex-start; gap: 6px; flex-grow: 1; justify-content: flex-end;">
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex-shrink: 0;">
+                                <label
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em; white-space: nowrap;">Media Type:</label>
+                                <select id="conditionMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
+                                    <option value="lp">LP</option>
+                                    <option value="cd">CD</option>
+                                    <option value="cassette">CASS</option>
+                                </select>
                             </div>
-                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                            <div style="display: flex; flex-direction: column; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 120px;">
                                 <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">CD
-                                    CONDITION</span>
-                                <select id="cdOptions" multiple
-                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Media Condition</span>
+                                <select id="mediaConditionOptions" multiple
+                                    style="width: 100%; height: 65px; font-size: 11px;"></select>
                             </div>
-                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                            <div style="display: flex; flex-direction: column; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 120px;">
                                 <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">CASS.
-                                    CONDITION</span>
-                                <select id="customOptions" multiple
-                                    style="width: 135px; height: 65px; font-size: 11px;"></select>
+                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Sleeve Condition</span>
+                                <select id="sleeveConditionOptions" multiple
+                                    style="width: 100%; height: 65px; font-size: 11px;"></select>
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 3px; align-items: flex-end; justify-content: flex-end;">
                                 <button id="editCustomOptionsBtn" class="nav-btn"
-                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: none; align-items: center; justify-content: center; gap: 4px;"
                                     title="Edit Condition Lists">✏️ Edit</button>
                                 <button id="clearCustomOptionsBtn" class="nav-btn"
-                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: none; align-items: center; justify-content: center; gap: 4px;"
                                     title="Clear Selections">❌ Clear</button>
                                 <button id="openCustomOptionsBtn" class="nav-btn"
-                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"
+                                    style="padding: 2px 6px; font-size: 10px; height: 18px; width: 70px; white-space: nowrap; display: none; align-items: center; justify-content: center; gap: 4px;"
                                     title="Open Condition Picker">📂 Open</button>
                             </div>
                         </div>
@@ -452,6 +473,11 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Hidden legacy multiselects (kept for data compatibility) -->
+            <select id="lpOptions" multiple style="display:none;"></select>
+            <select id="cdOptions" multiple style="display:none;"></select>
+            <select id="customOptions" multiple style="display:none;"></select>
 
             <div class="action-buttons">
                 <button id="generateBtn" class="btn-search" style="flex: 2; font-size: 14px;">Generate</button>
@@ -560,6 +586,24 @@
         <div id="favoriteContextItem"
             style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
             ⭐ Favorite / Unfavorite</div>
+        <div id="openMediaContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            📂 Open Media (Current Type)</div>
+        <div id="openSleeveContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            📂 Open Sleeve (Current Type)</div>
+        <div id="openAllMediaContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            📂 Open Media (All Types)</div>
+        <div id="openAllSleeveContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            📂 Open Sleeve (All Types)</div>
+        <div id="editConditionContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color, #eee);">
+            ✏️ Edit List</div>
+        <div id="clearConditionContextItem"
+            style="padding: 8px 15px; cursor: pointer; font-size: 13px;">
+            ❌ Clear Selection</div>
     </div>
 
     <script>
