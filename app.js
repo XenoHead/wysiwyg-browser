@@ -2049,125 +2049,123 @@ function processFormatData(inputs) {
     // Custom Options Logic
     // Build the flaw string: first item uses " & ", subsequent items use " / "
     let conditionPhrase = ""; // will be placed contextually in the assembled string
+
+    // --- 1. Collect media entries: text box text first, then multiselect flaws ---
+    const hasMediaDesc = mediaDesc && mediaDesc.trim() !== "";
+    const hasMediaCustomOptions = mediaCustomOptionsSelected && mediaCustomOptionsSelected.length > 0;
+    let mediaEntries = hasMediaDesc ? [mediaDesc.trim()] : [];
+    let mediaFinalSale = "";
+
+    if (hasMediaCustomOptions) {
+        mediaCustomOptionsSelected.forEach(optJson => {
+            try {
+                const opt = JSON.parse(optJson);
+                if (opt.title === "Final Sale") {
+                    mediaFinalSale = (mediaFinalSale ? mediaFinalSale + " " : "") + opt.text;
+                } else {
+                    if (opt.text) mediaEntries.push(opt.text);
+                    else mediaEntries.push(opt.title);
+                }
+            } catch (e) { }
+        });
+    }
+
+    // Text box content is consumed into mediaconditionPhrase below
+    if (hasMediaDesc) mediaDesc = "";
+    const hasMediaContent = mediaEntries.length > 0 || mediaFinalSale !== "";
+
+    // --- 2. Collect sleeve entries ---
+    let sleeveEntries = [];
     if (customOptionsSelected && customOptionsSelected.length > 0) {
-        let flaws = [];
         customOptionsSelected.forEach(optJson => {
             try {
                 const opt = JSON.parse(optJson);
                 if (opt.title === "Final Sale") {
+                    // Exception to the media-first rule: Final Sale from the
+                    // sleeve multiselect keeps its leading position on the
+                    // format string (appended bare, ahead of everything else).
                     finalFormatString += " " + opt.text;
                 } else {
-                    if (opt.text) flaws.push(opt.text);
-                    else flaws.push(opt.title);
+                    if (opt.text) sleeveEntries.push(opt.text);
+                    else sleeveEntries.push(opt.title);
                 }
             } catch (e) { }
         });
+    }
 
-        if (flaws.length > 0) {
-            // Group flaws to combine duplicates (e.g. "water damage to Booklet/Inlay")
-            flaws = groupFlaws(flaws);
+    // --- 3. Place sleeve entries ---
+    if (sleeveEntries.length > 0) {
+        // Group flaws to combine duplicates (e.g. "water damage to Booklet/Inlay")
+        const groupedSleeve = groupFlaws([...sleeveEntries]);
 
-            // Join: first separator = " & ", all subsequent = " / "
-            const combinedFlaws = flaws.length === 1
-                ? flaws[0]
-                : flaws[0] + " & " + flaws.slice(1).join(" / ");
+        // Join: first separator = " & ", all subsequent = " / "
+        const combinedSleeve = groupedSleeve.length === 1
+            ? groupedSleeve[0]
+            : groupedSleeve[0] + " & " + groupedSleeve.slice(1).join(" / ");
 
-            const hasSleeveCondition = sleeveCond && sleeveCond.trim() !== "";
-            const hasSleeveDesc = sleeveDesc && sleeveDesc.trim() !== "";
+        const hasSleeveCondition = sleeveCond && sleeveCond.trim() !== "";
+        const hasSleeveDesc = sleeveDesc && sleeveDesc.trim() !== "";
 
-            if (hasSleeveCondition && hasSleeveDesc) {
-                // Case A: sleeveDesc text is treated as the FIRST condition.
-                // Menu item 1 -> " & ", menu items 2+ -> " / "
-                if (flaws.length === 1) {
-                    sleeveDesc += ' & ' + flaws[0];
-                } else {
-                    sleeveDesc += ' & ' + flaws[0] + ' / ' + flaws.slice(1).join(' / ');
-                }
-            } else if (hasSleeveCondition && !hasSleeveDesc) {
-                // Case B: sleeve cond set + sleeve desc BLANK -> goes AFTER sleevePkg
-                // Store in conditionPhrase; assembleDescription will place it after sleevePkg.
-                conditionPhrase = combinedFlaws;
-            } else if (sleevePkg && !hasSleeveCondition && !sleeveDesc) {
-                // If there is a sleeve pack but no sleeve condition, attach
-                // the condition options directly to the sleeve pack.
-                sleevePkg += " with " + combinedFlaws;
-            } else if (sleeveDesc) {
-                sleeveDesc += " & " + combinedFlaws;
-            } else if (postFM) {
-                finalFormatString += " with " + combinedFlaws;
-            } else if (mediaDesc) {
-                mediaDesc += " & " + combinedFlaws;
+        if (hasSleeveCondition && hasSleeveDesc) {
+            // Case A: sleeveDesc text is treated as the FIRST condition.
+            // Menu item 1 -> " & ", menu items 2+ -> " / "
+            if (groupedSleeve.length === 1) {
+                sleeveDesc += ' & ' + groupedSleeve[0];
             } else {
-                finalFormatString += " with " + combinedFlaws;
+                sleeveDesc += ' & ' + groupedSleeve[0] + ' / ' + groupedSleeve.slice(1).join(' / ');
             }
+        } else if (hasSleeveCondition && !hasSleeveDesc) {
+            // Case B: sleeve cond set + sleeve desc BLANK -> goes AFTER sleevePkg
+            // Store in conditionPhrase; assembleDescription will place it after sleevePkg.
+            conditionPhrase = combinedSleeve;
+        } else if (sleevePkg && !hasSleeveCondition && !hasSleeveDesc) {
+            // If there is a sleeve pack but no sleeve condition, attach
+            // the condition options directly to the sleeve pack.
+            sleevePkg += " with " + combinedSleeve;
+        } else if (hasSleeveDesc) {
+            sleeveDesc += " & " + combinedSleeve;
+        } else if (hasMediaContent) {
+            // Media-first rule: the text box text / media multiselect choices
+            // lead, and the sleeve multiselect choices follow them inside
+            // mediaconditionPhrase instead of landing on the format string.
+            mediaEntries = mediaEntries.concat(groupedSleeve);
+        } else if (postFM) {
+            finalFormatString += " with " + combinedSleeve;
+        } else {
+            finalFormatString += " with " + combinedSleeve;
         }
     }
 
-    // Media Condition Logic (mirrors Sleeve Condition logic)
-    // The Media Description text box text is the FIRST entry of
-    // mediaconditionPhrase when entered; Media Condition multiselect choices
-    // follow using the same " & " / " / " separators as Sleeve Condition.
-    // The phrase region gets exactly ONE "with ": it is added only when neither
-    // the phrase itself nor the immediately preceding text already supplies one
-    // (the Sleeve Condition fallback appends " with ..." to finalFormatString
-    // when there is no text box text for the sleeve flaws to attach to).
-    // Final Sale keeps its bare leading text (mirrors the Sleeve rule).
+    // --- 4. Build mediaconditionPhrase from the media entries ---
+    // The Media Description text box text is the FIRST entry when entered; the
+    // Media Condition multiselect choices follow, then any sleeve multiselect
+    // choices appended by rule 3 (media always precedes sleeve content).
+    // The phrase region gets exactly ONE "with ": it is added only when the
+    // phrase does not already start with one AND the text immediately before
+    // it does not already end in a with-clause.
     let mediaconditionPhrase = "";
-    const hasMediaDesc = mediaDesc && mediaDesc.trim() !== "";
-    const hasMediaCustomOptions = mediaCustomOptionsSelected && mediaCustomOptionsSelected.length > 0;
+    if (mediaEntries.length > 0) {
+        const groupedMedia = groupFlaws(mediaEntries);
 
-    if (hasMediaDesc || hasMediaCustomOptions) {
-        let mediaFlaws = [];
-        let finalSaleText = "";
+        // Join: first separator = " & ", all subsequent = " / "
+        let flawPhrase = groupedMedia.length === 1
+            ? groupedMedia[0]
+            : groupedMedia[0] + " & " + groupedMedia.slice(1).join(" / ");
 
-        if (hasMediaCustomOptions) {
-            mediaCustomOptionsSelected.forEach(optJson => {
-                try {
-                    const opt = JSON.parse(optJson);
-                    if (opt.title === "Final Sale") {
-                        finalSaleText = (finalSaleText ? finalSaleText + " " : "") + opt.text;
-                    } else {
-                        if (opt.text) mediaFlaws.push(opt.text);
-                        else mediaFlaws.push(opt.title);
-                    }
-                } catch (e) { }
-            });
+        const priorEndsWithWith = /\swith\s\S/i.test(finalFormatString);
+        if (!/^with\s/i.test(flawPhrase) && !priorEndsWithWith) {
+            flawPhrase = "with " + flawPhrase;
         }
 
-        if (hasMediaDesc) {
-            // Text box text is always the first entry of the phrase
-            mediaFlaws.unshift(mediaDesc.trim());
-            mediaDesc = "";
-        }
+        mediaconditionPhrase = flawPhrase;
+    }
 
-        if (mediaFlaws.length > 0) {
-            // Group flaws to combine duplicates (e.g. "water damage to Booklet/Inlay")
-            mediaFlaws = groupFlaws(mediaFlaws);
-
-            // Join: first separator = " & ", all subsequent = " / "
-            let flawPhrase = mediaFlaws.length === 1
-                ? mediaFlaws[0]
-                : mediaFlaws[0] + " & " + mediaFlaws.slice(1).join(" / ");
-
-            // Exactly one "with " in this region: add one only when the phrase
-            // does not already start with one AND the text immediately before
-            // it does not already end in a with-clause (the Sleeve Condition
-            // fallback appends " with ..." to finalFormatString when there is
-            // no text box text to attach the sleeve flaws to).
-            const priorEndsWithWith = /\swith\s\S/i.test(finalFormatString);
-            if (!/^with\s/i.test(flawPhrase) && !priorEndsWithWith) {
-                flawPhrase = "with " + flawPhrase;
-            }
-
-            mediaconditionPhrase = flawPhrase;
-        }
-
-        // Final Sale keeps its bare leading text, ahead of the flaw portion
-        if (finalSaleText) {
-            mediaconditionPhrase = mediaconditionPhrase
-                ? finalSaleText + " " + mediaconditionPhrase
-                : finalSaleText;
-        }
+    // Final Sale from the media multiselect keeps its bare leading text,
+    // ahead of the flaw portion
+    if (mediaFinalSale) {
+        mediaconditionPhrase = mediaconditionPhrase
+            ? mediaFinalSale + " " + mediaconditionPhrase
+            : mediaFinalSale;
     }
 
     if (sleevePkg && sleevePkg.toLowerCase().includes('gatefold') && sleeveDesc) {
@@ -2768,6 +2766,21 @@ let currentModalCategory = 'cassette';
 let currentConditionMediaType = 'lp'; // Track current media type for condition dropdowns
 let conditionPickerViewMode = 'single'; // 'single' or 'dual'
 
+// The search bar must always filter the list that is currently open, never
+// switch it to a different list. Every picker-open function registers its own
+// redraw callback here so the search input handler can re-render that view.
+let conditionPickerRedraw = null;
+
+function conditionPickerQuery() {
+    const el = document.getElementById('conditionPickerSearch');
+    return (el?.value || '').trim().toLowerCase();
+}
+
+function conditionPickerMatch(opt, query) {
+    if (!query) return true;
+    return ((opt.title || '') + ' ' + (opt.text || '')).toLowerCase().includes(query);
+}
+
 function sortCustomOptionsData() {
     Object.keys(customOptionsData).forEach(cat => {
         customOptionsData[cat].sort((a, b) => {
@@ -3095,8 +3108,7 @@ function renderConditionPicker() {
 
     container.innerHTML = '';
 
-    const searchInput = document.getElementById('conditionPickerSearch');
-    const query = (searchInput?.value || '').trim().toLowerCase();
+    const query = conditionPickerQuery();
 
     const configs = getConditionPickerConfigs();
     configs.forEach(config => {
@@ -3112,10 +3124,7 @@ function renderConditionPicker() {
             allItems = customOptionsData[config.key] || [];
         }
         
-        const items = allItems.filter(opt => {
-            if (!query) return true;
-            return ((opt.title || '') + ' ' + (opt.text || '')).toLowerCase().includes(query);
-        });
+        const items = allItems.filter(opt => conditionPickerMatch(opt, query));
         const selectedKeys = getSelectedConditionKeys(config.id);
 
         const column = document.createElement('div');
@@ -3175,6 +3184,9 @@ function renderConditionPicker() {
         column.appendChild(list);
         container.appendChild(column);
     });
+
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => renderConditionPicker();
 }
 
 
@@ -3523,10 +3535,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = document.getElementById('conditionPickerHeader');
         if (header) header.textContent = currentConditionMediaType.toUpperCase() + ' MEDIA CONDITION';
         document.getElementById('conditionPickerModal').style.display = 'block';
+        // Ensure redraw is set for media view after opening
+        conditionPickerRedraw = () => renderConditionPicker();
     });
 
     document.getElementById('conditionPickerSearch')?.addEventListener('input', () => {
-        renderConditionPicker();
+        // Always filter whatever list is currently open; never switch views
+        if (conditionPickerRedraw) {
+            conditionPickerRedraw();
+        } else {
+            renderConditionPicker();
+        }
     });
 
     // Handle dual column mode toggle in modal
@@ -3832,16 +3851,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Three-column Media Condition Modal
-function openMediaConditionThreeColumnModal() {
+function openMediaConditionThreeColumnModal(preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
     const header = document.getElementById('conditionPickerHeader');
     const searchInput = document.getElementById('conditionPickerSearch');
-    
+
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    if (searchInput) searchInput.value = '';
+    if (!preserveSearch && searchInput) searchInput.value = '';
+
+    const pickerQuery = conditionPickerQuery();
     
     // Get selected options from inline multiselect and group by media_type
     const inlineSelect = document.getElementById('mediaConditionOptions');
@@ -3867,24 +3888,25 @@ function openMediaConditionThreeColumnModal() {
     
     mediaTypes.forEach(config => {
         const allItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === config.key);
+        const items = allItems.filter(opt => conditionPickerMatch(opt, pickerQuery));
         const selectedKeys = selectedByMediaType[config.key] || [];
-        
+
         const column = document.createElement('div');
         column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
-        
+
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
         headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
         column.appendChild(headerEl);
-        
+
         const list = document.createElement('div');
         list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
-        
-        if (allItems.length === 0) {
-            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+
+        if (items.length === 0) {
+            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${allItems.length === 0 ? 'No options' : 'No matches'}</div>`;
         }
-        
-        allItems.forEach(opt => {
+
+        items.forEach(opt => {
             const isSelected = selectedKeys.includes(conditionOptionKey(opt));
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -3895,7 +3917,7 @@ function openMediaConditionThreeColumnModal() {
                 `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
             row.onclick = () => {
                 toggleMediaConditionOption(opt);
-                openMediaConditionThreeColumnModal();
+                openMediaConditionThreeColumnModal(true);
             };
             // Add context menu for favoriting
             row.addEventListener('contextmenu', (e) => {
@@ -3924,23 +3946,27 @@ function openMediaConditionThreeColumnModal() {
         column.appendChild(list);
         container.appendChild(column);
     });
-    
+
     header.textContent = 'Select Media Condition (All Types)';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'mediaCondition';
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => openMediaConditionThreeColumnModal(true);
 }
 
-function openSleeveConditionThreeColumnModal() {
+function openSleeveConditionThreeColumnModal(preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
     const header = document.getElementById('conditionPickerHeader');
     const searchInput = document.getElementById('conditionPickerSearch');
-    
+
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    if (searchInput) searchInput.value = '';
-    
+    if (!preserveSearch && searchInput) searchInput.value = '';
+
+    const pickerQuery = conditionPickerQuery();
+
     // Get selected options from hidden legacy multiselects (one per media type)
     const legacySelects = {
         lp: document.getElementById('lpOptions'),
@@ -3967,24 +3993,25 @@ function openSleeveConditionThreeColumnModal() {
     
     mediaTypes.forEach(config => {
         const allItems = customOptionsData[config.key] || [];
+        const items = allItems.filter(opt => conditionPickerMatch(opt, pickerQuery));
         const selectedKeys = selectedByMediaType[config.key] || [];
-        
+
         const column = document.createElement('div');
         column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
-        
+
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
         headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
         column.appendChild(headerEl);
-        
+
         const list = document.createElement('div');
         list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
-        
-        if (allItems.length === 0) {
-            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+
+        if (items.length === 0) {
+            list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${allItems.length === 0 ? 'No options' : 'No matches'}</div>`;
         }
-        
-        allItems.forEach(opt => {
+
+        items.forEach(opt => {
             const isSelected = selectedKeys.includes(conditionOptionKey(opt));
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -3995,7 +4022,7 @@ function openSleeveConditionThreeColumnModal() {
                 `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
             row.onclick = () => {
                 toggleSleeveConditionOption(config.key, opt);
-                openSleeveConditionThreeColumnModal();
+                openSleeveConditionThreeColumnModal(true);
             };
             // Add context menu for favoriting
             row.addEventListener('contextmenu', (e) => {
@@ -4024,10 +4051,12 @@ function openSleeveConditionThreeColumnModal() {
         column.appendChild(list);
         container.appendChild(column);
     });
-    
+
     header.textContent = 'Select Sleeve Condition (All Types)';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'sleeveCondition';
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => openSleeveConditionThreeColumnModal(true);
 }
 
 function toggleMediaConditionOption(opt) {
@@ -4127,19 +4156,21 @@ if (clearConditionPickerBtn) {
 }
 
 // Open single-column condition picker for Media Condition (current media type) - same as OPEN button
-function openConditionPickerForMedia(mediaType) {
+function openConditionPickerForMedia(mediaType, preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
     const header = document.getElementById('conditionPickerHeader');
     const searchInput = document.getElementById('conditionPickerSearch');
-    
+
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    if (searchInput) searchInput.value = '';
-    
+    if (!preserveSearch && searchInput) searchInput.value = '';
+
     // Get media condition data for the specific media type
+    const query = conditionPickerQuery();
     const allItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === mediaType);
+    const items = allItems.filter(opt => conditionPickerMatch(opt, query));
     const select = document.getElementById('mediaConditionOptions');
     const selectedKeys = select ? Array.from(select.selectedOptions).map(o => {
         try {
@@ -4147,23 +4178,23 @@ function openConditionPickerForMedia(mediaType) {
             return d.title + '|||' + d.text;
         } catch (e) { return ''; }
     }) : [];
-    
+
     const column = document.createElement('div');
     column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
-    
+
     const headerEl = document.createElement('div');
     headerEl.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
     headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
     column.appendChild(headerEl);
-    
+
     const list = document.createElement('div');
     list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
-    
-    if (allItems.length === 0) {
-        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+
+    if (items.length === 0) {
+        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${allItems.length === 0 ? 'No options' : 'No matches'}</div>`;
     }
-    
-    allItems.forEach(opt => {
+
+    items.forEach(opt => {
         const isSelected = selectedKeys.includes(conditionOptionKey(opt));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -4176,36 +4207,40 @@ function openConditionPickerForMedia(mediaType) {
             toggleMediaConditionOption(opt);
             // Check if dual column mode was active
             if (window.currentThreeColumnMode === 'dualColumn') {
-                openDualColumnConditionPicker(mediaType);
+                openDualColumnConditionPicker(mediaType, true);
             } else {
-                openConditionPickerForMedia(mediaType);
+                openConditionPickerForMedia(mediaType, true);
             }
         };
         list.appendChild(row);
     });
-    
+
     column.appendChild(list);
     container.appendChild(column);
-    
+
     header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
     modal.style.display = 'block';
     window.currentThreeColumnMode = null;
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => openConditionPickerForMedia(mediaType, true);
 }
 
 // Open single-column condition picker for Sleeve Condition (current media type) - same as OPEN button
-function openConditionPickerForSleeve(mediaType) {
+function openConditionPickerForSleeve(mediaType, preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
     const header = document.getElementById('conditionPickerHeader');
     const searchInput = document.getElementById('conditionPickerSearch');
-    
+
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    if (searchInput) searchInput.value = '';
-    
+    if (!preserveSearch && searchInput) searchInput.value = '';
+
     // Get sleeve condition data for the specific media type
+    const query = conditionPickerQuery();
     const allItems = customOptionsData[mediaType] || [];
+    const items = allItems.filter(opt => conditionPickerMatch(opt, query));
     const select = document.getElementById('sleeveConditionOptions');
     const selectedKeys = select ? Array.from(select.selectedOptions).map(o => {
         try {
@@ -4213,23 +4248,23 @@ function openConditionPickerForSleeve(mediaType) {
             return d.title + '|||' + d.text;
         } catch (e) { return ''; }
     }) : [];
-    
+
     const column = document.createElement('div');
     column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
-    
+
     const headerEl = document.createElement('div');
     headerEl.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
     headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
     column.appendChild(headerEl);
-    
+
     const list = document.createElement('div');
     list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
-    
-    if (allItems.length === 0) {
-        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+
+    if (items.length === 0) {
+        list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${allItems.length === 0 ? 'No options' : 'No matches'}</div>`;
     }
-    
-    allItems.forEach(opt => {
+
+    items.forEach(opt => {
         const isSelected = selectedKeys.includes(conditionOptionKey(opt));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -4242,36 +4277,41 @@ function openConditionPickerForSleeve(mediaType) {
             toggleSleeveConditionOption(mediaType, opt);
             // Check if dual column mode was active
             if (window.currentThreeColumnMode === 'dualColumn') {
-                openDualColumnConditionPicker(mediaType);
+                openDualColumnConditionPicker(mediaType, true);
             } else {
-                openConditionPickerForSleeve(mediaType);
+                openConditionPickerForSleeve(mediaType, true);
             }
         };
         list.appendChild(row);
     });
-    
+
     column.appendChild(list);
     container.appendChild(column);
-    
+
     header.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION';
     modal.style.display = 'block';
     window.currentThreeColumnMode = null;
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => openConditionPickerForSleeve(mediaType, true);
 }
 
 // Open dual-column condition picker for both Media and Sleeve conditions (current media type)
-function openDualColumnConditionPicker(mediaType) {
+function openDualColumnConditionPicker(mediaType, preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
     const header = document.getElementById('conditionPickerHeader');
     const searchInput = document.getElementById('conditionPickerSearch');
-    
+
     if (!modal || !container) return;
-    
+
     container.innerHTML = '';
-    if (searchInput) searchInput.value = '';
-    
+    if (!preserveSearch && searchInput) searchInput.value = '';
+
+    const query = conditionPickerQuery();
+
     // Media Condition column
     const mediaItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === mediaType);
+    const mediaFiltered = mediaItems.filter(opt => conditionPickerMatch(opt, query));
     const mediaSelect = document.getElementById('mediaConditionOptions');
     const mediaSelectedKeys = mediaSelect ? Array.from(mediaSelect.selectedOptions).map(o => {
         try {
@@ -4279,9 +4319,10 @@ function openDualColumnConditionPicker(mediaType) {
             return d.title + '|||' + d.text;
         } catch (e) { return ''; }
     }) : [];
-    
+
     // Sleeve Condition column
     const sleeveItems = customOptionsData[mediaType] || [];
+    const sleeveFiltered = sleeveItems.filter(opt => conditionPickerMatch(opt, query));
     const sleeveSelect = document.getElementById('sleeveConditionOptions');
     const sleeveSelectedKeys = sleeveSelect ? Array.from(sleeveSelect.selectedOptions).map(o => {
         try {
@@ -4302,11 +4343,11 @@ function openDualColumnConditionPicker(mediaType) {
     const mediaList = document.createElement('div');
     mediaList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
     
-    if (mediaItems.length === 0) {
-        mediaList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    if (mediaFiltered.length === 0) {
+        mediaList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${mediaItems.length === 0 ? 'No options' : 'No matches'}</div>`;
     }
-    
-    mediaItems.forEach(opt => {
+
+    mediaFiltered.forEach(opt => {
         const isSelected = mediaSelectedKeys.includes(conditionOptionKey(opt));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -4317,7 +4358,7 @@ function openDualColumnConditionPicker(mediaType) {
             `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
         row.onclick = () => {
             toggleMediaConditionOption(opt);
-            openDualColumnConditionPicker(mediaType);
+            openDualColumnConditionPicker(mediaType, true);
         };
         // Add context menu for favoriting
         row.addEventListener('contextmenu', (e) => {
@@ -4358,11 +4399,11 @@ function openDualColumnConditionPicker(mediaType) {
     const sleeveList = document.createElement('div');
     sleeveList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
     
-    if (sleeveItems.length === 0) {
-        sleeveList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">No options</div>`;
+    if (sleeveFiltered.length === 0) {
+        sleeveList.innerHTML = `<div style="font-size: 11px; color: var(--text-muted, #666); text-align: center; padding: 8px;">${sleeveItems.length === 0 ? 'No options' : 'No matches'}</div>`;
     }
-    
-    sleeveItems.forEach(opt => {
+
+    sleeveFiltered.forEach(opt => {
         const isSelected = sleeveSelectedKeys.includes(conditionOptionKey(opt));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
@@ -4373,15 +4414,17 @@ function openDualColumnConditionPicker(mediaType) {
             `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
         row.onclick = () => {
             toggleSleeveConditionOption(mediaType, opt);
-            openDualColumnConditionPicker(mediaType);
+            openDualColumnConditionPicker(mediaType, true);
         };
         sleeveList.appendChild(row);
     });
-    
+
     sleeveColumn.appendChild(sleeveList);
     container.appendChild(sleeveColumn);
-    
+
     header.textContent = mediaType.toUpperCase() + ' CONDITIONS';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'dualColumn';
+    // This view owns the search bar until another picker is opened
+    conditionPickerRedraw = () => openDualColumnConditionPicker(mediaType, true);
 }
