@@ -14,6 +14,9 @@
         :root {
             --primary-color: #0000FF;
             --accent-color: #FFFF00;
+            /* Theme-aware accent for TEXT: blue in Light Mode, yellow in Dark Mode
+               (#0000FF on the dark panel is only 1.9:1 and cannot be read). */
+            --primary-text: #0000FF;
             --bg-body: #f0f0f0;
             --bg-container: #ffffff;
             --text-main: #333333;
@@ -29,6 +32,7 @@
             --text-main: #e0e0e0;
             --border-color: #444444;
             --input-bg: #2d2d2d;
+            --primary-text: #FFFF00;
             /* Keep high contrast buttons in dark mode too */
         }
 
@@ -617,7 +621,7 @@
             <div class="converter-panel-right"
                 style="flex: 1.2; min-width: 400px; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; background: var(--bg-container); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box;">
                 <div
-                    style="font-weight: bold; font-size: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--primary-color);">
+                    style="font-weight: bold; font-size: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--primary-text);">
                     📦 Image Convert</div>
 
                 <!-- 1. Save Location of Converted Images -->
@@ -3542,7 +3546,7 @@
             </div>
 
             <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-                <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-color);"></span>
+                <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-text);"></span>
                 <div>
                     <button onclick="openCliInNotepad()"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); margin-right: 6px;">📝 Open</button>

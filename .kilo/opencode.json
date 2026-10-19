@@ -5,5 +5,8 @@
   ],
   "indexing": {
     "model": "intfloat/e5-base-v2"
+  },
+  "commit_message": {
+    "prompt": ""
   }
 }

@@ -174,7 +174,7 @@ class ClipboardItemWidget(QWidget):
 
         if self.is_docked:
             bg_color = "#3c3c3c" if self.dock_index % 2 == 0 else "#4a4a4a"
-            text_color = "#00FFFF" if is_kept else "#ffffff"
+            text_color = "#FFFF00" if is_kept else "#ffffff"
             hover_bg = "#666666"
             hover_text_color = "#ffffff"
             self.setStyleSheet(f"""
@@ -189,7 +189,7 @@ class ClipboardItemWidget(QWidget):
         else:
             if is_dark:
                 bg_color = "#1e1e1e"
-                text_color = "#00FFFF" if is_kept else "#ffffff"
+                text_color = "#FFFF00" if is_kept else "#ffffff"
                 border_style = "1px solid #444444"
                 hover_bg = "#444444"
                 hover_text_color = "#ffffff"

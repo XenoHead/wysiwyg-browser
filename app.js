@@ -2765,6 +2765,7 @@ let editingCustomOptionIndex = -1;
 let currentModalCategory = 'cassette';
 let currentConditionMediaType = 'lp'; // Track current media type for condition dropdowns
 let conditionPickerViewMode = 'single'; // 'single' or 'dual'
+let conditionPickerSingleSource = 'media'; // 'media' | 'sleeve' - which single column the "Both" toggle returns to
 
 // The search bar must always filter the list that is currently open, never
 // switch it to a different list. Every picker-open function registers its own
@@ -3037,15 +3038,22 @@ function getConditionPickerConfigs() {
     const mediaType = currentConditionMediaType;
     if (conditionPickerViewMode === 'dual') {
         return [
-            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: 'Media Condition', useMediaCondition: true },
-            { id: 'sleeveConditionOptions', key: mediaType, label: 'Sleeve Condition' }
+            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: mediaType.toUpperCase() + ' MEDIA CONDITION', useMediaCondition: true },
+            { id: 'sleeveConditionOptions', key: mediaType, label: mediaType.toUpperCase() + ' SLEEVE CONDITION' }
         ];
     } else {
-        // Single column mode - only Media Condition
+        // Single column mode - only Media Condition; always show the active media format
         return [
-            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: 'Media Condition', useMediaCondition: true }
+            { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: mediaType.toUpperCase() + ' MEDIA CONDITION', useMediaCondition: true }
         ];
     }
+}
+
+function setDualColumnToggle(visible, checked) {
+    const label = document.getElementById('dualColumnModeLabel');
+    if (label) label.style.display = visible ? '' : 'none';
+    const cb = document.getElementById('dualColumnMode');
+    if (cb) cb.checked = !!checked;
 }
 
 function conditionOptionKey(opt) {
@@ -3184,6 +3192,14 @@ function renderConditionPicker() {
         column.appendChild(list);
         container.appendChild(column);
     });
+
+    // Single-column default is Media Condition; leave the dual source untouched
+    if (conditionPickerViewMode !== 'dual') {
+        conditionPickerSingleSource = 'media';
+    }
+
+    // Re-show the "Both" toggle for the single-column default view (OPEN button / unchecking the box)
+    setDualColumnToggle(true, false);
 
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => renderConditionPicker();
@@ -3552,16 +3568,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaType = currentConditionMediaType;
         if (dualColumn) {
             conditionPickerViewMode = 'dual';
-            openDualColumnConditionPicker(mediaType);
+            openDualColumnConditionPicker(mediaType, true);
         } else {
             conditionPickerViewMode = 'single';
-            // Default back to single column Media Condition
-            currentModalCategory = 'mediaCondition';
-            const modalCatSelect = document.getElementById('modalCategorySelect');
-            if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
-            renderConditionPicker();
-            const header = document.getElementById('conditionPickerHeader');
-            if (header) header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
+            // Return to whichever single column the modal was opened from
+            if (conditionPickerSingleSource === 'sleeve') {
+                currentModalCategory = 'sleeveCondition';
+                const sleeveCatSelect = document.getElementById('modalCategorySelect');
+                if (sleeveCatSelect) sleeveCatSelect.value = 'sleeveCondition';
+                openConditionPickerForSleeve(mediaType, true);
+            } else {
+                currentModalCategory = 'mediaCondition';
+                const modalCatSelect = document.getElementById('modalCategorySelect');
+                if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
+                renderConditionPicker();
+                const header = document.getElementById('conditionPickerHeader');
+                if (header) header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
+            }
         }
     });
 
@@ -3861,6 +3884,7 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
     if (!preserveSearch && searchInput) searchInput.value = '';
 
     const pickerQuery = conditionPickerQuery();
+    setDualColumnToggle(false, false);
     
     // Get selected options from inline multiselect and group by media_type
     const inlineSelect = document.getElementById('mediaConditionOptions');
@@ -3964,6 +3988,7 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
     if (!preserveSearch && searchInput) searchInput.value = '';
 
     const pickerQuery = conditionPickerQuery();
+    setDualColumnToggle(false, false);
 
     // Get selected options from hidden legacy multiselects (one per media type)
     const legacySelects = {
@@ -4164,6 +4189,8 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
 
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
+    setDualColumnToggle(true, false);
+    conditionPickerSingleSource = 'media';
 
     // Get media condition data for the specific media type
     const query = conditionPickerQuery();
@@ -4234,6 +4261,8 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
 
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
+    setDualColumnToggle(true, false);
+    conditionPickerSingleSource = 'sleeve';
 
     // Get sleeve condition data for the specific media type
     const query = conditionPickerQuery();
@@ -4305,6 +4334,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
 
+    setDualColumnToggle(true, true);
     const query = conditionPickerQuery();
 
     // Media Condition column

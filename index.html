@@ -38,7 +38,7 @@
     <!-- Generic Themed Modal -->
     <div id="genericModal" class="modal" style="display:none; align-items:center; justify-content:center;">
         <div class="modal-content modal-content-wide">
-            <h3 id="genericModalTitle" style="margin-top: 0; color: var(--wysiwyg-blue);">Title</h3>
+            <h3 id="genericModalTitle" style="margin-top: 0; color: var(--wysiwyg-accent-text);">Title</h3>
             <div id="genericModalBody"
                 style="margin-bottom: 20px; white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></div>
             <div id="genericModalActions" class="modal-actions">
@@ -51,7 +51,7 @@
     <div id="hotkeysModal" class="modal" style="display:none; align-items:center; justify-content:center;">
         <div class="modal-content" style="width: 420px; max-width: 92%; text-align: left;">
             <span id="closeHotkeysBtn" class="close-btn" title="Close">&times;</span>
-            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">⌨️ Hot Keys</h3>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">⌨️ Hot Keys</h3>
             <p style="font-size: 12px; margin: 0 0 10px; color: var(--text-muted, #666);">
                 Click a key box, then press the shortcut you want. Combos like Ctrl+Shift+K work.
             </p>
@@ -69,7 +69,7 @@
     <div id="requestModal" class="modal">
         <div class="modal-content modal-content-narrow">
             <span id="closeRequestModalBtn" class="close-btn">&times;</span>
-            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Feature Request</h3>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">Feature Request</h3>
 
             <label class="form-label">Name:</label>
             <input type="text" id="reqName" class="full-width-input" placeholder="Your Name">
@@ -89,7 +89,7 @@
     <div id="calcModal" class="modal">
         <div class="modal-content modal-content-narrow">
             <span id="closeCalcModalBtn" class="close-btn">&times;</span>
-            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Cost Calculator</h3>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">Cost Calculator</h3>
             <div style="display:none;">
                 <label class="form-label">Condition:</label>
                 <select id="calcCondition" class="full-width-input" style="margin-bottom: 10px;"></select>
@@ -134,7 +134,7 @@
     <div id="customOptionsModal" class="modal">
         <div class="modal-content modal-content-narrow">
             <span id="closeCustomOptionsModalBtn" class="close-btn">&times;</span>
-            <h3 style="margin-top: 0; color: var(--wysiwyg-blue);">Edit Conditions</h3>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">Edit Conditions</h3>
 
             <div style="margin-bottom: 10px;">
                 <label class="form-label">Category:</label>
@@ -193,9 +193,10 @@
             style="max-width: 780px; width: 90%; height: 420px; min-width: 320px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; margin-bottom: 4px;">
                 <h3 id="conditionPickerHeader"
-                    style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Conditions</h3>
+                    style="margin-top: 0; color: var(--wysiwyg-accent-text); cursor: move; flex-shrink: 0;">Select Conditions</h3>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <label style="font-size: 11px; color: var(--text-color, #444); cursor: pointer; white-space: nowrap;">
+                    <label id="dualColumnModeLabel"
+                        style="font-size: 11px; color: var(--text-color, #444); cursor: pointer; white-space: nowrap;">
                         <input type="checkbox" id="dualColumnMode" style="width: 14px; height: 14px; margin-right: 4px;"> Both
                     </label>
                     <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
@@ -218,7 +219,7 @@
         <div id="listPickerContent" class="modal-content modal-content-wide"
             style="max-width: 460px; width: 90%; height: 420px; min-width: 300px; min-height: 260px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
             <h3 id="listPickerHeader"
-                style="margin-top: 0; color: var(--wysiwyg-blue); cursor: move; flex-shrink: 0;">Select Options</h3>
+                style="margin-top: 0; color: var(--wysiwyg-accent-text); cursor: move; flex-shrink: 0;">Select Options</h3>
             <span id="closeListPickerBtn" class="close-btn">&times;</span>
             <div id="listPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
                 <!-- column rendered by app.js -->

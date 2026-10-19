@@ -1,28 +1,4 @@
 {
 	"servers": {
-		"upstash/context7": {
-			"type": "http",
-			"url": "https://mcp.context7.com/mcp",
-			"headers": {
-				"X-API-Key": "ctx7sk-e2159c9e-eb58-4c80-8ebe-b5e654c66dcf"
-			},
-			"gallery": "https://api.mcp.github.com/2025-09-15/v0/servers/dcec7705-b81b-4e0f-8615-8032604be7ad",
-			"version": "1.0.0"
-		},
-		"sequential-thinking": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"@modelcontextprotocol/server-sequential-thinking"
-			],
-			"type": "stdio"
-		},
-		"fetch": {
-			"command": "uvx",
-			"args": [
-				"mcp-server-fetch"
-			],
-			"type": "stdio"
-		}
 	}
 }

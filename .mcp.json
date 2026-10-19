@@ -1,0 +1,35 @@
+{
+	"mcpServers": {
+		"fetch": {
+			"type": "local",
+			"command": "uvx",
+			"args": [
+				"mcp-server-fetch"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"sequential-thinking": {
+			"type": "local",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@modelcontextprotocol/server-sequential-thinking"
+			],
+			"tools": [
+				"*"
+			]
+		},
+		"upstash/context7": {
+			"type": "http",
+			"url": "https://mcp.context7.com/mcp",
+			"tools": [
+				"*"
+			],
+			"headers": {
+				"X-API-Key": "ctx7sk-e2159c9e-eb58-4c80-8ebe-b5e654c66dcf"
+			}
+		}
+	}
+}

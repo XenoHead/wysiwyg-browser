@@ -1,26 +1,25 @@
 Release:
-Band Name: Monty Python
-Album Name: The Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
-Release Date: 1975
-Label: Arista
-Catalogue Number: AC5-8157
+Band Name: Al Jarreau
+Album Name: Breakin' Away
+Release Date: 1981
+Label: Warner Bros. Records Inc.
+Catalogue Number: M5 3576
+
 Tracks:
-A1: Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
-B1: Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail
+A1: Closer To Your Love
+A2: My Old Friend
+A3: We're In This Love Together
+A4: Easy
+A5: Our Love
+B1: Breakin' Away
+B2: Roof Garden
+B3: (Round, Round, Round) Blue Rondo A La Turk
+B4: Teach Me Tonight
+
 Extra:
-Executive Version
-New From Arista
-Qualitape
-Optimum Sound
-Dolby System
-Arista Records, Inc. 6 West 57th Street, New York, N.y. 10019
-Printed In U.s.a.
-Mfg. U.s.a.
-Barcode: 0 7822-18157-4
-Shell Type: Opaque
-Shell Texture: Smooth
-Timing Window: Small
-Shell Color: Off White
-Ink Color: Black
-Binding: Sonic Weld
-Stamps: None
+Produced By: Jay Graydon
+Copyright: © ℗ 1981 Warner Bros. Records Inc.
+Note: Blank Tape At End Of Side Two Is Necessary To Duplicate Sequence Of L.P.
+System: Dolby System
+Side One Total Time: 21:30
+Side Two Total Time: 19:30

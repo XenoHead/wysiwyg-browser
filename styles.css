@@ -8,12 +8,15 @@
     --danger-color: #dc3545;
     --wysiwyg-blue: #0000FF;
     --wysiwyg-yellow: #FFFF00;
+    /* Theme-aware accent for TEXT: blue in Light Mode, yellow in Dark Mode
+       (#0000FF on the dark panel is only 1.9:1 and cannot be read). */
+    --wysiwyg-accent-text: #0000FF;
     --input-bg: #fff;
     --input-text: #000;
     --bg-content: #fff;
     --text-main: #343a40;
     --bg-secondary: #eee;
-    --accent-color: #0000FF;
+    --accent-color: #ebebf3;
     --sleeve-border-color: #c511a7;
     /* Shared & Editor Variables */
     --text-muted: #666666;
@@ -22,7 +25,7 @@
     --tag-bg: #eeeeee;
     --version-bg: #e3f2fd;
     --version-border: #90caf9;
-    --version-title: #0d47a1;
+    --version-title: #c8fd08;
     --save-bar-bg: #ffffff;
     --category-text: #000000;
     --dev-bg: #fff3cd;
@@ -127,6 +130,7 @@ select[multiple] { min-height: 60px; }
     --dev-bg: #3e3000;
     --dev-border: #665200;
     --dev-title: #ffda6a;
+    --wysiwyg-accent-text: #FFFF00;
 }
 [data-theme="dark"] .container { background-color: #1e1e1e; box-shadow: 0 4px 6px rgba(255, 255, 255, 0.1); }
 [data-theme="dark"] .sticky-header { background-color: #1e1e1e; }

@@ -32,6 +32,18 @@ elements the user didn't mention. For WysiScan, "move buttons to a Menu" meant t
 blue banner's buttons (Hot Keys / Theme / Exit / AI Prompt) ONLY — not the
 main-form scan-controls toolbar. Show exact before/after diffs for HTML/UI edits.
 
+### Accent colors (mandatory)
+Accent **text** color is theme-aware, never hard-coded:
+- Main app — use `var(--wysiwyg-accent-text)` (`#0000FF` in Light Mode, `#FFFF00` in Dark Mode).
+- WysiScan — use `var(--primary-text)` (same values).
+
+Rules:
+1. Never use `#0000FF` for text — in Dark Mode it is only 1.9:1 contrast on the panel.
+2. Never use `#FFFF00` for text on a light surface — it would be 1.07:1 on white.
+3. `var(--wysiwyg-blue)` / `var(--primary-color)` are **background/border** colors only; they
+   carry white or yellow text and are readable in both themes.
+4. Text on a yellow background (e.g. the hamburger `☰ Menu` button) stays blue.
+
 ## Data / Scraping Conventions
 
 - **Discogs data always via API** (token in `.env`), never by scraping discogs.com HTML.

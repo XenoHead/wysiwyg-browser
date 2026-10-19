@@ -1,15 +1,5 @@
 [
   {
-    "key": "DeathSpell_1.jpg||DeathSpell_2.jpg||DeathSpell_3.jpg",
-    "files": [
-      "DeathSpell_1.jpg",
-      "DeathSpell_3.jpg",
-      "DeathSpell_2.jpg"
-    ],
-    "output": "Release:\nBand Name: Deathspell Omega\nAlbum Name: Inquisitors Of Satan\nLabel: Northern Heritage\nCatalogue Number: Nh 017\n\nTracks:\nA1 - From Unknown Lands Of Desolation\nA2 - Torture And Death\nA3 - Desecration Master\nA4 - Lethal Baptism\nA5 - Succubus Of All Vices\nA6 - Inquisitors Of Satan\nA7 - Decadence\n\nExtra:\nAddress: P.o. Box 21 15141 Lahti Finland\n\nMedia Description:\nMatrix: M7f5 Nh-017 Mandag",
-    "ts": "2026-10-13T11:28:44"
-  },
-  {
     "key": "Hank_1.jpg||Hank_2.jpg||Hank_3.jpg",
     "files": [
       "Hank_3.jpg",
@@ -28,5 +18,15 @@
     ],
     "output": "Release:\nBand Name: Monty Python\nAlbum Name: The Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail\nRelease Date: 1975\nLabel: Arista\nCatalogue Number: AC5-8157\n\nTracks:\nA1 - Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail\nB1 - Album Of The Soundtrack Of The Trailer Of The Film Of Monty Python And The Holy Grail\n\nExtra:\nExecutive Version\nNew From Arista\nQualitape\nOptimum Sound\nDolby System\nArista Records, Inc. 6 West 57th Street, New York, N.y. 10019\nPrinted In U.s.a.\nMfg. U.s.a.\nBarcode: 0 7822-18157-4\n\nMedia Description:\nShell Type: Opaque\nShell Texture: Smooth\nTiming Window: Small\nShell Color: Off White\nInk Color: Black\nBinding: Sonic Weld\nStamps: None",
     "ts": "2026-10-13T14:47:32"
+  },
+  {
+    "key": "AlBrea_1.jpg||AlBrea_2.jpg||AlBrea_3.jpg",
+    "files": [
+      "AlBrea_3.jpg",
+      "AlBrea_1.jpg",
+      "AlBrea_2.jpg"
+    ],
+    "output": "Release:\nBand Name: Al Jarreau\nAlbum Name: Breakin' Away\nRelease Date: 1981\nLabel: Warner Bros. Records Inc.\nCatalogue Number: M5 3576\n\nTracks:\nA1 - Closer To Your Love\nA2 - My Old Friend\nA3 - We're In This Love Together\nA4 - Easy\nA5 - Our Love\nB1 - Breakin' Away\nB2 - Roof Garden\nB3 - (Round, Round, Round) Blue Rondo A La Turk\nB4 - Teach Me Tonight\n\nExtra:\nProduced By: Jay Graydon\nCopyright: © ℗ 1981 Warner Bros. Records Inc.\nNote: Blank Tape At End Of Side Two Is Necessary To Duplicate Sequence Of L.P.\nSystem: Dolby System\nSide One Total Time: 21:30\nSide Two Total Time: 19:30",
+    "ts": "2026-10-19T14:35:18"
   }
 ]

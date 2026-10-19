@@ -1,7 +1,6 @@
 {
   "python.defaultInterpreterPath": "",
   "python.terminal.activateEnvironment": true,
-  "python-envs.pythonProjects": [],
   "python-envs.workspaceSearchPaths": [],
   "chat.mcp.serverSampling": {
     "WysiWyg/.vscode/mcp.json: filesystem": {
