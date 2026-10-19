@@ -932,7 +932,9 @@ async def serve_css():
 
 @app.get("/app.js")
 async def serve_js():
-    return FileResponse(resource_path("app.js"))
+    # no-cache: browsers heuristically cache FileResponse JS, which has repeatedly
+    # served stale app.js after edits during local use; revalidate every load.
+    return FileResponse(resource_path("app.js"), headers={"Cache-Control": "no-cache"})
 
 @app.get("/style-guide")
 async def serve_style_guide():

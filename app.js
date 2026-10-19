@@ -3535,8 +3535,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = document.getElementById('conditionPickerHeader');
         if (header) header.textContent = currentConditionMediaType.toUpperCase() + ' MEDIA CONDITION';
         document.getElementById('conditionPickerModal').style.display = 'block';
-        // Ensure redraw is set for media view after opening
-        conditionPickerRedraw = () => renderConditionPicker();
     });
 
     document.getElementById('conditionPickerSearch')?.addEventListener('input', () => {
