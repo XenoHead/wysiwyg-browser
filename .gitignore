@@ -8,7 +8,7 @@ nul
 # Continuity
 /.cursorrules
 SESSION_HANDOFF.md
-.continuity/
+.continuity/*
 /.venv # Already present
 
 # Python
@@ -80,3 +80,9 @@ WysiScan/temp/temp_HerOur_2.jpg
 Listings/2026-10-06_Listings.txt
 WysiScan/config.json
 WysiScan/config.json
+# Continuity decision memory — travels with the repo (runtime state stays ignored)
+!.continuity/decisions.jsonl
+!.continuity/decisions.json
+!.continuity/.gitattributes
+!.continuity/SESSION_NOTES.md
+!.continuity/INSTRUCTIONS.md

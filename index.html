@@ -36,7 +36,7 @@
     </div>
 
     <!-- Generic Themed Modal -->
-    <div id="genericModal" class="modal" style="display:none; align-items:center; justify-content:center;">
+    <div id="genericModal" class="modal" style="display:none; align-items:center; justify-content:center; z-index: 3000;">
         <div class="modal-content modal-content-wide">
             <h3 id="genericModalTitle" style="margin-top: 0; color: var(--wysiwyg-accent-text);">Title</h3>
             <div id="genericModalBody"
@@ -82,6 +82,35 @@
                 <button id="submitRequestBtn" class="btn-search" style="padding: 8px 15px;">OK</button>
                 <button id="cancelRequestBtn" class="nav-btn"
                     style="padding: 8px 15px; margin-left: 5px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Menus Modal -->
+    <div id="updateMenusModal" class="modal">
+        <div class="modal-content modal-content-narrow" style="height: auto; min-height: unset; margin: 15% auto;">
+            <span id="closeUpdateMenusModalBtn" class="close-btn">&times;</span>
+            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">Update Menus & Conditions</h3>
+            <div style="margin: 15px 0; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="chkUpdateMenus" checked>
+                    <span>Update Menus</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="chkUpdateConditions">
+                    <span>Update Conditions</span>
+                </label>
+                <div id="mergeConditionsContainer" style="margin-left: 24px; display: none; align-items: center; gap: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="chkMergeConditions">
+                        <span>Merge (default is over write)</span>
+                    </label>
+                    <span id="mergeHelpBtn" title="Merge keeps your existing edits to the conditions menus, overwrite will replace everything with the current approved list" style="display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid currentColor; font-size: 11px; font-weight: bold; cursor: help; opacity: 0.8;" onclick="event.stopPropagation(); customHelp('Merge keeps your existing edits to the conditions menus, overwrite will replace everything with the current approved list');">?</span>
+                </div>
+            </div>
+            <div class="modal-actions" style="justify-content: flex-end; margin-top: 15px;">
+                <button id="confirmUpdateMenusBtn" class="btn-search" style="padding: 8px 15px;">Update</button>
+                <button id="cancelUpdateMenusBtn" class="nav-btn" style="padding: 8px 15px; margin-left: 5px;">Cancel</button>
             </div>
         </div>
     </div>
@@ -132,11 +161,14 @@
     </div>
 
     <div id="customOptionsModal" class="modal">
-        <div class="modal-content modal-content-narrow">
-            <span id="closeCustomOptionsModalBtn" class="close-btn">&times;</span>
-            <h3 style="margin-top: 0; color: var(--wysiwyg-accent-text);">Edit Conditions</h3>
+        <div id="customOptionsModalContent" class="modal-content modal-content-narrow"
+            style="width: 600px; max-width: 90vw; height: 80vh; min-width: 360px; min-height: 420px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            <div id="customOptionsModalHeader" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; cursor: move; margin-bottom: 10px;">
+                <h3 style="margin: 0; color: var(--wysiwyg-accent-text);">Edit Conditions</h3>
+                <span id="closeCustomOptionsModalBtn" class="close-btn" style="position: static;">&times;</span>
+            </div>
 
-            <div style="margin-bottom: 10px;">
+            <div style="margin-bottom: 10px; flex-shrink: 0;">
                 <label class="form-label">Category:</label>
                 <select id="modalCategorySelect" class="full-width-input" style="padding: 4px;">
                     <option value="mediaCondition">Media Condition</option>
@@ -145,7 +177,7 @@
             </div>
 
             <!-- Media Type filter for both categories -->
-            <div id="modalMediaTypeFilter" style="margin-bottom: 10px;">
+            <div id="modalMediaTypeFilter" style="margin-bottom: 10px; flex-shrink: 0;">
                 <label class="form-label">Media Type:</label>
                 <select id="modalMediaTypeSelect" class="full-width-input" style="padding: 4px;">
                     <option value="lp">LP</option>
@@ -155,23 +187,23 @@
             </div>
 
             <div id="customOptionsList"
-                style="margin-bottom: 15px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
+                style="flex: 1; min-height: 80px; margin-bottom: 10px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
 
                 <!-- list of options -->
             </div>
 
-            <hr style="border-top: 1px solid var(--border-color); margin: 10px 0;">
-            <h4 style="margin-top: 0; margin-bottom: 5px; font-size: 13px;">Add New Option</h4>
+            <hr style="border-top: 1px solid var(--border-color); margin: 5px 0; flex-shrink: 0;">
+            <h4 style="margin-top: 0; margin-bottom: 5px; font-size: 13px; flex-shrink: 0;">Add New Option</h4>
 
-            <label class="form-label">Title:</label>
+            <label class="form-label" style="flex-shrink: 0;">Title:</label>
             <input type="text" id="newOptionTitle" class="full-width-input" placeholder="e.g. Water Damage">
 
-            <label class="form-label" style="margin-top: 5px;">Text:</label>
+            <label class="form-label" style="margin-top: 5px; flex-shrink: 0;">Text:</label>
             <input type="text" id="newOptionText" class="full-width-input"
                 placeholder="e.g. slight water damage on sleeve">
 
             <!-- Media Type for new entries (both categories) -->
-            <div id="newOptionMediaTypeContainer" style="margin-top: 5px;">
+            <div id="newOptionMediaTypeContainer" style="margin-top: 5px; flex-shrink: 0;">
                 <label class="form-label">Media Type:</label>
                 <select id="newOptionMediaType" class="full-width-input" style="padding: 4px;">
                     <option value="lp">LP</option>
@@ -180,10 +212,12 @@
                 </select>
             </div>
 
-            <div class="modal-actions" style="justify-content: flex-end; margin-top: 10px;">
-                <button id="cancelEditCustomOptionBtn" class="nav-btn"
-                    style="padding: 5px 15px; margin-right: 5px; display: none;">Cancel</button>
+            <div class="modal-actions" style="justify-content: flex-end; margin-top: 10px; flex-shrink: 0;">
                 <button id="addCustomOptionBtn" class="btn-search" style="padding: 5px 15px;">Add</button>
+                <button id="copyCustomOptionBtn" class="nav-btn"
+                    style="padding: 5px 15px; display: none;">Copy</button>
+                <button id="cancelEditCustomOptionBtn" class="nav-btn"
+                    style="padding: 5px 15px;">Cancel</button>
             </div>
         </div>
     </div>
@@ -429,21 +463,26 @@
                 <div class="form-group">
                     <label>OPTIONS</label>
                     <div style="display:flex; flex-wrap:nowrap; gap:5px; align-items:center; margin-top:5px;">
-                        <label id="oopLabel"
-                            style="font-weight:normal; font-size:11px; display: flex; align-items: center; gap: 4px; white-space: nowrap;"><input
-                                type="checkbox" id="oopToggle"> OOP</label>
-                        <input type="text" id="trackTimeInfo" placeholder="Tracks"
-                            style="width:45px; padding:2px; font-size:11px;">
                         <div
                             style="display:flex; align-items:flex-start; gap: 6px; flex-grow: 1; justify-content: flex-end;">
                             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex-shrink: 0;">
                                 <label
                                     style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em; white-space: nowrap;">Media Type:</label>
-                                <select id="conditionMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
-                                    <option value="lp">LP</option>
-                                    <option value="cd">CD</option>
-                                    <option value="cassette">CASS</option>
-                                </select>
+                                <div style="display:flex; align-items:center; gap:5px; height:22px; white-space:nowrap;">
+                                    <div id="conditionQuickControls"
+                                        style="display:flex; align-items:center; gap:5px; height:22px; white-space:nowrap;">
+                                        <label id="oopLabel"
+                                            style="font-weight:normal; font-size:11px; display:flex; align-items:center; gap:4px; white-space:nowrap;"><input
+                                                type="checkbox" id="oopToggle"> OOP</label>
+                                        <input type="text" id="trackTimeInfo" placeholder="Tracks"
+                                            style="width:45px; height:22px; box-sizing:border-box; padding:2px; font-size:11px;">
+                                    </div>
+                                    <select id="conditionMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
+                                        <option value="lp">LP</option>
+                                        <option value="cd">CD</option>
+                                        <option value="cassette">CASS</option>
+                                    </select>
+                                </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 120px;">
                                 <span

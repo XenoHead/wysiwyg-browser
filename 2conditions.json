@@ -1,0 +1,476 @@
+{
+    "lp": [
+        {
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode",
+            "favorite": true
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing",
+            "favorite": true
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing"
+        },
+        {
+            "title": "Corner (Creasing)",
+            "text": "Corner creasing"
+        },
+        {
+            "title": "Corner (Denting Light)",
+            "text": "light Corner denting"
+        },
+        {
+            "title": "Corner (Denting)",
+            "text": "Corner denting"
+        },
+        {
+            "title": "Corner (Light Wear)",
+            "text": "light Corner-wear"
+        },
+        {
+            "title": "Corner (Wear)",
+            "text": "Corner-wear"
+        },
+        {
+            "title": "Creasing (Edge)",
+            "text": "Edge creasing"
+        },
+        {
+            "title": "Cut Mark (Sleeve)",
+            "text": "cut-mark to Sleeve"
+        },
+        {
+            "title": "Cut Mark (Spine)",
+            "text": "cut-mark to Spine"
+        },
+        {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
+        },
+        {
+            "title": "Discoloration (Sleeve)",
+            "text": "discoloration to Sleeve"
+        },
+        {
+            "title": "Edge Wear",
+            "text": "edge wear / edge-wear"
+        },
+        {
+            "title": "Final Sale",
+            "text": "( final sale - can't verify color/matrix variant due to seal )"
+        },
+        {
+            "title": "Label (Discoloration)",
+            "text": "Label discoloration"
+        },
+        {
+            "title": "Ring-Wear",
+            "text": "ring-wear"
+        },
+        {
+            "title": "Seam Splitting",
+            "text": "Seam splitting"
+        },
+        {
+            "title": "Shelf Wear",
+            "text": "shelf-wear"
+        },
+        {
+            "title": "Shelf Wear (Light)",
+            "text": "light shelf-wear"
+        },
+        {
+            "title": "Shelf Wear (Overall)",
+            "text": "overall shelf-wear"
+        },
+        {
+            "title": "Spindle (Wear)",
+            "text": "Spindle-wear"
+        },
+        {
+            "title": "Spine Creasing",
+            "text": "Spine creasing"
+        },
+        {
+            "title": "Spine Creasing (Light)",
+            "text": "light Spine creasing"
+        },
+        {
+            "title": "Sticker (Residue)",
+            "text": "light sticker residue"
+        },
+        {
+            "title": "Sticker Mark",
+            "text": "sticker mark"
+        },
+        {
+            "title": "Sticker Mark (Light)",
+            "text": "light sticker mark"
+        },
+        {
+            "title": "Tearing Sleeve",
+            "text": "Sleeve tearing"
+        },
+        {
+            "title": "Tearing Sleeve (Light)",
+            "text": "light Sleeve tearing"
+        },
+        {
+            "title": "Water Damage (Art)",
+            "text": "water damage to Artwork"
+        },
+        {
+            "title": "Water Damage (Sleeve)",
+            "text": "water damage to Sleeve"
+        },
+        {
+            "title": "Writing/Ink",
+            "text": "writing on Artwork"
+        }
+    ],
+    "cd": [
+        {
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode",
+            "favorite": true
+        },
+        {
+            "title": "Booklet (Light Play)",
+            "text": "light play to Booklet"
+        },
+        {
+            "title": "Booklet (Whitening)",
+            "text": "Booklet edge whitening"
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Substantial Tearing)",
+            "text": "substantial Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing"
+        },
+        {
+            "title": "Corner (Wear Light)",
+            "text": "light Corner-wear"
+        },
+        {
+            "title": "Corner (Wear)",
+            "text": "Corner-wear"
+        },
+        {
+            "title": "Cracking (Jewel Case)",
+            "text": "Jewel Case cracking"
+        },
+        {
+            "title": "Cracking (light Jewel Case)",
+            "text": "light Jewel Case cracking"
+        },
+        {
+            "title": "Creasing (Booklet)",
+            "text": "creasing to Booklet"
+        },
+        {
+            "title": "Creasing (Spine Light)",
+            "text": "light Spine-creasing"
+        },
+        {
+            "title": "Cut Mark (Art)",
+            "text": "cut-mark to Artwork"
+        },
+        {
+            "title": "Cut Mark (Jewel Case)",
+            "text": "cut-mark to Jewel Case"
+        },
+        {
+            "title": "Cut Mark (Spine)",
+            "text": "cut-mark to Spine"
+        },
+        {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
+        },
+        {
+            "title": "Drill Hole (Art)",
+            "text": "drill-hole through Artwork"
+        },
+        {
+            "title": "Drill Hole (Inlay)",
+            "text": "drill-hole through Inlay"
+        },
+        {
+            "title": "Drill Hole (Jewel Case)",
+            "text": "drill-hole through Jewel Case"
+        },
+        {
+            "title": "Edge Whitening (Booklet)",
+            "text": "Edge whitening to Booklet"
+        },
+        {
+            "title": "Edge Whitening (Digipak)",
+            "text": "Edge whitening"
+        },
+        {
+            "title": "Final Sale",
+            "text": "( final sale - can't verify matrix/pressing/label variant due to seal )"
+        },
+        {
+            "title": "Hole Punch (Barcode)",
+            "text": "hole-punch through Barcode"
+        },
+        {
+            "title": "Hole Punch (Booklet)",
+            "text": "hole-punch through Booklet"
+        },
+        {
+            "title": "Hole Punch (Inlay)",
+            "text": "hole-punch through Inlay"
+        },
+        {
+            "title": "Inlay (Disc Wear)",
+            "text": "ring-wear to Inlay"
+        },
+        {
+            "title": "Promo Stamp Gold (Art)",
+            "text": "Gold Promo Stamp on Artwork"
+        },
+        {
+            "title": "Promo Stamp Gold (Booklet)",
+            "text": "Gold Promo Stamp on Booklet"
+        },
+        {
+            "title": "Promo Sticker (Booklet)",
+            "text": "Promo Sticker on Booklet"
+        },
+        {
+            "title": "Shelf Wear",
+            "text": "shelf-wear"
+        },
+        {
+            "title": "Shelf Wear (Light)",
+            "text": "light shelf-wear"
+        },
+        {
+            "title": "Sticker Mark",
+            "text": "sticker-mark"
+        },
+        {
+            "title": "Sticker Mark (Light)",
+            "text": "light sticker-mark"
+        },
+        {
+            "title": "Tab Mark (Booklet)",
+            "text": "tab-marks to Booklet"
+        },
+        {
+            "title": "Tab Mark (Insert)",
+            "text": "tab-marks to Insert"
+        },
+        {
+            "title": "Tab Mark (Light Booklet)",
+            "text": "light tab-marks to Booklet"
+        },
+        {
+            "title": "Tab Mark (Light Insert)",
+            "text": "light tab-marks to Insert"
+        },
+        {
+            "title": "Tab Wear (Booklet)",
+            "text": "tab-wear to Booklet"
+        },
+        {
+            "title": "Tab Wear (Insert)",
+            "text": "tab-wear to Insert"
+        },
+        {
+            "title": "Tab Wear (Light Booklet)",
+            "text": "light tab-wear to Booklet"
+        },
+        {
+            "title": "Tab Wear (Light Insert)",
+            "text": "light tab-wear to Insert"
+        },
+        {
+            "title": "Tearing (Art)",
+            "text": "tearing to Artwork"
+        },
+        {
+            "title": "Tearing (Booklet)",
+            "text": "tearing to Booklet"
+        },
+        {
+            "title": "Tearing (Inlay)",
+            "text": "tearing to Inlay"
+        },
+        {
+            "title": "Tearing Box Set",
+            "text": "tearing to Box"
+        },
+        {
+            "title": "Tearing Box Set (Light)",
+            "text": "light tearing to Box"
+        },
+        {
+            "title": "Water Damage (Art)",
+            "text": "water damage to Artwork"
+        },
+        {
+            "title": "Water Damage (Booklet)",
+            "text": "water damage to Booklet"
+        },
+        {
+            "title": "Water Damage (Inlay)",
+            "text": "water damage to Inlay"
+        },
+        {
+            "title": "Waviness/Bending (Booklet)",
+            "text": "waviness/bending to Booklet"
+        },
+        {
+            "title": "Waviness/Bending (Inlay)",
+            "text": "waviness/bending to Inlay"
+        },
+        {
+            "title": "Waviness/Bending (Insert)",
+            "text": "waviness/bending to Insert"
+        },
+        {
+            "title": "Writing/Ink",
+            "text": "writing on Artwork"
+        }
+    ],
+    "cassette": [
+        {
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode",
+            "favorite": true
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing",
+            "favorite": true
+        },
+        {
+            "title": "Cellophane (Substantial Tearing)",
+            "text": "substantial Cellophane tearing",
+            "favorite": true
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing"
+        },
+        {
+            "title": "Cracking (Jewel Case)",
+            "text": "Jewel Case cracking"
+        },
+        {
+            "title": "Cracking (Light Jewel Case)",
+            "text": "light Jewel Case cracking"
+        },
+        {
+            "title": "Creasing (Jcard)",
+            "text": "creasing to Jcard"
+        },
+        {
+            "title": "Cut Mark (Art)",
+            "text": "cut-mark"
+        },
+        {
+            "title": "Cut Mark (Jewel Case)",
+            "text": "cut-mark to Jewel Case"
+        },
+        {
+            "title": "Cut Mark (Spine)",
+            "text": "cut-mark to Spine"
+        },
+        {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
+        },
+        {
+            "title": "Drill Hole (Art)",
+            "text": "drill-hole through Artwork"
+        },
+        {
+            "title": "Drill Hole (Jcard)",
+            "text": "drill-hole through Jcard"
+        },
+        {
+            "title": "Drill Hole (Jewel Case)",
+            "text": "drill-hole through Jewel Case"
+        },
+        {
+            "title": "Edge Whitening",
+            "text": "Edge whitening"
+        },
+        {
+            "title": "Final Sale",
+            "text": "( final sale - can't verify matrix/pressing/label variant due to seal )"
+        },
+        {
+            "title": "Hole Punch",
+            "text": "hole-punch"
+        },
+        {
+            "title": "Hole Punch (Barcode)",
+            "text": "hole-punch through Barcode"
+        },
+        {
+            "title": "Play (Light)",
+            "text": "light play to Jcard"
+        },
+        {
+            "title": "Shelf Wear",
+            "text": "shelf-wear"
+        },
+        {
+            "title": "Shelf Wear (Light)",
+            "text": "light shelf-wear"
+        },
+        {
+            "title": "Spine (Fading)",
+            "text": "Spine fading"
+        },
+        {
+            "title": "Spine (Light Fading)",
+            "text": "light Spine fading"
+        },
+        {
+            "title": "Sticker Mark",
+            "text": "sticker-mark"
+        },
+        {
+            "title": "Sticker Mark (Light)",
+            "text": "light sticker-mark"
+        },
+        {
+            "title": "Tearing (Jcard)",
+            "text": "tearing to Jcard"
+        },
+        {
+            "title": "Tearing (Light Jcard)",
+            "text": "light tearing to Jcard"
+        },
+        {
+            "title": "Water Damage (Art)",
+            "text": "water damage to Artwork"
+        },
+        {
+            "title": "Waviness/Bending (Jcard)",
+            "text": "waviness/bending to Jcard"
+        },
+        {
+            "title": "Writing/Ink",
+            "text": "writing on Artwork"
+        }
+    ],
+    "media": [],
+    "mediaCondition": []
+}

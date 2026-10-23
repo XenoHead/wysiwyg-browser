@@ -193,34 +193,33 @@ def get_current_version_str():
 
 def _load_env_file():
     """Minimal .env loader (no external dependency). Reads KEY=VALUE pairs
-    from a .env file next to this script (or inside the PyInstaller bundle)
+    from a .env file next to this script or executable
     into os.environ if the variable isn't already set. .env is gitignored so
     secrets never enter version control."""
-    candidates = []
-    base = os.path.dirname(os.path.abspath(__file__))
-    candidates.append(os.path.join(base, ".env"))
-    if hasattr(sys, "_MEIPASS"):
-        candidates.append(os.path.join(sys._MEIPASS, ".env"))
-    for path in candidates:
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    for line in fh:
-                        line = line.strip()
-                        if not line or line.startswith("#") or "=" not in line:
-                            continue
-                        k, v = line.split("=", 1)
-                        k, v = k.strip(), v.strip().strip('"').strip("'")
-                        if k and k not in os.environ:
-                            os.environ[k] = v
-            except OSError:
-                pass
-            break
+    base = (
+        os.path.dirname(sys.executable)
+        if getattr(sys, "frozen", False)
+        else os.path.dirname(os.path.abspath(__file__))
+    )
+    path = os.path.join(base, ".env")
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k, v = k.strip(), v.strip().strip('"').strip("'")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except OSError:
+            pass
 
 _load_env_file()
 
 # Live Discogs token is sourced from the environment / .env (gitignored),
-# never hardcoded here. Set DISCOGS_TOKEN in .env for local runs and builds.
+# never hardcoded or bundled here. For packaged builds, provide .env beside the executable.
 DISCOGS_TOKEN = os.environ.get("DISCOGS_TOKEN", "")
 # Load version dynamically for User-Agent
 HEADERS = {"User-Agent": f"WYSIWYG/{get_current_version_str()}", "Authorization": f"Discogs token={DISCOGS_TOKEN}"}
@@ -242,7 +241,7 @@ def init_conditions():
                 print(f"Failed to copy Conditions.json from server: {e}")
         else:
             # Create default if server also unavailable
-            default = {"lp": [], "cd": [], "cassette": []}
+            default = {"lp": [], "cd": [], "cassette": [], "media": [], "mediaCondition": []}
             try:
                 with open(local_path, "w") as f:
                     json.dump(default, f, indent=4)
@@ -250,14 +249,14 @@ def init_conditions():
             except: pass
 
 POSSIBLE_ROOTS = [
-    r"Z:\Tools\FYRTools",
-    r"\\BATMAN\SupergirlNew\Tools\FYRTools"
+    r"\\192.168.0.108\FYRShare\Tools\FYRTools",
+    r"Z:\Tools\FYRTools"
 ]
 def resolve_server_paths():
     for path in POSSIBLE_ROOTS:
         if os.path.exists(path): 
             return path, os.path.join(path, "WYSIWYG")
-    return r"Z:\Tools\FYRTools", r"Z:\Tools\FYRTools\WYSIWYG"
+    return r"\\192.168.0.108\FYRShare\Tools\FYRTools", r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG"
 
 SERVER_ROOT, WYSIWYG_SERVER_DIR = resolve_server_paths()
 SERVER_VERSION_PATH = os.path.join(WYSIWYG_SERVER_DIR, "version.json")
@@ -1021,13 +1020,13 @@ async def get_conditions(master: bool = False):
         server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
         if os.path.exists(server_path):
             return FileResponse(server_path)
-        return {"cassette": [], "cd": [], "lp": []}
+        return {"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}
     
     file_path = get_local_path("Conditions.json")
     if os.path.exists(file_path):
         return FileResponse(file_path)
     # Return empty default if file missing
-    return {"cassette": [], "cd": [], "lp": []}
+    return {"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}
 
 @app.post("/api/save-conditions")
 async def save_conditions(data: dict = Body(...), master: bool = False):
@@ -1060,47 +1059,67 @@ async def sync_conditions(data: dict = Body(...)):
         return {"status": "error", "message": f"Server update failed: {e}"}
 
 @app.post("/api/merge-conditions")
-async def merge_conditions():
+async def merge_conditions(merge: bool = False):
     local_path = get_local_path("Conditions.json")
     server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
     
-    local_data = {"lp": [], "cd": [], "cassette": []}
+    if not os.path.exists(server_path):
+        alt_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\conditions.json"
+        if os.path.exists(alt_path):
+            server_path = alt_path
+        else:
+            return {"status": "error", "message": "Server master file not found."}
+
+    if not merge:
+        try:
+            with open(server_path, "r", encoding="utf-8") as f:
+                server_data = json.load(f)
+            if not isinstance(server_data, dict):
+                return {"status": "error", "message": "Server Conditions.json must contain a JSON object."}
+
+            with open(local_path, "w", encoding="utf-8") as f:
+                json.dump(server_data, f, indent=4)
+            return {"status": "success", "message": "Conditions overwritten from server."}
+        except Exception as e:
+            return {"status": "error", "message": f"Overwrite failed: {e}"}
+
+    local_data = {}
     if os.path.exists(local_path):
         try:
-            with open(local_path, "r") as f: local_data = json.load(f)
+            with open(local_path, "r", encoding="utf-8") as f: local_data = json.load(f)
         except: pass
         
-    server_data = {"lp": [], "cd": [], "cassette": []}
-    if os.path.exists(server_path):
-        try:
-            with open(server_path, "r") as f: server_data = json.load(f)
-        except: 
-            return {"status": "error", "message": "Could not read master file on server."}
-    else:
-        return {"status": "error", "message": "Server master file not found."}
+    server_data = {}
+    try:
+        with open(server_path, "r", encoding="utf-8") as f: server_data = json.load(f)
+    except: 
+        return {"status": "error", "message": "Could not read master file on server."}
 
-    # Merge logic
+    # Dynamic merge logic covering all categories (including mediaCondition & media)
+    all_cats = list(dict.fromkeys(list(server_data.keys()) + list(local_data.keys())))
+    if not all_cats:
+        all_cats = ["lp", "cd", "cassette", "media", "mediaCondition"]
+
     merged_data = {}
-    for cat in ["lp", "cd", "cassette"]:
+    for cat in all_cats:
         local_list = local_data.get(cat, [])
         server_list = server_data.get(cat, [])
+        if not isinstance(local_list, list): local_list = []
+        if not isinstance(server_list, list): server_list = []
         
-        # Use a dict keyed by title to handle merging
         combined = {}
-        # Load server first, then local (so if same title, local wins? or server wins?)
-        # User said: "gets the changes made by an admin, but dose not loose any of the items they manually added"
-        # If admin changed the TEXT of a title the user also has, admin's text is probably "the change".
-        # But if the user customized it, maybe they want theirs.
-        # Usually, "Admin changes" take precedence for the same title.
-        for item in local_list:
-            if item.get("title"): combined[item["title"]] = item
-            
         for item in server_list:
-            if item.get("title"): combined[item["title"]] = item
+            if isinstance(item, dict) and item.get("title"):
+                key = (item.get("media_type", "").lower(), item.get("title", "").strip().lower())
+                combined[key] = item
             
-        # Convert back to list and sort
+        for item in local_list:
+            if isinstance(item, dict) and item.get("title"):
+                key = (item.get("media_type", "").lower(), item.get("title", "").strip().lower())
+                combined[key] = item
+            
         final_list = list(combined.values())
-        final_list.sort(key=lambda x: x.get("title", "").lower())
+        final_list.sort(key=lambda x: (x.get("media_type", ""), x.get("title", "").lower()))
         merged_data[cat] = final_list
 
     # Save locally

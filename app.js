@@ -154,6 +154,24 @@ function setupEventListeners() {
     addClickListener('submitRequestBtn', submitRequest);
     addClickListener('cancelRequestBtn', closeRequestModal);
 
+    addClickListener('closeUpdateMenusModalBtn', closeUpdateMenusModal);
+    addClickListener('cancelUpdateMenusBtn', closeUpdateMenusModal);
+    addClickListener('confirmUpdateMenusBtn', confirmUpdateMenus);
+    document.getElementById('chkUpdateConditions')?.addEventListener('change', function () {
+        const mergeContainer = document.getElementById('mergeConditionsContainer');
+        const chkMerge = document.getElementById('chkMergeConditions');
+        if (this.checked) {
+            if (mergeContainer) mergeContainer.style.display = 'flex';
+            if (chkMerge) chkMerge.disabled = false;
+        } else {
+            if (mergeContainer) mergeContainer.style.display = 'none';
+            if (chkMerge) {
+                chkMerge.checked = false;
+                chkMerge.disabled = true;
+            }
+        }
+    });
+
     addClickListener('openCalcBtn', openCalcModal);
     addClickListener('closeCalcModalBtn', closeCalcModal);
     addClickListener('calculateBtn', runCalculator);
@@ -578,10 +596,15 @@ async function setupSaveConditionsButton() {
     saveBtn.title = 'Save Variable Conditions';
     saveBtn.innerHTML = '💾'; // Save icon
 
-    saveBtn.style.marginLeft = '8px';
+    saveBtn.style.marginLeft = '0';
     saveBtn.style.padding = '0 5px';
     saveBtn.style.fontSize = '1em';
     saveBtn.style.lineHeight = '1';
+    saveBtn.style.height = '22px';
+    saveBtn.style.boxSizing = 'border-box';
+    saveBtn.style.display = 'inline-flex';
+    saveBtn.style.alignItems = 'center';
+    saveBtn.style.justifyContent = 'center';
     saveBtn.style.cursor = 'pointer';
     saveBtn.style.border = '1px solid #28a745';
     saveBtn.style.borderRadius = '3px';
@@ -760,30 +783,69 @@ async function openEditor() {
     }
 }
 
-async function updateMenus() {
-    customConfirm("Pull latest menus and merge conditions from server?", async () => {
-        try {
-            // 1. Update general menus (data.json, version.json, etc.)
+function updateMenus() {
+    const modal = document.getElementById('updateMenusModal');
+    if (!modal) return;
+    const chkMenus = document.getElementById('chkUpdateMenus');
+    if (chkMenus) chkMenus.checked = true;
+    const chkCond = document.getElementById('chkUpdateConditions');
+    if (chkCond) chkCond.checked = false;
+    const chkMerge = document.getElementById('chkMergeConditions');
+    if (chkMerge) {
+        chkMerge.checked = false;
+        chkMerge.disabled = true;
+    }
+    const mergeContainer = document.getElementById('mergeConditionsContainer');
+    if (mergeContainer) mergeContainer.style.display = 'none';
+    modal.style.display = 'block';
+}
+
+function closeUpdateMenusModal() {
+    const modal = document.getElementById('updateMenusModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function confirmUpdateMenus() {
+    const doMenus = document.getElementById('chkUpdateMenus')?.checked;
+    const doConditions = document.getElementById('chkUpdateConditions')?.checked;
+    const doMerge = document.getElementById('chkMergeConditions')?.checked;
+
+    if (!doMenus && !doConditions) {
+        customAlert("Please select at least one option to update.");
+        return;
+    }
+
+    closeUpdateMenusModal();
+
+    try {
+        let messages = [];
+        let anySuccess = false;
+
+        if (doMenus) {
             const resp = await fetch('/update-menus', { method: 'POST' });
             const res = await resp.json();
+            messages.push(res.message || (res.status === 'success' ? 'Menus updated.' : 'Menu update failed.'));
+            if (res.status === 'success') anySuccess = true;
+        }
 
-            // 2. Merge conditions (Conditions.json)
-            const respCond = await fetch('/api/merge-conditions', { method: 'POST' });
+        if (doConditions) {
+            const respCond = await fetch(`/api/merge-conditions?merge=${doMerge}`, { method: 'POST' });
             const resCond = await respCond.json();
-
-            let msg = res.message;
             if (resCond.status === 'success') {
-                msg += "\n\n" + resCond.message;
+                messages.push(resCond.message || 'Conditions updated.');
+                anySuccess = true;
             } else {
-                msg += "\n\nCondition Merge Failed: " + resCond.message;
+                messages.push("Condition Update Failed: " + (resCond.message || 'Unknown error'));
             }
+        }
 
-            customAlert(msg);
-            if (res.status === 'success' || resCond.status === 'success') {
-                location.reload();
-            }
-        } catch (e) { customAlert("Error: " + e); }
-    });
+        customAlert(messages.join("\n\n"));
+        if (anySuccess) {
+            location.reload();
+        }
+    } catch (e) {
+        customAlert("Error: " + e);
+    }
 }
 
 async function submitRequest() {
@@ -1255,7 +1317,7 @@ function closeModal() {
     if (overlay) overlay.style.display = 'none';
 }
 
-window.customAlert = function (msg) {
+window.customHelp = function (msg) { showModal('Help', msg, [{ text: 'OK', primary: true }]); }; window.customAlert = function (msg) {
     showModal('Alert', msg, [{ text: 'OK', primary: true }]);
 }
 
@@ -2762,6 +2824,8 @@ function updateCounterUIDeprecated() {}
 
 let customOptionsData = { cassette: [], cd: [], lp: [], media: [], mediaCondition: [] };
 let editingCustomOptionIndex = -1;
+let editingCustomOption = null;
+let customOptionCopyDraft = false;
 let currentModalCategory = 'cassette';
 let currentConditionMediaType = 'lp'; // Track current media type for condition dropdowns
 let conditionPickerViewMode = 'single'; // 'single' or 'dual'
@@ -2968,6 +3032,8 @@ function renderCustomOptionsModalList() {
     // Get data based on category
     let currentData;
     const selectedMediaType = modalMediaTypeSelect?.value || currentConditionMediaType;
+    const newOptionMediaTypeSelect = document.getElementById('newOptionMediaType');
+    if (newOptionMediaTypeSelect) newOptionMediaTypeSelect.value = selectedMediaType;
     
     if (currentModalCategory === 'mediaCondition') {
         // Filter mediaCondition by selected media type
@@ -2990,7 +3056,7 @@ function renderCustomOptionsModalList() {
         const item = document.createElement('div');
         item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:4px 5px; border-bottom:1px solid var(--border-color); gap:3px;';
 
-        if (editingCustomOptionIndex === index) {
+        if (editingCustomOption === opt) {
             item.style.backgroundColor = 'var(--wysiwyg-blue-light, #e6f0ff)';
         }
 
@@ -3323,6 +3389,7 @@ function initDraggableModal(contentId, headerId) {
 
 window.resetConditionPickerPlacement = initDraggableModal('conditionPickerContent', 'conditionPickerHeader');
 window.resetListPickerPlacement = initDraggableModal('listPickerContent', 'listPickerHeader');
+window.resetCustomOptionsModalPlacement = initDraggableModal('customOptionsModalContent', 'customOptionsModalHeader');
 
 
 window.editCustomOption = function (index) {
@@ -3339,19 +3406,23 @@ window.editCustomOption = function (index) {
     }
     
     const opt = currentData[index];
+    if (!opt) return;
+    editingCustomOption = opt;
     document.getElementById('newOptionTitle').value = opt.title;
     document.getElementById('newOptionText').value = opt.text;
     
     // Set the media type dropdown
     const mediaTypeSelect = document.getElementById('newOptionMediaType');
-    if (mediaTypeSelect && opt.media_type) {
-        mediaTypeSelect.value = opt.media_type;
+    if (mediaTypeSelect) {
+        mediaTypeSelect.value = opt.media_type || selectedMediaType;
     }
     
     document.getElementById('addCustomOptionBtn').innerText = 'Update';
 
     const cancelBtn = document.getElementById('cancelEditCustomOptionBtn');
     if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    const copyBtn = document.getElementById('copyCustomOptionBtn');
+    if (copyBtn) copyBtn.style.display = 'inline-block';
 
     renderCustomOptionsModalList();
 };
@@ -3412,13 +3483,17 @@ window.toggleFavoriteCustomOption = function (event, index) {
 
 function cancelEditCustomOption() {
     editingCustomOptionIndex = -1;
+    editingCustomOption = null;
+    customOptionCopyDraft = false;
     if (document.getElementById('newOptionTitle')) document.getElementById('newOptionTitle').value = '';
     if (document.getElementById('newOptionText')) document.getElementById('newOptionText').value = '';
     const addBtn = document.getElementById('addCustomOptionBtn');
     if (addBtn) addBtn.innerText = 'Add';
 
     const cancelBtn = document.getElementById('cancelEditCustomOptionBtn');
-    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    const copyBtn = document.getElementById('copyCustomOptionBtn');
+    if (copyBtn) copyBtn.style.display = 'none';
 
     renderCustomOptionsModalList();
 }
@@ -3464,6 +3539,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('editCustomOptionsBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
         cancelEditCustomOption();
+        window.resetCustomOptionsModalPlacement?.();
         document.getElementById('customOptionsModal').style.display = 'block';
     });
 
@@ -3472,7 +3548,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('cancelEditCustomOptionBtn')?.addEventListener('click', () => {
-        cancelEditCustomOption();
+        if (editingCustomOption || customOptionCopyDraft) {
+            cancelEditCustomOption();
+            return;
+        }
+        document.getElementById('customOptionsModal').style.display = 'none';
+    });
+
+    document.getElementById('copyCustomOptionBtn')?.addEventListener('click', () => {
+        if (!editingCustomOption) return;
+
+        document.getElementById('newOptionTitle').value = `${editingCustomOption.title} (copy)`;
+        document.getElementById('newOptionText').value = editingCustomOption.text;
+        document.getElementById('newOptionMediaType').value =
+            editingCustomOption.media_type || document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
+        editingCustomOption = null;
+        editingCustomOptionIndex = -1;
+        customOptionCopyDraft = true;
+        document.getElementById('addCustomOptionBtn').innerText = 'Update';
+        document.getElementById('copyCustomOptionBtn').style.display = 'none';
+        renderCustomOptionsModalList();
     });
 
     document.getElementById('addCustomOptionBtn')?.addEventListener('click', () => {
@@ -3497,11 +3592,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentModalCategory === 'mediaCondition') {
             targetArray = customOptionsData.mediaCondition;
         } else if (currentModalCategory === 'sleeveCondition') {
-            targetArray = customOptionsData[selectedMediaType];
+            targetArray = customOptionsData[editingCustomOption?.media_type || selectedMediaType];
         }
 
-        if (editingCustomOptionIndex !== -1) {
-            targetArray[editingCustomOptionIndex] = newOption;
+        if (editingCustomOption) {
+            const actualIndex = targetArray.indexOf(editingCustomOption);
+            if (actualIndex !== -1) {
+                targetArray[actualIndex] = newOption;
+            } else {
+                targetArray.push(newOption);
+            }
         } else {
             targetArray.push(newOption);
         }
@@ -3833,6 +3933,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetId = menu.dataset.targetId;
             if (targetId === 'mediaConditionOptions') {
                 currentModalCategory = 'mediaCondition';
+                window.resetCustomOptionsModalPlacement?.();
                 document.getElementById('customOptionsModal').style.display = 'block';
                 const modalCatSelect = document.getElementById('modalCategorySelect');
                 if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
@@ -3840,6 +3941,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (modalMediaTypeSelect) modalMediaTypeSelect.value = currentConditionMediaType;
             } else if (targetId === 'sleeveConditionOptions') {
                 currentModalCategory = 'sleeveCondition';
+                window.resetCustomOptionsModalPlacement?.();
                 document.getElementById('customOptionsModal').style.display = 'block';
                 const modalCatSelect = document.getElementById('modalCategorySelect');
                 if (modalCatSelect) modalCatSelect.value = 'sleeveCondition';
@@ -3880,6 +3982,7 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
 
     if (!modal || !container) return;
 
+    const scrollPositions = preserveSearch ? captureConditionPickerScroll(container) : {};
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
 
@@ -3922,6 +4025,7 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
         column.appendChild(headerEl);
 
         const list = document.createElement('div');
+        list.dataset.conditionPickerList = config.key;
         list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
 
         if (items.length === 0) {
@@ -3967,6 +4071,7 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
         
         column.appendChild(list);
         container.appendChild(column);
+        list.scrollTop = scrollPositions[config.key] || 0;
     });
 
     header.textContent = 'Select Media Condition (All Types)';
@@ -3984,6 +4089,7 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
 
     if (!modal || !container) return;
 
+    const scrollPositions = preserveSearch ? captureConditionPickerScroll(container) : {};
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
 
@@ -4028,6 +4134,7 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
         column.appendChild(headerEl);
 
         const list = document.createElement('div');
+        list.dataset.conditionPickerList = config.key;
         list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
 
         if (items.length === 0) {
@@ -4073,6 +4180,7 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
         
         column.appendChild(list);
         container.appendChild(column);
+        list.scrollTop = scrollPositions[config.key] || 0;
     });
 
     header.textContent = 'Select Sleeve Condition (All Types)';
@@ -4080,6 +4188,13 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
     window.currentThreeColumnMode = 'sleeveCondition';
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openSleeveConditionThreeColumnModal(true);
+}
+
+function captureConditionPickerScroll(container) {
+    return Object.fromEntries(
+        Array.from(container.querySelectorAll('[data-condition-picker-list]'))
+            .map(list => [list.dataset.conditionPickerList, list.scrollTop])
+    );
 }
 
 function toggleMediaConditionOption(opt) {
@@ -4187,6 +4302,7 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
 
     if (!modal || !container) return;
 
+    const scrollPositions = preserveSearch ? captureConditionPickerScroll(container) : {};
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
     setDualColumnToggle(true, false);
@@ -4213,6 +4329,7 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
     column.appendChild(headerEl);
 
     const list = document.createElement('div');
+    list.dataset.conditionPickerList = 'current';
     list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
 
     if (items.length === 0) {
@@ -4242,6 +4359,7 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
 
     column.appendChild(list);
     container.appendChild(column);
+    list.scrollTop = scrollPositions.current || 0;
 
     header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
     modal.style.display = 'block';
@@ -4259,6 +4377,7 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
 
     if (!modal || !container) return;
 
+    const scrollPositions = preserveSearch ? captureConditionPickerScroll(container) : {};
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
     setDualColumnToggle(true, false);
@@ -4285,6 +4404,7 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
     column.appendChild(headerEl);
 
     const list = document.createElement('div');
+    list.dataset.conditionPickerList = 'current';
     list.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
 
     if (items.length === 0) {
@@ -4314,6 +4434,7 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
 
     column.appendChild(list);
     container.appendChild(column);
+    list.scrollTop = scrollPositions.current || 0;
 
     header.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION';
     modal.style.display = 'block';
@@ -4331,6 +4452,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
 
     if (!modal || !container) return;
 
+    const scrollPositions = preserveSearch ? captureConditionPickerScroll(container) : {};
     container.innerHTML = '';
     if (!preserveSearch && searchInput) searchInput.value = '';
 
@@ -4369,6 +4491,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     mediaColumn.appendChild(mediaHeaderEl);
     
     const mediaList = document.createElement('div');
+    mediaList.dataset.conditionPickerList = 'media';
     mediaList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
     
     if (mediaFiltered.length === 0) {
@@ -4414,6 +4537,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     
     mediaColumn.appendChild(mediaList);
     container.appendChild(mediaColumn);
+    mediaList.scrollTop = scrollPositions.media || 0;
     
     // Sleeve Condition Column
     const sleeveColumn = document.createElement('div');
@@ -4425,6 +4549,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     sleeveColumn.appendChild(sleeveHeaderEl);
     
     const sleeveList = document.createElement('div');
+    sleeveList.dataset.conditionPickerList = 'sleeve';
     sleeveList.style.cssText = 'flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid var(--border-color, #ccc); border-radius: 4px;';
     
     if (sleeveFiltered.length === 0) {
@@ -4449,6 +4574,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
 
     sleeveColumn.appendChild(sleeveList);
     container.appendChild(sleeveColumn);
+    sleeveList.scrollTop = scrollPositions.sleeve || 0;
 
     header.textContent = mediaType.toUpperCase() + ' CONDITIONS';
     modal.style.display = 'block';

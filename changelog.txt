@@ -1,3 +1,7 @@
+### v1.14.2.0 - 2026-10-20
+-- Dependencies: upgraded AnyIO to 4.14.2 to fix TLS certificate hostname matching with internationalized domain names and prevent process workers from blocking when stderr fills its pipe.
+-- Packaging: stopped bundling .env secrets; installer preserves data.json, media_formats.json, and Conditions.json and no longer removes unrelated JSON/TXT files during uninstall.
+
 ### v1.14.1.0 - 2026-10-13
 -- UI: accent text color is now theme-aware - blue (#0000FF) in Light Mode, yellow (#FFFF00) in Dark Mode - so the main app's modal titles (Hot Keys, Feature Request, Cost Calculator, Edit Conditions, Select Conditions/Options, generic modal) and the Settings Editor category titles are readable on the dark panel (blue on #1e1e1e was 1.9:1 contrast). WysiScan's "Image Convert" panel label and its CLI modal status line use the same theme-aware token. The Adds pages' dark-mode accent was aligned to the same #FFFF00 yellow, and UberPaste's dark-mode "keep" marker changed from cyan to that yellow. Blue used as a background (the header bar, buttons, borders) is unchanged.
 -- CONDITIONS OVERHAUL: Replaced legacy LP/CD/CASS. CONDITION multiselects with per-media-type Media Condition + Sleeve Condition multiselects. New Media Type dropdown (LP/CD/Cassette) sets the active media type for condition dropdowns; Media Description multiselect removed.

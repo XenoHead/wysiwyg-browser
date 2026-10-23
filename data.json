@@ -54,7 +54,8 @@
         "RSD",
         "Autographed",
         "Advance",
-        "Collector's Edition"
+        "Collector's Edition",
+        "Indie Exclusive"
     ],
     "Slash Separated Editions": [
         "Deluxe Edition",
@@ -125,7 +126,8 @@
         "DVD-Audio",
         "DVD-Video",
         "Blu-ray Audio",
-        "CDV"
+        "CDV",
+        "DVDr"
     ],
     "Sleeve Packaging": [
         "Gatefold",
@@ -139,7 +141,8 @@
         "Artwork / Insert",
         "Digibook",
         "Jcard",
-        "Q-Pack"
+        "Q-Pack",
+        "Lenticular Cover"
     ],
     "Sleeve/Artwork/Insert Condition": [
         "Very Good",

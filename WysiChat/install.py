@@ -9,7 +9,7 @@ from win32com.client import Dispatch
 SOURCE_EXE = r"Z:\Tools\FYRTools\Wysichat\Wysichat.exe"
 DEST_FOLDER = r"C:\FYRTOOLS\WysiChat"
 SHORTCUT_NAME = "WysiChat.lnk"
-SOURCE_SHORTCUT_DIR = r"\\BATMAN\FYRTools\WysiChat"
+SOURCE_SHORTCUT_DIR = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WysiChat"
 
 def install():
     try:

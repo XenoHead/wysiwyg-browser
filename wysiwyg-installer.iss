@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.13.0.0"
+#define MyAppVersion "1.14.0.0"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -32,18 +32,19 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startupicon"; Description: "Run at Windows Startup"; GroupDescription: "Additional options:"; Flags: unchecked
 
 [Files]
-; Main Executable
-Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Main application; user data files are installed separately below.
+Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Root Configuration & Assets (only copy data.json if it doesn't already exist to preserve local profiles)
 Source: "index.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "editor.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "admin.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "search.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "data.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
+Source: "data.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
 Source: "fyrlogo.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "fyrlogo.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
+Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
+Source: "dist\WYSIWYG\Conditions.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "changelog.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "styles.css"; DestDir: "{app}"; Flags: ignoreversion
@@ -58,7 +59,7 @@ Source: "C:\Users\Scott\FYR_LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ChromeExt\*"; DestDir: "{app}\ChromeExt"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Subfolders
-; NOTE: The compiled EXE is a PyInstaller onefile build that bundles Uberpaste,
+; NOTE: The compiled EXE is a PyInstaller onedir build that bundles Uberpaste,
 ; WysiScan and WalmartSheet internally (via --add-data / sys._MEIPASS). At runtime
 ; main.py and scanner_server.py read those assets from the bundle, not from on-disk
 ; folders, and the scanner self-creates its writable data dirs (WysiScan\scans,
@@ -73,16 +74,6 @@ Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: st
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
-[UninstallDelete]
-Type: files; Name: "{app}\*.log"
-Type: files; Name: "{app}\*.json"
-Type: files; Name: "{app}\*.txt"
-Type: files; Name: "{app}\*.PNG"
-Type: files; Name: "{app}\*.ico"
-Type: filesandordirs; Name: "{app}\WalmartSheet"
-Type: filesandordirs; Name: "{app}\Uberpaste"
-Type: filesandordirs; Name: "{app}\WysiScan"
 
 [Code]
 function InitializeSetup(): Boolean;

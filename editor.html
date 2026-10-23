@@ -13,7 +13,7 @@
         </div>
         
         <p style="font-size: 14px; color: var(--text-muted); text-align: center;">Add or remove items for your listing tool dropdowns. Changes only take effect after clicking Save.</p>
-        <input type="text" id="searchBar" placeholder="🔍 Filter categories..." oninput="renderUI()" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
+        <input type="text" id="searchBar" placeholder="🔍 Search all categories and items..." oninput="renderUI()" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
         
         <div id="editorUI">Loading your settings...</div>
 
@@ -83,8 +83,9 @@
             
             <!-- Fixed Footer with Buttons -->
             <div style="padding: 20px 25px; background: var(--save-bar-bg); border-top: 2px solid var(--wysiwyg-blue); display: flex; justify-content: flex-end; gap: 15px;">
-                <button onclick="closeConditionsModal()" style="background: #6c757d; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">Cancel</button>
+                <button onclick="saveConditions()" style="background: #007bff; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">Save</button>
                 <button onclick="syncConditions()" style="background: #28a745; color: white; border: none; padding: 12px 40px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🚀 Update To Server</button>
+                <button onclick="closeConditionsModal()" style="background: #6c757d; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">Cancel</button>
             </div>
         </div>
     </div>
@@ -172,19 +173,28 @@
 
         function renderUI() {
             const container = document.getElementById('editorUI');
-            const filter = document.getElementById('searchBar') ? document.getElementById('searchBar').value.toLowerCase() : "";
+            const searchTerm = document.getElementById('searchBar') ? document.getElementById('searchBar').value.trim().toLowerCase() : "";
             container.innerHTML = '';
 
-            // Generate a block for every category in the data
             for (const [category, items] of Object.entries(currentData)) {
-                if (filter && !category.toLowerCase().includes(filter)) continue;
+                const categoryMatches = !searchTerm || category.toLowerCase().includes(searchTerm);
+                const filteredItems = !searchTerm
+                    ? items.map((item, index) => ({ item, index }))
+                    : items
+                        .map((item, index) => ({ item, index }))
+                        .filter(({ item }) => String(item).toLowerCase().includes(searchTerm) || categoryMatches);
+
+                if (searchTerm && !categoryMatches && filteredItems.length === 0) {
+                    continue;
+                }
 
                 const div = document.createElement('div');
                 div.className = 'category-block';
-                
+
                 const isCollapsed = collapsedCategories.has(category);
                 const displayStyle = isCollapsed ? 'none' : 'block';
                 const arrow = isCollapsed ? '▶' : '▼';
+                const visibleItems = categoryMatches ? items.map((item, index) => ({ item, index })) : filteredItems;
 
                 div.innerHTML = `
                     <div class="category-header" onclick="toggleCategory('${category}')">
@@ -196,9 +206,9 @@
                             <button onclick="removeCategory('${category}')" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">Delete Category</button>
                         </div>
                         <div class="tag-list" id="list-${category}">
-                            ${items.map((item, index) => `
+                            ${visibleItems.map(({ item, index }) => `
                                 <div class="tag-item">
-                                    ${item} 
+                                    ${item}
                                     ${index > 0 ? `<button class="move-btn" onclick="moveToTop('${category}', ${index})" title="Send to Top">↑↑</button>` : ''}
                                     ${index > 0 ? `<button class="move-btn" onclick="moveItem('${category}', ${index}, -1)" title="Move Up">↑</button>` : ''}
                                     ${index < items.length - 1 ? `<button class="move-btn" onclick="moveItem('${category}', ${index}, 1)" title="Move Down">↓</button>` : ''}
@@ -212,7 +222,7 @@
                             <button style="padding: 8px 15px; cursor: pointer;" onclick="addItem('${category}')">Add</button>
                         </div>
                     </div>
-                `; 
+                `;
                 container.appendChild(div);
             }
         }
@@ -376,13 +386,18 @@
         }
 
         // --- Conditions Management Logic ---
-        let localConditions = { cassette: [], cd: [], lp: [] };
+        let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: { lp: [], cd: [], cassette: [] } };
+        let conditionsView = 'sleeve';
+        let conditionsSearchTerm = '';
+        let conditionsSearchInput = null;
+        let conditionsListContainer = null;
+        let conditionsViewWrap = null;
 
         async function openConditions() {
             try {
-                // User requested ONLY load the server side file
-                const resp = await fetch('/api/conditions?master=true');
+                const resp = await fetch('/api/conditions');
                 localConditions = await resp.json();
+                conditionsSearchTerm = '';
                 renderConditionsEditor();
                 document.getElementById('conditionsModal').style.display = 'block';
             } catch(e) { alert("Error loading conditions: " + e); }
@@ -392,57 +407,83 @@
             document.getElementById('conditionsModal').style.display = 'none';
         }
 
-        function renderConditionsEditor() {
-            const container = document.getElementById('conditionsEditorContainer');
-            container.innerHTML = '';
-
-            const categories = [
-                { key: 'lp', label: 'LP (Vinyl) Conditions' },
-                { key: 'cd', label: 'CD Conditions' },
-                { key: 'cassette', label: 'Cassette Conditions' }
-            ];
-
-            // Create a flex container for side-by-side layout
-            const flexBox = document.createElement('div');
-            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start;';
-
-            categories.forEach(cat => {
-                const section = document.createElement('div');
-                section.style.cssText = 'flex: 1; min-width: 250px; background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid #eee;';
-                
-                const title = document.createElement('h4');
-                title.innerText = cat.label;
-                title.style.cssText = 'border-bottom: 2px solid var(--wysiwyg-accent-text); padding-bottom: 8px; margin-bottom: 15px; color: var(--wysiwyg-accent-text); font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px;';
-                section.appendChild(title);
-
-                const list = document.createElement('div');
-                list.id = `list-${cat.key}`;
-                
-                // Sort by title alphabetically
-                const items = localConditions[cat.key] || [];
-                items.sort((a, b) => a.title.localeCompare(b.title));
-
-                items.forEach((item, index) => {
-                    const row = createConditionRow(cat.key, index, item);
-                    list.appendChild(row);
-                });
-
-                const addBtn = document.createElement('button');
-                addBtn.innerText = '+ Add New Item';
-                addBtn.style.cssText = 'width: 100%; margin-top: 15px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s;';
-                addBtn.onmouseover = () => { addBtn.style.background = '#0056b3'; };
-                addBtn.onmouseout = () => { addBtn.style.background = '#007bff'; };
-                addBtn.onclick = () => addNewItem(cat.key);
-                
-                section.appendChild(list);
-                section.appendChild(addBtn);
-                flexBox.appendChild(section);
-            });
-
-            container.appendChild(flexBox);
+        function matchesConditionSearch(item, catLabel) {
+            if (!conditionsSearchTerm) return true;
+            const term = conditionsSearchTerm.toLowerCase();
+            return (
+                catLabel.toLowerCase().includes(term) ||
+                (item.title || '').toLowerCase().includes(term) ||
+                (item.text || '').toLowerCase().includes(term)
+            );
         }
 
-        function createConditionRow(catKey, index, item) {
+        function renderConditionsEditor() {
+            const container = document.getElementById('conditionsEditorContainer');
+            const scrollTop = container.scrollTop;
+
+            if (!conditionsSearchInput) {
+                const searchWrap = document.createElement('div');
+                searchWrap.style.cssText = 'margin-bottom: 20px;';
+                conditionsSearchInput = document.createElement('input');
+                conditionsSearchInput.type = 'text';
+                conditionsSearchInput.id = 'conditionsSearchInput';
+                conditionsSearchInput.value = conditionsSearchTerm;
+                conditionsSearchInput.placeholder = '🔍 Search all conditions...';
+                conditionsSearchInput.style.cssText = 'width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--input-text);';
+                conditionsSearchInput.oninput = (e) => {
+                    conditionsSearchTerm = e.target.value.trim();
+                    renderConditionsEditor();
+                };
+                searchWrap.appendChild(conditionsSearchInput);
+                container.appendChild(searchWrap);
+            }
+
+            if (!conditionsListContainer) {
+                conditionsListContainer = document.createElement('div');
+                container.appendChild(conditionsListContainer);
+            }
+
+            conditionsSearchInput.value = conditionsSearchTerm;
+            conditionsListContainer.innerHTML = '';
+
+            if (!conditionsViewWrap) {
+                conditionsViewWrap = document.createElement('div');
+                conditionsViewWrap.style.cssText = 'margin-bottom: 15px;';
+                const viewLabel = document.createElement('label');
+                viewLabel.innerText = 'Condition Type: ';
+                viewLabel.style.cssText = 'font-weight: bold; margin-right: 8px; color: var(--text-main);';
+                const viewSelect = document.createElement('select');
+                viewSelect.style.cssText = 'padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
+                const sleeveOpt = document.createElement('option');
+                sleeveOpt.value = 'sleeve';
+                sleeveOpt.innerText = 'Sleeve';
+                const mediaOpt = document.createElement('option');
+                mediaOpt.value = 'media';
+                mediaOpt.innerText = 'Media';
+                viewSelect.appendChild(sleeveOpt);
+                viewSelect.appendChild(mediaOpt);
+                viewSelect.value = conditionsView;
+                viewSelect.onchange = (e) => {
+                    conditionsView = e.target.value;
+                    conditionsSearchTerm = '';
+                    renderConditionsEditor();
+                };
+                conditionsViewWrap.appendChild(viewLabel);
+                conditionsViewWrap.appendChild(viewSelect);
+                container.insertBefore(conditionsViewWrap, conditionsListContainer);
+            }
+            const viewSelect = conditionsViewWrap.querySelector('select');
+            if (viewSelect) viewSelect.value = conditionsView;
+
+            if (conditionsView === 'media') {
+                renderMediaConditionsEditor(conditionsListContainer);
+            } else {
+                renderSleeveConditionsEditor(conditionsListContainer);
+            }
+            container.scrollTop = scrollTop;
+        }
+
+        function createConditionRow(catKey, index, item, parentKey) {
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; gap: 10px; margin-bottom: 8px; align-items: center;';
             
@@ -451,20 +492,36 @@
             titleInput.value = item.title;
             titleInput.placeholder = 'Title (e.g. Tearing)';
             titleInput.style.cssText = 'flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; background: var(--input-bg); color: var(--input-text);';
-            titleInput.onchange = (e) => { localConditions[catKey][index].title = e.target.value; };
+            titleInput.onchange = (e) => {
+                if (parentKey) {
+                    localConditions[parentKey][catKey][index].title = e.target.value;
+                } else {
+                    localConditions[catKey][index].title = e.target.value;
+                }
+            };
 
             const textInput = document.createElement('input');
             textInput.type = 'text';
             textInput.value = item.text;
             textInput.placeholder = 'Generated Text (e.g. cellophane tearing)';
             textInput.style.cssText = 'flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
-            textInput.onchange = (e) => { localConditions[catKey][index].text = e.target.value; };
+            textInput.onchange = (e) => {
+                if (parentKey) {
+                    localConditions[parentKey][catKey][index].text = e.target.value;
+                } else {
+                    localConditions[catKey][index].text = e.target.value;
+                }
+            };
 
             const delBtn = document.createElement('button');
             delBtn.innerText = '🗑️';
             delBtn.style.cssText = 'background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer;';
             delBtn.onclick = () => {
-                localConditions[catKey].splice(index, 1);
+                if (parentKey) {
+                    localConditions[parentKey][catKey].splice(index, 1);
+                } else {
+                    localConditions[catKey].splice(index, 1);
+                }
                 renderConditionsEditor();
             };
 
@@ -478,6 +535,139 @@
             if (!localConditions[catKey]) localConditions[catKey] = [];
             localConditions[catKey].push({ title: '', text: '' });
             renderConditionsEditor();
+        }
+
+        function renderSleeveConditionsEditor(container) {
+            const categories = [
+                { key: 'lp', label: 'LP (Vinyl) Conditions' },
+                { key: 'cd', label: 'CD Conditions' },
+                { key: 'cassette', label: 'Cassette Conditions' }
+            ];
+
+            const flexBox = document.createElement('div');
+            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start;';
+
+            categories.forEach(cat => {
+                const itemEntries = (localConditions[cat.key] || [])
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ item }) => matchesConditionSearch(item, cat.label));
+
+                if (conditionsSearchTerm && itemEntries.length === 0) {
+                    return;
+                }
+
+                const section = document.createElement('div');
+                section.style.cssText = 'flex: 1; min-width: 250px; background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid #eee;';
+
+                const title = document.createElement('h4');
+                title.innerText = cat.label;
+                title.style.cssText = 'border-bottom: 2px solid var(--wysiwyg-accent-text); padding-bottom: 8px; margin-bottom: 15px; color: var(--wysiwyg-accent-text); font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px;';
+                section.appendChild(title);
+
+                const addBtn = document.createElement('button');
+                addBtn.innerText = '+ Add New Item';
+                addBtn.style.cssText = 'width: 100%; margin-bottom: 15px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s;';
+                addBtn.onmouseover = () => { addBtn.style.background = '#0056b3'; };
+                addBtn.onmouseout = () => { addBtn.style.background = '#007bff'; };
+                addBtn.onclick = () => addNewItem(cat.key);
+                section.appendChild(addBtn);
+
+                const list = document.createElement('div');
+                list.id = `list-${cat.key}`;
+
+                const items = itemEntries.length ? itemEntries : (localConditions[cat.key] || []).map((item, index) => ({ item, index }));
+                items
+                    .sort((a, b) => (a.item.title || '').localeCompare(b.item.title || ''))
+                    .forEach(({ item, index }) => {
+                        const row = createConditionRow(cat.key, index, item);
+                        list.appendChild(row);
+                    });
+
+                section.appendChild(list);
+                flexBox.appendChild(section);
+            });
+
+            container.appendChild(flexBox);
+        }
+
+        function renderMediaConditionsEditor(container) {
+            const categories = [
+                { key: 'lp', label: 'LP MEDIA CONDITIONS' },
+                { key: 'cd', label: 'CD MEDIA CONDITIONS' },
+                { key: 'cassette', label: 'CASSETTE MEDIA CONDITIONS' }
+            ];
+
+            const flexBox = document.createElement('div');
+            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start;';
+
+            categories.forEach(cat => {
+                const itemEntries = (localConditions.mediaCondition[cat.key] || [])
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ item }) => matchesConditionSearch(item, cat.label));
+
+                if (conditionsSearchTerm && itemEntries.length === 0) {
+                    return;
+                }
+
+                const section = document.createElement('div');
+                section.style.cssText = 'flex: 1; min-width: 250px; background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid #eee;';
+
+                const title = document.createElement('h4');
+                title.innerText = cat.label;
+                title.style.cssText = 'border-bottom: 2px solid var(--wysiwyg-accent-text); padding-bottom: 8px; margin-bottom: 15px; color: var(--wysiwyg-accent-text); font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px;';
+                section.appendChild(title);
+
+                const addBtn = document.createElement('button');
+                addBtn.innerText = '+ Add New Item';
+                addBtn.style.cssText = 'width: 100%; margin-bottom: 15px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s;';
+                addBtn.onmouseover = () => { addBtn.style.background = '#0056b3'; };
+                addBtn.onmouseout = () => { addBtn.style.background = '#007bff'; };
+                addBtn.onclick = () => addMediaConditionItem(cat.key);
+                section.appendChild(addBtn);
+
+                const list = document.createElement('div');
+                list.id = `list-media-${cat.key}`;
+
+                const items = itemEntries.length ? itemEntries : (localConditions.mediaCondition[cat.key] || []).map((item, index) => ({ item, index }));
+                items
+                    .sort((a, b) => (a.item.title || '').localeCompare(b.item.title || ''))
+                    .forEach(({ item, index }) => {
+                        const row = createConditionRow(cat.key, index, item, 'mediaCondition');
+                        list.appendChild(row);
+                    });
+
+                section.appendChild(list);
+                flexBox.appendChild(section);
+            });
+
+            container.appendChild(flexBox);
+        }
+
+        function addMediaConditionItem(catKey) {
+            if (!localConditions.mediaCondition[catKey]) localConditions.mediaCondition[catKey] = [];
+            localConditions.mediaCondition[catKey].push({ title: '', text: '' });
+            renderConditionsEditor();
+        }
+
+        async function saveConditions() {
+            Object.keys(localConditions).forEach(cat => {
+                localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+            });
+
+            try {
+                const resp = await fetch('/api/save-conditions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(localConditions)
+                });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    alert("Conditions saved.");
+                    closeConditionsModal();
+                } else {
+                    alert("Error: " + res.message);
+                }
+            } catch(e) { alert("Error saving conditions: " + e); }
         }
 
         async function syncConditions() {

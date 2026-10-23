@@ -4,6 +4,12 @@ This file is the durable home for project-wide conventions (UI, build, data rule
 It is referenced from `AGENTS.md` and should be consulted whenever a relevant
 change is made. Add new conventions here rather than relying on chat memory alone.
 
+Working facts about the user — identity, environment, projects, and how they want to
+be worked with — are kept **outside this repo**, at
+`C:\Users\Scott\.local\share\opencode\USER.md`, because they apply to every project
+they work on. Update that file when you learn something durable about them rather than
+trusting it to carry across a chat. Project-specific conventions stay here.
+
 ## UI Conventions
 
 ### Modal windows (mandatory)

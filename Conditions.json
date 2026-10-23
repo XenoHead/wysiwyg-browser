@@ -487,12 +487,6 @@
     ],
     "mediaCondition": [
         {
-            "title": "CD Face (Discoloration)",
-            "text": "CD Face discoloration",
-            "media_type": "cd",
-            "favorite": true
-        },
-        {
             "title": "CD Face (Scratched)",
             "text": "scratched CD Face",
             "media_type": "cd",
@@ -578,6 +572,11 @@
             "title": "Fading (Letters)",
             "text": "letter fading on Shell",
             "media_type": "cassette"
+        },
+        {
+            "title": "Groove Wear",
+            "text": "groove wear",
+            "media_type": "lp"
         },
         {
             "title": "Label (Discoloration)",
