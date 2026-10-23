@@ -386,7 +386,7 @@
         }
 
         // --- Conditions Management Logic ---
-        let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: { lp: [], cd: [], cassette: [] } };
+        let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: [] };
         let conditionsView = 'sleeve';
         let conditionsSearchTerm = '';
         let conditionsSearchInput = null;
@@ -397,11 +397,8 @@
             try {
                 const resp = await fetch('/api/conditions');
                 localConditions = await resp.json();
-                // Ensure mediaCondition structure exists
-                if (!localConditions.mediaCondition) localConditions.mediaCondition = {};
-                ['lp', 'cd', 'cassette'].forEach(cat => {
-                    if (!localConditions.mediaCondition[cat]) localConditions.mediaCondition[cat] = [];
-                });
+                // Ensure mediaCondition is a flat array
+                if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
                 conditionsSearchTerm = '';
                 renderConditionsEditor();
                 document.getElementById('conditionsModal').style.display = 'block';
@@ -488,7 +485,7 @@
             container.scrollTop = scrollTop;
         }
 
-        function createConditionRow(catKey, index, item, parentKey) {
+        function createConditionRow(catKey, index, item) {
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; gap: 10px; margin-bottom: 8px; align-items: center;';
             
@@ -498,11 +495,7 @@
             titleInput.placeholder = 'Title (e.g. Tearing)';
             titleInput.style.cssText = 'flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; background: var(--input-bg); color: var(--input-text);';
             titleInput.onchange = (e) => {
-                if (parentKey) {
-                    localConditions[parentKey][catKey][index].title = e.target.value;
-                } else {
-                    localConditions[catKey][index].title = e.target.value;
-                }
+                localConditions[catKey][index].title = e.target.value;
             };
 
             const textInput = document.createElement('input');
@@ -511,22 +504,14 @@
             textInput.placeholder = 'Generated Text (e.g. cellophane tearing)';
             textInput.style.cssText = 'flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
             textInput.onchange = (e) => {
-                if (parentKey) {
-                    localConditions[parentKey][catKey][index].text = e.target.value;
-                } else {
-                    localConditions[catKey][index].text = e.target.value;
-                }
+                localConditions[catKey][index].text = e.target.value;
             };
 
             const delBtn = document.createElement('button');
             delBtn.innerText = '🗑️';
             delBtn.style.cssText = 'background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer;';
             delBtn.onclick = () => {
-                if (parentKey) {
-                    localConditions[parentKey][catKey].splice(index, 1);
-                } else {
-                    localConditions[catKey].splice(index, 1);
-                }
+                localConditions[catKey].splice(index, 1);
                 renderConditionsEditor();
             };
 
@@ -606,7 +591,8 @@
             flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start;';
 
             categories.forEach(cat => {
-                const itemEntries = (localConditions.mediaCondition[cat.key] || [])
+                const itemEntries = (localConditions.mediaCondition || [])
+                    .filter(item => item.media_type === cat.key)
                     .map((item, index) => ({ item, index }))
                     .filter(({ item }) => matchesConditionSearch(item, cat.label));
 
@@ -633,11 +619,11 @@
                 const list = document.createElement('div');
                 list.id = `list-media-${cat.key}`;
 
-                const items = itemEntries.length ? itemEntries : (localConditions.mediaCondition[cat.key] || []).map((item, index) => ({ item, index }));
+                const items = itemEntries.length ? itemEntries : (localConditions.mediaCondition || []).filter(item => item.media_type === cat.key).map((item, index) => ({ item, index }));
                 items
                     .sort((a, b) => (a.item.title || '').localeCompare(b.item.title || ''))
                     .forEach(({ item, index }) => {
-                        const row = createConditionRow(cat.key, index, item, 'mediaCondition');
+                        const row = createConditionRow('mediaCondition', index, item);
                         list.appendChild(row);
                     });
 
@@ -649,8 +635,8 @@
         }
 
         function addMediaConditionItem(catKey) {
-            if (!localConditions.mediaCondition[catKey]) localConditions.mediaCondition[catKey] = [];
-            localConditions.mediaCondition[catKey].push({ title: '', text: '' });
+            if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
+            localConditions.mediaCondition.push({ title: '', text: '', media_type: catKey });
             renderConditionsEditor();
         }
 
