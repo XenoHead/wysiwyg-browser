@@ -650,8 +650,11 @@
         }
 
         async function saveConditions() {
-            Object.keys(localConditions).forEach(cat => {
+            ['cassette', 'cd', 'lp'].forEach(cat => {
                 localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+            });
+            ['lp', 'cd', 'cassette'].forEach(cat => {
+                (localConditions.mediaCondition[cat] || []).sort((a, b) => a.title.localeCompare(b.title));
             });
 
             try {
@@ -674,8 +677,11 @@
             if (!confirm("This will overwrite the Conditions.json file on the network server (\\\\192.168.0.108). Proceed?")) return;
             
             // Sort before saving
-            Object.keys(localConditions).forEach(cat => {
+            ['cassette', 'cd', 'lp'].forEach(cat => {
                 localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+            });
+            ['lp', 'cd', 'cassette'].forEach(cat => {
+                (localConditions.mediaCondition[cat] || []).sort((a, b) => a.title.localeCompare(b.title));
             });
 
             try {
