@@ -397,6 +397,11 @@
             try {
                 const resp = await fetch('/api/conditions');
                 localConditions = await resp.json();
+                // Ensure mediaCondition structure exists
+                if (!localConditions.mediaCondition) localConditions.mediaCondition = {};
+                ['lp', 'cd', 'cassette'].forEach(cat => {
+                    if (!localConditions.mediaCondition[cat]) localConditions.mediaCondition[cat] = [];
+                });
                 conditionsSearchTerm = '';
                 renderConditionsEditor();
                 document.getElementById('conditionsModal').style.display = 'block';
