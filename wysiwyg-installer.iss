@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.14.0.0"
+#define MyAppVersion "1.14.3.14"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -14,7 +14,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName=C:\FYRTOOLS\WYSIWYG
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=dist
+OutputDir=dist_install
 OutputBaseFilename=INSTALL_WYSIWYG
 SetupIconFile=fyrlogo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -33,17 +33,18 @@ Name: "startupicon"; Description: "Run at Windows Startup"; GroupDescription: "A
 
 [Files]
 ; Main application; user data files are installed separately below.
-Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json,clipboard_history.json,Uberpaste\.venv\*,Uberpaste\dist\*,Uberpaste\build\*,Uberpaste\__pycache__\*,.venv\*,__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Root Configuration & Assets (only copy data.json if it doesn't already exist to preserve local profiles)
+; Root Configuration & Assets (data/media/conditions ship with the build so
+; every install gets the latest versions; clipboard history is never touched)
 Source: "index.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "editor.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "admin.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "search.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "data.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
+Source: "data.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "fyrlogo.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "fyrlogo.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
+Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "dist\WYSIWYG\Conditions.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "changelog.txt"; DestDir: "{app}"; Flags: ignoreversion
@@ -51,6 +52,8 @@ Source: "styles.css"; DestDir: "{app}"; Flags: ignoreversion
 Source: "style_guide.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "walmart.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: ".env"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "keys.txt"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Source: "C:\Users\Scott\FYR_LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Chrome extension (unpacked; loaded manually from {app}\ChromeExt on each

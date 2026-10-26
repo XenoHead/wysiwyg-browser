@@ -483,7 +483,17 @@
         #cliResultBox {
             flex: 1 1 auto;
             min-height: 120px;
+            max-height: 65vh;
             overflow-y: auto;
+        }
+        /* Keep the whole Extract Text window scrollable when the content is taller
+           than the window (long track lists, many rows, etc.). */
+        #cliModal:not(.maximized) {
+            max-height: 92vh;
+        }
+        #cliModal .ocr-modal-content {
+            overflow-y: auto;
+            min-height: 0;
         }
 
         .ocr-modal.stay-on-top {
@@ -1052,6 +1062,11 @@
             const editable = (name === 'Custom');
             box.readOnly = !editable;
             box.style.opacity = editable ? '1' : '0.75';
+            // Basic / Detailed are fixed presets: hide the prompt editor entirely.
+            const promptWrap = document.getElementById('cliPromptWrap');
+            if (promptWrap) {
+                promptWrap.style.display = (name === 'Basic' || name === 'Detailed') ? 'none' : '';
+            }
             if (saveBtn) {
                 saveBtn.disabled = !editable;
                 saveBtn.title = editable ? 'Save this custom prompt' : 'Only the Custom prompt can be saved';
@@ -1137,7 +1152,20 @@
             const modal = document.getElementById('cliModal');
             const btn = document.getElementById('cliMaxBtn');
             const on = modal.classList.toggle('maximized');
+            if (on) {
+                // Inline size (from the markup or the native resize handle) beats
+                // the .maximized class, so stash it and clear it while maximized.
+                modal.dataset.restoreStyle = modal.getAttribute('style') || '';
+                ['width', 'height', 'maxWidth', 'maxHeight', 'left', 'top', 'transform']
+                    .forEach(p => { modal.style[p] = ''; });
+            } else if (modal.dataset.restoreStyle !== undefined) {
+                modal.setAttribute('style', modal.dataset.restoreStyle);
+                delete modal.dataset.restoreStyle;
+            }
             btn.textContent = on ? '❒ Restore' : '□ Max';
+            // Force a re-layout so the contents redraw at the new size.
+            void modal.offsetWidth;
+            window.dispatchEvent(new Event('resize'));
         }
 
         // Rebuild the extraction output as clean plain text straight from the
@@ -1224,9 +1252,18 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt: prompt, files: checked })
                 });
-                const data = await response.json();
+                // Read as text first so an HTML/plain error page still shows
+                // its actual message instead of a JSON parse failure.
+                const raw = await response.text();
+                let data = null;
+                try { data = JSON.parse(raw); } catch (parseErr) { data = null; }
 
-                if (data.status === 'success') {
+                if (!data) {
+                    const snippet = (raw || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+                    resultBox.innerHTML = '<div style="color:#c62828;font-size:13px;">Server error (HTTP ' +
+                        response.status + '): ' + (snippet || 'empty response') + '</div>';
+                    statusMsg.innerText = "Failed.";
+                } else if (data.status === 'success') {
                     renderCliResults(data.output || '');
                     if (data.cached) {
                         statusMsg.innerText = "Loaded from cache (click Re-Run to refresh).";
@@ -1240,7 +1277,11 @@
                     statusMsg.innerText = "Failed.";
                 }
             } catch (e) {
-                resultBox.innerHTML = '<div style="color:#c62828;font-size:13px;">Network Error: ' + e + '</div>';
+                const msg = (e && e.message) ? e.message : String(e);
+                const hint = /failed to fetch|networkerror|load failed/i.test(msg)
+                    ? ' (no response from server - is the scanner server still running?)'
+                    : '';
+                resultBox.innerHTML = '<div style="color:#c62828;font-size:13px;">Network Error: ' + msg + hint + '</div>';
                 statusMsg.innerText = "Error.";
             } finally {
                 btn.disabled = false;
@@ -3530,7 +3571,7 @@
                 </select>
             </div>
 
-            <div style="margin-bottom: 10px;">
+            <div id="cliPromptWrap" style="margin-bottom: 10px;">
                 <label for="cliPromptText"
                     style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Prompt:</label>
                 <textarea id="cliPromptText"
@@ -3541,7 +3582,7 @@
                 <label style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 4px;">Extracted
                     Text:</label>
                 <div id="cliResultBox"
-                    style="width: calc(100% - 12px); max-height: 260px; overflow-y: auto; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px;">
+                    style="width: calc(100% - 12px); overflow-y: auto; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px;">
                 </div>
             </div>
 

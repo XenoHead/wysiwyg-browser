@@ -162,7 +162,7 @@
 
     <div id="customOptionsModal" class="modal">
         <div id="customOptionsModalContent" class="modal-content modal-content-narrow"
-            style="width: 600px; max-width: 90vw; height: 80vh; min-width: 360px; min-height: 420px; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
+            style="width: 600px; max-width: 90vw; height: 76vh; max-height: calc(100vh - 80px); min-width: 360px; min-height: 420px; margin: 2vh auto; text-align: left; display: flex; flex-direction: column; resize: both; overflow: hidden;">
             <div id="customOptionsModalHeader" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; cursor: move; margin-bottom: 10px;">
                 <h3 style="margin: 0; color: var(--wysiwyg-accent-text);">Edit Conditions</h3>
                 <span id="closeCustomOptionsModalBtn" class="close-btn" style="position: static;">&times;</span>
@@ -732,25 +732,29 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 14px 16px;
+            padding: 10px 14px;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 14px;
             border-bottom: 1px solid var(--border-color, #ccc);
+            flex-shrink: 0;
         }
         .drawer-actions {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            padding: 12px;
+            gap: 4px;
+            padding: 10px;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
         }
         .drawer-btn {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             text-align: left;
             width: 100%;
-            padding: 12px 14px;
-            font-size: 14px;
+            padding: 8px 12px;
+            font-size: 12.5px;
             border: none;
             border-radius: 6px;
             background: transparent;
@@ -767,7 +771,7 @@
         }
         .drawer-submenu { width: 100%; }
         .drawer-submenu-items { padding-left: 18px; }
-        .drawer-submenu-item { font-size: 13px; padding: 9px 12px; }
+        .drawer-submenu-item { font-size: 12px; padding: 7px 10px; }
         .drawer-ico-sm { font-size: 13px; width: 18px; }
         .drawer-submenu-toggle .drawer-ico { transition: transform 0.15s ease; }
         .drawer-section-title {

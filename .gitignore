@@ -86,3 +86,7 @@ WysiScan/config.json
 !.continuity/.gitattributes
 !.continuity/SESSION_NOTES.md
 !.continuity/INSTRUCTIONS.md
+dist_install/
+/.other
+2_Conditions.json
+2conditions.json

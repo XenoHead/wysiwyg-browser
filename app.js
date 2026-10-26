@@ -2846,7 +2846,32 @@ function conditionPickerMatch(opt, query) {
     return ((opt.title || '') + ' ' + (opt.text || '')).toLowerCase().includes(query);
 }
 
+function dedupeCustomOptions() {
+    Object.keys(customOptionsData).forEach(cat => {
+        const arr = customOptionsData[cat];
+        if (!Array.isArray(arr)) return;
+        const seen = new Map();
+        const keep = [];
+        arr.forEach(item => {
+            if (!item) return;
+            const key = [item.title, item.text, item.media_type || ''].join('|||');
+            const existing = seen.get(key);
+            if (existing) {
+                if (item.favorite) existing.favorite = true;
+                return;
+            }
+            seen.set(key, item);
+            keep.push(item);
+        });
+        if (keep.length !== arr.length) {
+            arr.length = 0;
+            keep.forEach(i => arr.push(i));
+        }
+    });
+}
+
 function sortCustomOptionsData() {
+    dedupeCustomOptions();
     Object.keys(customOptionsData).forEach(cat => {
         customOptionsData[cat].sort((a, b) => {
             const aFav = a.favorite ? 1 : 0;
@@ -3126,6 +3151,26 @@ function conditionOptionKey(opt) {
     return (opt ? opt.title + '|||' + opt.text : '');
 }
 
+function openFavoriteContextMenuAt(e, targetId, optionKey, optionMediaType) {
+    e.preventDefault();
+    e.stopPropagation();
+    const menu = document.getElementById('customContextMenu');
+    if (!menu) return;
+    ['openMediaContextItem', 'openSleeveContextItem', 'openAllMediaContextItem', 'openAllSleeveContextItem',
+        'editConditionContextItem', 'clearConditionContextItem'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+    const favItem = document.getElementById('favoriteContextItem');
+    if (favItem) favItem.style.display = 'block';
+    menu.dataset.targetId = targetId;
+    menu.dataset.optionKey = optionKey || '';
+    menu.dataset.optionMediaType = optionMediaType || '';
+    menu.style.display = 'block';
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+}
+
 function getSelectedConditionKeys(selectId) {
     const select = document.getElementById(selectId);
     if (!select) return [];
@@ -3285,6 +3330,7 @@ const LIST_PICKER_CONFIGS = [
 ];
 
 let activeListPicker = null;
+let listPickerScrollTop = 0;
 
 function renderListPicker() {
     const container = document.getElementById('listPickerColumns');
@@ -3320,6 +3366,7 @@ function renderListPicker() {
             `<span style="flex-shrink: 0;">${isSelected ? '☑' : '☐'}</span>` +
             `<div style="min-width: 0;"><strong>${opt.text || opt.value}</strong></div>`;
         row.onclick = () => {
+            listPickerScrollTop = list.scrollTop;
             opt.selected = !opt.selected;
             renderListPicker();
         };
@@ -3328,12 +3375,14 @@ function renderListPicker() {
 
     column.appendChild(list);
     container.appendChild(column);
+    list.scrollTop = listPickerScrollTop;
 }
 
 function openListPicker(selectId) {
     const config = LIST_PICKER_CONFIGS.find(c => c.selectId === selectId);
     if (!config) return;
     activeListPicker = config;
+    listPickerScrollTop = 0;
     window.resetListPickerPlacement?.();
     renderListPicker();
     document.getElementById('listPickerModal').style.display = 'block';
@@ -3681,9 +3730,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentModalCategory = 'mediaCondition';
                 const modalCatSelect = document.getElementById('modalCategorySelect');
                 if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
-                renderConditionPicker();
-                const header = document.getElementById('conditionPickerHeader');
-                if (header) header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
+                // Preserve scroll/search when collapsing back to the single column
+                openConditionPickerForMedia(mediaType, true);
             }
         }
     });
@@ -3699,6 +3747,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('clearConditionPickerBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
+        const dualCb = document.getElementById('dualColumnMode');
+        const dualState = dualCb ? dualCb.checked : false;
         // Clear new multiselects
         ['mediaConditionOptions', 'sleeveConditionOptions'].forEach(id => {
             const select = document.getElementById(id);
@@ -3713,7 +3763,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 Array.from(select.options).forEach(opt => opt.selected = false);
             }
         });
-        renderConditionPicker();
+        // Keep the current view (and its scroll position) instead of rebuilding to the top
+        if (conditionPickerRedraw) conditionPickerRedraw();
+        else renderConditionPicker();
+        // Clearing must not touch the "Both" checkbox state
+        if (dualCb) dualCb.checked = dualState;
     });
 
     document.querySelectorAll('.list-picker-open-btn').forEach(btn => {
@@ -3769,6 +3823,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 menu.style.left = e.pageX + 'px';
                 menu.style.top = e.pageY + 'px';
                 menu.dataset.targetId = id;
+                delete menu.dataset.optionKey;
+                delete menu.dataset.optionMediaType;
             }
         });
     });
@@ -3789,7 +3845,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const optionMediaType = menu.dataset.optionMediaType;
             
             // Handle modal rows (have optionKey but no select element)
-            if (optionKey && !document.getElementById(targetId)) {
+            if (optionKey) {
                 // Find the item in the appropriate data array
                 let targetArray;
                 if (targetId === 'mediaConditionOptions') {
@@ -3799,7 +3855,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         targetArray = targetArray.filter(opt => opt.media_type === optionMediaType);
                     }
                 } else if (targetId === 'sleeveConditionOptions') {
-                    targetArray = customOptionsData[currentConditionMediaType] || [];
+                    targetArray = optionMediaType && customOptionsData[optionMediaType]
+                        ? customOptionsData[optionMediaType]
+                        : (customOptionsData[currentConditionMediaType] || []);
                 } else if (['lp', 'cd', 'cassette'].includes(targetId)) {
                     targetArray = customOptionsData[targetId] || [];
                 } else {
@@ -3813,21 +3871,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.favorite = !item.favorite;
                     saveCustomOptions();
                     renderCustomOptionsSelect();
-                    // Re-render modal if open
-                    if (document.getElementById('conditionPickerModal').style.display === 'block') {
-                        if (window.currentThreeColumnMode === 'mediaCondition') {
-                            openMediaConditionThreeColumnModal();
-                        } else if (window.currentThreeColumnMode === 'sleeveCondition') {
-                            openSleeveConditionThreeColumnModal();
-                        } else if (window.currentThreeColumnMode === 'dualColumn') {
-                            openDualColumnConditionPicker(currentConditionMediaType);
-                        } else if (conditionPickerViewMode === 'dual') {
-                            openDualColumnConditionPicker(currentConditionMediaType);
-                        } else {
-                            renderConditionPicker();
-                        }
+                    // Re-render the active picker so the new fav state shows
+                    if (document.getElementById('conditionPickerModal').style.display === 'block' && conditionPickerRedraw) {
+                        conditionPickerRedraw();
                     }
                 }
+                delete menu.dataset.optionKey;
+                delete menu.dataset.optionMediaType;
                 menu.style.display = 'none';
                 return;
             }
@@ -4258,6 +4308,8 @@ const clearConditionPickerBtn = document.getElementById('clearConditionPickerBtn
 if (clearConditionPickerBtn) {
     const originalClick = clearConditionPickerBtn.onclick;
     clearConditionPickerBtn.onclick = (e) => {
+        const dualCb = document.getElementById('dualColumnMode');
+        const dualState = dualCb ? dualCb.checked : false;
         if (window.currentThreeColumnMode) {
             const mode = window.currentThreeColumnMode;
             if (mode === 'mediaCondition') {
@@ -4281,15 +4333,16 @@ if (clearConditionPickerBtn) {
                 }
             }
             if (mode === 'mediaCondition') {
-                openMediaConditionThreeColumnModal();
+                openMediaConditionThreeColumnModal(true);
             } else if (mode === 'sleeveCondition') {
-                openSleeveConditionThreeColumnModal();
+                openSleeveConditionThreeColumnModal(true);
             } else if (mode === 'dualColumn') {
-                openDualColumnConditionPicker(currentConditionMediaType);
+                openDualColumnConditionPicker(currentConditionMediaType, true);
             }
         } else if (originalClick) {
             originalClick(e);
         }
+        if (dualCb) dualCb.checked = dualState;
     };
 }
 
@@ -4354,6 +4407,9 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
                 openConditionPickerForMedia(mediaType, true);
             }
         };
+        row.addEventListener('contextmenu', (e) => {
+            openFavoriteContextMenuAt(e, 'mediaConditionOptions', conditionOptionKey(opt), opt.media_type || mediaType);
+        });
         list.appendChild(row);
     });
 
@@ -4429,6 +4485,9 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
                 openConditionPickerForSleeve(mediaType, true);
             }
         };
+        row.addEventListener('contextmenu', (e) => {
+            openFavoriteContextMenuAt(e, 'sleeveConditionOptions', conditionOptionKey(opt), mediaType);
+        });
         list.appendChild(row);
     });
 
@@ -4569,6 +4628,9 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
             toggleSleeveConditionOption(mediaType, opt);
             openDualColumnConditionPicker(mediaType, true);
         };
+        row.addEventListener('contextmenu', (e) => {
+            openFavoriteContextMenuAt(e, 'sleeveConditionOptions', conditionOptionKey(opt), mediaType);
+        });
         sleeveList.appendChild(row);
     });
 

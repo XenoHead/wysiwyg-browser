@@ -369,8 +369,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(currentData)
                 });
-                if (resp.ok) alert("Settings saved successfully!");
-                else alert("Save failed. Check server connection.");
+                if (resp.ok) {
+                    alert("Settings saved successfully!");
+                    // Full reload so the editor shows the freshly saved data.
+                    location.reload();
+                } else {
+                    alert("Save failed. Check server connection.");
+                }
             } catch (err) {
                 alert("Error saving: " + err.message);
             }
@@ -387,6 +392,7 @@
 
         // --- Conditions Management Logic ---
         let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: [] };
+        let conditionsDirty = false;
         let conditionsView = 'sleeve';
         let conditionsSearchTerm = '';
         let conditionsSearchInput = null;
@@ -399,6 +405,7 @@
                 localConditions = await resp.json();
                 // Ensure mediaCondition is a flat array
                 if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
+                conditionsDirty = false;
                 conditionsSearchTerm = '';
                 renderConditionsEditor();
                 document.getElementById('conditionsModal').style.display = 'block';
@@ -407,6 +414,20 @@
 
         function closeConditionsModal() {
             document.getElementById('conditionsModal').style.display = 'none';
+            // Data changed while the modal was open: refresh the page behind it
+            // once the window is closed.
+            if (conditionsDirty) location.reload();
+        }
+
+        async function refreshConditionsData() {
+            try {
+                const resp = await fetch('/api/conditions');
+                localConditions = await resp.json();
+                if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
+                renderConditionsEditor();
+            } catch (e) {
+                console.error('Could not refresh conditions:', e);
+            }
         }
 
         function matchesConditionSearch(item, catLabel) {
@@ -495,7 +516,7 @@
             titleInput.placeholder = 'Title (e.g. Tearing)';
             titleInput.style.cssText = 'flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; background: var(--input-bg); color: var(--input-text);';
             titleInput.onchange = (e) => {
-                localConditions[catKey][index].title = e.target.value;
+                item.title = e.target.value;
             };
 
             const textInput = document.createElement('input');
@@ -504,14 +525,19 @@
             textInput.placeholder = 'Generated Text (e.g. cellophane tearing)';
             textInput.style.cssText = 'flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
             textInput.onchange = (e) => {
-                localConditions[catKey][index].text = e.target.value;
+                item.text = e.target.value;
             };
 
             const delBtn = document.createElement('button');
             delBtn.innerText = '🗑️';
             delBtn.style.cssText = 'background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer;';
             delBtn.onclick = () => {
-                localConditions[catKey].splice(index, 1);
+                const arr = localConditions[catKey] || [];
+                // Delete by identity: the visible index is a filtered/sorted
+                // position, so splicing by it removed the WRONG entry.
+                let i = arr.indexOf(item);
+                if (i === -1) i = index;
+                if (i >= 0 && i < arr.length) arr.splice(i, 1);
                 renderConditionsEditor();
             };
 
@@ -529,9 +555,9 @@
 
         function renderSleeveConditionsEditor(container) {
             const categories = [
-                { key: 'lp', label: 'LP (Vinyl) Conditions' },
-                { key: 'cd', label: 'CD Conditions' },
-                { key: 'cassette', label: 'Cassette Conditions' }
+                { key: 'lp', label: 'LP Sleeve Conditions' },
+                { key: 'cd', label: 'CD Sleeve Conditions' },
+                { key: 'cassette', label: 'Cassette Sleeve Conditions' }
             ];
 
             const flexBox = document.createElement('div');
@@ -642,11 +668,13 @@
 
         async function saveConditions() {
             ['cassette', 'cd', 'lp'].forEach(cat => {
-                localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+                if (Array.isArray(localConditions[cat])) {
+                    localConditions[cat].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                }
             });
-            ['lp', 'cd', 'cassette'].forEach(cat => {
-                (localConditions.mediaCondition[cat] || []).sort((a, b) => a.title.localeCompare(b.title));
-            });
+            if (Array.isArray(localConditions.mediaCondition)) {
+                localConditions.mediaCondition.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+            }
 
             try {
                 const resp = await fetch('/api/save-conditions', {
@@ -656,8 +684,10 @@
                 });
                 const res = await resp.json();
                 if (res.status === 'success') {
+                    conditionsDirty = true;
                     alert("Conditions saved.");
-                    closeConditionsModal();
+                    // Refresh the list in place - keep this window open.
+                    await refreshConditionsData();
                 } else {
                     alert("Error: " + res.message);
                 }

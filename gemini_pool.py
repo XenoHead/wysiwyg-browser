@@ -23,6 +23,56 @@ import time
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _near_app_dirs():
+    """Directories that may hold user-supplied keys.txt / .env.
+    Frozen onefile puts gemini_pool inside _MEIPASS, so the executable's own
+    folder (and cwd) must be searched too."""
+    dirs = []
+    try:
+        import sys as _sys
+        if getattr(_sys, 'frozen', False):
+            dirs.append(os.path.dirname(os.path.abspath(_sys.executable)))
+    except Exception:
+        pass
+    dirs.append(BASE_DIR)
+    dirs.append(os.getcwd())
+    out, seen = [], set()
+    for d in dirs:
+        if d and d not in seen and os.path.isdir(d):
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def _read_dotenv_key(path):
+    """Minimal .env reader for GEMINI_API_KEY / GOOGLE_API_KEY."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln or ln.startswith("#") or "=" not in ln:
+                    continue
+                k, v = ln.split("=", 1)
+                if k.strip() in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+                    val = v.strip().strip('"').strip("'")
+                    if val:
+                        return val
+    except Exception:
+        pass
+    return None
+
+
+def key_label(key, key_pool=None):
+    """Short, unambiguous key label for logs (keys share a long common prefix)."""
+    idx = ''
+    if key_pool:
+        try:
+            idx = f"key#{key_pool.index(key)} "
+        except ValueError:
+            idx = 'key#? '
+    return f"{idx}...{key[-6:]}"
+
+
 def load_key_pool(extra_config_keys=None):
     """Return a de-duplicated list of API keys from:
        1) .env GEMINI_API_KEY / GOOGLE_API_KEY
@@ -33,13 +83,22 @@ def load_key_pool(extra_config_keys=None):
     env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if env_key and env_key.strip():
         pool.append(env_key.strip())
-    kt = os.path.join(BASE_DIR, "keys.txt")
-    if os.path.isfile(kt):
-        with open(kt, encoding="utf-8") as f:
-            for ln in f:
-                k = ln.strip()
-                if k and not k.startswith("#"):
-                    pool.append(k)
+    for d in _near_app_dirs():
+        env_file_key = _read_dotenv_key(os.path.join(d, ".env"))
+        if env_file_key:
+            pool.append(env_file_key)
+    for d in _near_app_dirs():
+        kt = os.path.join(d, "keys.txt")
+        if not os.path.isfile(kt):
+            continue
+        try:
+            with open(kt, encoding="utf-8") as f:
+                for ln in f:
+                    k = ln.strip()
+                    if k and not k.startswith("#"):
+                        pool.append(k)
+        except OSError:
+            pass
     if extra_config_keys:
         for ck in extra_config_keys:
             if ck and ck.strip():
@@ -66,6 +125,9 @@ def load_model_pool():
         "gemini-2.5-flash",
         "gemini-3.1-flash-lite",
         "gemini-3-flash-preview",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
     ]
     mp = os.path.join(BASE_DIR, "models.txt")
     models = []
@@ -195,8 +257,10 @@ def gemini_generate(prompt_text, image_paths=None, timeout=40,
     key_pool = load_key_pool(extra_config_keys=extra_config_keys)
     model_pool = load_model_pool()
     if not key_pool:
-        _emit({"type": "error", "detail": "No Gemini API keys found (.env / keys.txt)."})
-        return None, {"error": "No Gemini API keys found (.env / keys.txt)."}
+        msg = ("No Gemini API keys found. Add GEMINI_API_KEY to .env or list one "
+               "key per line in keys.txt in: " + "; ".join(_near_app_dirs()))
+        _emit({"type": "error", "detail": msg})
+        return None, {"error": msg}
     if not model_pool:
         _emit({"type": "error", "detail": "No models in model pool (models.txt)."})
         return None, {"error": "No models in model pool (models.txt)."}
@@ -225,12 +289,18 @@ def gemini_generate(prompt_text, image_paths=None, timeout=40,
     dropped_keys = set()      # 400/401 -> key will never work
     dropped_combos = set()    # 403/404 -> (key,model) won't work, key may
     # Error-type counters (for the returned diagnostics).
-    seen = {"quota": 0, "busy": 0, "invalid_key": 0, "forbidden": 0, "not_found": 0, "other": 0}
+    seen = {"quota": 0, "busy": 0, "invalid_key": 0, "forbidden": 0, "not_found": 0,
+            "bad_request": 0, "other": 0}
 
     def classify(code, err_text):
         t = (err_text or "").lower()
-        if code in (400, 401) or "api_key_invalid" in t or "api key not valid" in t:
+        # Only treat key-shaped failures as invalid keys. A generic HTTP 400
+        # (bad payload, unsupported image, etc.) must NOT drop the key.
+        if code == 401 or "api_key_invalid" in t or "api key not valid" in t \
+                or "api key expired" in t or "api key is invalid" in t:
             return "invalid_key"
+        if code == 400:
+            return "bad_request"
         if code == 429 or "resource_exhausted" in t or "quota" in t or "rate" in t:
             return "quota"
         if code == 403 or "forbidden" in t or "permission" in t or "new users" in t:
@@ -267,25 +337,39 @@ def gemini_generate(prompt_text, image_paths=None, timeout=40,
             seen[etype] = seen.get(etype, 0) + 1
             last_type = etype
             if etype == "invalid_key":
-                # 400/401: this key is a "no" — drop it for the whole run.
+                # 401 / key-shaped error: this key is a "no" — drop it for the run.
                 dropped_keys.add(api_key)
-                print(f"DEBUG - Gemini: key dropped (invalid): {api_key[:8]}...")
+                print(f"DEBUG - Gemini: key dropped (invalid): {key_label(api_key, key_pool)}")
                 _emit({"type": "invalid_key", "attempt": seen["invalid_key"],
-                       "model": model, "detail": last_err})
+                       "model": model, "key": key_label(api_key, key_pool),
+                       "detail": last_err})
+                continue
+            if etype == "bad_request":
+                # 400 that isn't key-related (payload/image/model issue): don't
+                # blame the key, just skip this combo.
+                dropped_combos.add((api_key, model))
+                print(f"DEBUG - Gemini: combo dropped (bad request): "
+                      f"{key_label(api_key, key_pool)} {model} {last_err}")
+                _emit({"type": "bad_request", "attempt": seen["bad_request"],
+                       "model": model, "key": key_label(api_key, key_pool),
+                       "detail": last_err})
                 continue
             if etype == "forbidden":
                 # 403: key can't use THIS model ("new users can't use this model")
                 # but may work on others — drop just this combo.
                 dropped_combos.add((api_key, model))
-                print(f"DEBUG - Gemini: combo dropped (forbidden): {model}")
+                print(f"DEBUG - Gemini: combo dropped (forbidden): "
+                      f"{key_label(api_key, key_pool)} {model}")
                 _emit({"type": "forbidden", "attempt": seen["forbidden"],
-                       "model": model, "detail": last_err})
+                       "model": model, "key": key_label(api_key, key_pool),
+                       "detail": last_err})
                 continue
             if etype == "not_found":
                 # 404: model name absent for this key — try next model, same key.
                 dropped_combos.add((api_key, model))
                 _emit({"type": "not_found", "attempt": seen["not_found"],
-                       "model": model, "detail": last_err})
+                       "model": model, "key": key_label(api_key, key_pool),
+                       "detail": last_err})
                 continue
             # quota (429) / busy (503): "not now" — drop this combo (it's
             # overloaded/hot) and immediately try the next one. We do NOT wait
@@ -307,7 +391,18 @@ def gemini_generate(prompt_text, image_paths=None, timeout=40,
     _emit({"type": "exhausted", "combos": len(combos),
            "last_error_type": last_type, "detail": last_err,
            "diagnostics": seen, "dropped_keys": len(dropped_keys)})
-    return None, {"error": f"Gemini failed for all {len(combos)} combos.",
+    tried = len(combos) - len([1 for (k, m) in combos if (k, m) in dropped_combos])
+    if seen.get("busy") and seen["busy"] >= max(tried, 1):
+        friendly = (f"Gemini is temporarily overloaded (high demand) on all "
+                    f"{len(combos)} key/model combos. Try again in a moment.")
+    elif seen.get("quota") and seen["quota"] >= max(tried, 1):
+        friendly = (f"All {len(combos)} key/model combos hit their rate limit "
+                    f"(quota exhausted). Wait a bit or add another key.")
+    elif seen.get("invalid_key") and len(dropped_keys) == len(key_pool):
+        friendly = f"All {len(key_pool)} API keys were rejected as invalid or disabled."
+    else:
+        friendly = f"Gemini failed for all {len(combos)} combos."
+    return None, {"error": friendly,
                   "last_error": last_err, "last_error_type": last_type,
                   "diagnostics": seen,
                   "dropped_keys": len(dropped_keys)}

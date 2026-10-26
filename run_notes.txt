@@ -1,3 +1,0 @@
- Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass
-
- C:\Git\WysiWyg\.venv\Scripts\activate.ps1

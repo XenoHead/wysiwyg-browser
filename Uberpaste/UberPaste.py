@@ -795,7 +795,7 @@ class ClipTrayApp(QWidget):
 
         # History Limit Submenu
         history_menu = menu.addMenu("History Limit")
-        for limit in [10, 20, 30]:
+        for limit in [10, 20, 30, 40, 50]:
             action = QAction(f"{limit} Items", self)
             action.setCheckable(True)
             action.setChecked(self.max_items == limit)
@@ -1384,6 +1384,18 @@ class ClipTrayApp(QWidget):
         self.raise_()
         super().enterEvent(event)
 
+    def ensure_on_screen(self):
+        """Recovers the window if a saved geometry left it off-screen/invisible."""
+        screen = self.screen() or QApplication.primaryScreen()
+        if not screen:
+            return
+        available = screen.availableGeometry()
+        if not available.intersects(self.frameGeometry()):
+            geo = self.frameGeometry()
+            geo.moveCenter(available.center())
+            self.move(geo.topLeft())
+        self.raise_()
+
     def show_app_context_menu(self, pos):
         """Shows context menu for the app (dock/undock, close) on background click."""
         if self.list_widget.itemAt(pos):
@@ -1571,6 +1583,7 @@ def main():
     app.setQuitOnLastWindowClosed(False)
     main_window = ClipTrayApp()
     main_window.show()
+    main_window.ensure_on_screen()
     sys.exit(app.exec())
 
 if __name__ == "__main__":

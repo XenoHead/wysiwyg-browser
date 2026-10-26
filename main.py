@@ -2276,6 +2276,20 @@ async def adds_amazon_scrape(data: dict = Body(...)):
     return {"status": "success", "text": text}
 
 
+def kill_stray_wysiwyg_processes():
+    """Kills leftover WYSIWYG executable processes, excluding the current one."""
+    own_pid = os.getpid()
+    targets = {"wysiwyg.exe", "wysiwyg-browser.exe", "wysiwyg browser.exe"}
+    for proc in psutil.process_iter(['name', 'pid']):
+        try:
+            name = (proc.info.get('name') or '').lower()
+            if name in targets and proc.info.get('pid') != own_pid:
+                logging.info(f"Killing stray process: {name} (pid {proc.info['pid']})")
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+
 @app.post("/shutdown")
 async def shutdown():
     # Terminate tracked child processes
@@ -2286,6 +2300,12 @@ async def shutdown():
                 proc.terminate()
             except Exception as e:
                 logging.error(f"Error terminating {name}: {e}")
+
+    # Kill any stray WYSIWYG processes left behind
+    try:
+        kill_stray_wysiwyg_processes()
+    except Exception as e:
+        logging.error(f"Error killing stray WYSIWYG processes: {e}")
 
     threading.Thread(target=lambda: (time.sleep(1), os.kill(os.getpid(), signal.SIGTERM))).start()
     return HTMLResponse("<h3>Shutdown Successful.</h3>")

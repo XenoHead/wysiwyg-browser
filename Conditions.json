@@ -2,17 +2,15 @@
     "lp": [
         {
             "title": "Barcode (Mark)",
-            "text": "mark through Barcode",
-            "favorite": true
-        },
-        {
-            "title": "Cellophane (Tearing)",
-            "text": "Cellophane tearing",
-            "favorite": true
+            "text": "mark through Barcode"
         },
         {
             "title": "Cellophane (Light Tearing)",
             "text": "light Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing"
         },
         {
             "title": "Corner (Creasing)",
@@ -142,8 +140,7 @@
     "cd": [
         {
             "title": "Barcode (Mark)",
-            "text": "mark through Barcode",
-            "favorite": true
+            "text": "mark through Barcode"
         },
         {
             "title": "Booklet (Light Play)",
@@ -357,18 +354,15 @@
     "cassette": [
         {
             "title": "Barcode (Mark)",
-            "text": "mark through Barcode",
-            "favorite": true
+            "text": "mark through Barcode"
         },
         {
             "title": "Cellophane (Light Tearing)",
-            "text": "light Cellophane tearing",
-            "favorite": true
+            "text": "light Cellophane tearing"
         },
         {
             "title": "Cellophane (Substantial Tearing)",
-            "text": "substantial Cellophane tearing",
-            "favorite": true
+            "text": "substantial Cellophane tearing"
         },
         {
             "title": "Cellophane (Tearing)",
@@ -489,44 +483,7 @@
         {
             "title": "CD Face (Scratched)",
             "text": "scratched CD Face",
-            "media_type": "cd",
-            "favorite": true
-        },
-        {
-            "title": "Cracking (Shell)",
-            "text": "cracking to Shell",
-            "media_type": "cassette",
-            "favorite": true
-        },
-        {
-            "title": "Cracking (Timing Window)",
-            "text": "cracking to Timing Window",
-            "media_type": "cassette",
-            "favorite": true
-        },
-        {
-            "title": "Fading (Letters Light)",
-            "text": "light letter fading on Shell",
-            "media_type": "cassette",
-            "favorite": true
-        },
-        {
-            "title": "Groove Wear",
-            "text": "groove wear",
-            "media_type": "lp",
-            "favorite": true
-        },
-        {
-            "title": "Indentation",
-            "text": "indentations to Disc",
-            "media_type": "lp",
-            "favorite": true
-        },
-        {
-            "title": "Label (Discoloration)",
-            "text": "label discoloration",
-            "media_type": "lp",
-            "favorite": true
+            "media_type": "cd"
         },
         {
             "title": "CD Face (Wear)",
@@ -541,6 +498,36 @@
         {
             "title": "Cloudiness (Disc)",
             "text": "cloudiness to Disc",
+            "media_type": "cd"
+        },
+        {
+            "title": "Cracking (Shell)",
+            "text": "cracking to Shell",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Cracking (Timing Window)",
+            "text": "cracking to Timing Window",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Fading (Letters Heavy)",
+            "text": "heavy letter fading on Shell",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Fading (Letters Light)",
+            "text": "light letter fading on Shell",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Label (Discoloration)",
+            "text": "label discoloration",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Scuffing (Moderate)",
+            "text": "moderate scuffing to Disc",
             "media_type": "cd"
         },
         {
@@ -564,11 +551,6 @@
             "media_type": "cassette"
         },
         {
-            "title": "Fading (Letters Heavy)",
-            "text": "heavy letter fading on Shell",
-            "media_type": "cassette"
-        },
-        {
             "title": "Fading (Letters)",
             "text": "letter fading on Shell",
             "media_type": "cassette"
@@ -579,9 +561,14 @@
             "media_type": "lp"
         },
         {
+            "title": "Indentation",
+            "text": "indentations to Disc",
+            "media_type": "lp"
+        },
+        {
             "title": "Label (Discoloration)",
             "text": "label discoloration",
-            "media_type": "cassette"
+            "media_type": "lp"
         },
         {
             "title": "Label (Peeling)",
@@ -727,11 +714,6 @@
             "title": "Scuffing (Light)",
             "text": "light scuffing to Shell",
             "media_type": "cassette"
-        },
-        {
-            "title": "Scuffing (Moderate)",
-            "text": "moderate scuffing to Disc",
-            "media_type": "cd"
         },
         {
             "title": "Scuffing (Moderate)",

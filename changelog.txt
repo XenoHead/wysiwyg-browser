@@ -1,3 +1,26 @@
+### v1.14.3.0 - 2026-10-26
+-- UI: right-clicking a row in the Open Media (Current Type) and Open Sleeve (Current Type) condition pickers now offers Favorite / Unfavorite, and the picker repaints immediately so the star updates without closing.
+-- UI: the Sleeve column of the "Both" dual-column condition picker gained the same right-click Favorite / Unfavorite behavior.
+-- UI: favorited condition options now appear once (starred) instead of showing a duplicate copy further down each list.
+-- UI: Clear All in the condition picker keeps the list at its current scroll position and no longer changes the state of the "Both" checkbox.
+-- UI: unchecking "Both" keeps the search text and list scroll position instead of jumping back to the top.
+-- UI: list-picker folder buttons (Edition, Packaging Feature, Format Tags, Weight/Speed, Pre FM, Post FM, Sleeve Packaging) keep their scroll position after selecting an option.
+-- UberPaste: History Limit menu now offers 40 and 50 items.
+-- UberPaste: window is restored on screen and raised at startup if a saved geometry left it off-screen.
+-- UberPaste: can now be built as a standalone single-file UberPaste.exe (python 3.11 + PyInstaller) that runs independently of WYSIWYG.
+-- Shutdown: the Shut Down action now also kills any stray wysiwyg.exe processes so a leftover instance cannot block the next launch.
+-- Editor: Manage Conditions no longer deletes or edits the wrong row (rows were keyed by filter/sort position); media conditions are now sorted correctly on save.
+-- Editor: "Save All Changes" and the Manage Conditions Save both refresh automatically - the settings save reloads the page, the conditions save keeps its window open and reloads the list in place.
+-- UI: the Edit Conditions window opens higher on screen (2vh from the top, 76vh tall) so its bottom is no longer cut off on smaller monitors.
+-- UI: the main menu drawer uses a smaller font with tighter spacing, and its list scrolls instead of running off the bottom of short screens.
+-- WysiScan: the prompt editor is hidden for the fixed Basic and Detailed presets (still shown for Custom).
+-- WysiScan: the Extract Text window's Max button now actually resizes it and redraws the contents, and long track lists scroll instead of overflowing.
+-- WysiScan: AI failures now report the real reason in the window (HTTP status/server text) instead of "Failed to fetch" or a generic "failed for all combos" message.
+-- WysiScan: Gemini failover hardened - 6-key x 8-model pool, per-key/model skip on 503/429, unambiguous key labels in logs, and plain HTTP 400s no longer drop a good key.
+-- WysiScan: installed builds now find prompts.json, keys.txt and .env next to the exe (prompts.json is seeded on first run), so presets and API keys work outside the repo.
+-- Installer: ships .env and keys.txt next to the exe, overwrites data.json, media_formats.json and Conditions.json with each build, never touches clipboard_history.json, and drops ~115 MB of dev files (UberPaste .venv/dist).
+-- Packaging: the installer now writes to dist_install instead of dist, plus a run_me_Installer.bat helper that stops WYSIWYG/scanner processes and snapshots the previous install before upgrading.
+
 ### v1.14.2.0 - 2026-10-20
 -- Dependencies: upgraded AnyIO to 4.14.2 to fix TLS certificate hostname matching with internationalized domain names and prevent process workers from blocking when stderr fills its pipe.
 -- Packaging: stopped bundling .env secrets; installer preserves data.json, media_formats.json, and Conditions.json and no longer removes unrelated JSON/TXT files during uninstall.

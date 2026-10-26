@@ -1,0 +1,40 @@
+[
+  {
+    "id": "4820472c-d094-49b4-9cc8-95edce8be6cd",
+    "question": "UberPaste history limit + hidden window?",
+    "answer": "History Limit submenu now offers 40 and 50 items (no clamping anywhere). Window-not-showing: app launches fine but a stale UberPaste process makes /run-uberpaste return 'already running'; added ClipTrayApp.ensure_on_screen() called after show() to recover off-screen saved geometry and raise the window.",
+    "timestamp": "2026-10-26T18:26:11.233Z",
+    "tags": [
+      "ui"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-26T18:26:11.234Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-26T18:26:11.230Z"
+    }
+  }
+]

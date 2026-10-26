@@ -7,6 +7,7 @@ REM like the scanner subprocess that can keep the EXE file handle locked).
 taskkill /F /T /IM WYSIWYG.exe >nul 2>&1
 taskkill /F /T /IM WysiScan.exe >nul 2>&1
 taskkill /F /T /IM XDevHubX.exe >nul 2>&1
+taskkill /F /T /IM Wysichat.exe >nul 2>&1
 timeout /t 3 /nobreak >nul
 taskkill /F /T /IM WYSIWYG.exe >nul 2>&1
 timeout /t 2 /nobreak >nul

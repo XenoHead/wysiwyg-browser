@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 import logging
 from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI, Body, UploadFile, File, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import win32com.client
@@ -291,6 +291,18 @@ def create_backup(file_path):
 
 app = FastAPI(lifespan=lifespan)
 
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_json(request: Request, exc: Exception):
+    """Return JSON for unhandled errors so clients always see the real reason
+    instead of an HTML 'Internal Server Error' page."""
+    logging.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": f"{type(exc).__name__}: {exc}"},
+    )
+
+
 # Allow cross-origin requests. The scanner page is normally served from this
 # server (8010), but if it's opened via the main app's static mount (8008) the
 # API calls would otherwise be blocked by the browser. Permissive CORS here is
@@ -378,12 +390,32 @@ def _format_prompt_text(prompt_obj):
                 parts.append(f"  {r}")
     return "\n".join(parts)
 
+def get_prompts_file_path():
+    """prompts.json location, preferring the app folder (writable, editable)
+    and falling back to the bundled copy inside the PyInstaller bundle. If only
+    the bundled copy exists it is seeded next to the app so edits persist."""
+    user_path = os.path.join(APP_DIR, "prompts.json")
+    if os.path.isfile(user_path):
+        return user_path
+    bundled = os.path.join(ASSET_DIR, "prompts.json")
+    if os.path.isfile(bundled):
+        try:
+            if os.path.abspath(bundled) != os.path.abspath(user_path):
+                import shutil
+                shutil.copyfile(bundled, user_path)
+                return user_path
+        except Exception:
+            pass
+        return bundled
+    return user_path
+
+
 def load_prompts():
     """Load prompts.json. Supports two shapes:
        a) A dict of named prompts: {"Basic": {...}, "Detailed": {...}}
        b) A single flat prompt object with an "Option" key naming it.
     Returns dict: { name: prompt_object }."""
-    path = os.path.join(APP_DIR, "prompts.json")
+    path = get_prompts_file_path()
     if not os.path.isfile(path):
         return {}
     try:
@@ -426,7 +458,7 @@ async def save_prompt(data: dict = Body(default={})):
     if name != 'Custom':
         return {'status': 'error', 'message': 'Only the "Custom" prompt can be saved.'}
 
-    path = os.path.join(APP_DIR, "prompts.json")
+    path = get_prompts_file_path()
     prompts = {}
     if os.path.isfile(path):
         try:
@@ -484,12 +516,18 @@ async def run_cli_prompt(data: dict = Body(default={})):
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _root not in _sys.path:
         _sys.path.insert(0, _root)
-    import gemini_pool
-    text, info = gemini_pool.gemini_generate(
-        prompt_text=prompt, image_paths=files, timeout=120,
-        extra_config_keys=_scanner_cfg_keys())
+    try:
+        import gemini_pool
+        text, info = gemini_pool.gemini_generate(
+            prompt_text=prompt, image_paths=files, timeout=120,
+            extra_config_keys=_scanner_cfg_keys())
+    except Exception as e:
+        logging.exception("run-cli-prompt failed")
+        return {'status': 'error', 'message': f'AI request failed: {e}'}
     if text is None:
-        return {'status': 'error', 'message': info.get('error', 'AI prompt failed.')}
+        detail = info.get('last_error') or ''
+        msg = info.get('error', 'AI prompt failed.')
+        return {'status': 'error', 'message': f'{msg} {detail}'.strip()}
     upsert_cli_cache(files, text)
     return {'status': 'success', 'output': text}
 
