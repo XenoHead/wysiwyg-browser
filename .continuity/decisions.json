@@ -4980,5 +4980,43 @@
       "source": "cli",
       "timestamp": "2026-10-27T22:31:56.167Z"
     }
+  },
+  {
+    "id": "02fa76c6-ebf4-4ae2-a6ba-3c1cce5d4353",
+    "question": "Is set_password.exe shipped with the installer?",
+    "answer": "No. It was briefly added then removed on request; the .iss has no InstallDelete/UninstallDelete entries and set_password is not in the file list, so a manually placed copy in C:\\FYRTOOLS\\WYSIWYG survives install/upgrade/uninstall. Installer rebuilt (487.2MB).",
+    "timestamp": "2026-10-27T22:43:42.011Z",
+    "tags": [
+      "installer tooling build"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:43:42.011Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:43:42.007Z"
+    }
   }
 ]

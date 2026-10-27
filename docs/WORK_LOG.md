@@ -559,10 +559,12 @@ in-progress edit only when the deleted object is the one being edited. Verified 
     `allpass.json.bak` when saving),
   - on genuinely invalid JSON prints a clear "file looks corrupt, restore it (.bak)" message and
     exits without a traceback.
-- Installer now ships `dist_tools\set_password.exe` to `{app}` with
-  `Flags: ignoreversion uninsneveruninstall`, so upgrades and uninstalls never delete it
-  (previously it wasn't shipped at all; nothing in the .iss deletes unknown files either).
-- Rebuilt `set_password.exe` (5:28 PM) and `INSTALL_WYSIWYG.exe` (5:31 PM, 494,241,942 bytes).
+- Installer no longer ships `set_password.exe` (removed after feedback — it's a private tool).
+  Nothing in the `.iss` deletes unknown files, so a copy manually placed in `C:\FYRTOOLS\WYSIWYG`
+  survives installs, upgrades and uninstalls (no `InstallDelete`/`UninstallDelete` entries and
+  it is not part of the installed file list).
+- Rebuilt `set_password.exe` (5:28 PM) and `INSTALL_WYSIWYG.exe` (5:43 PM, 487,189,876 bytes —
+  back to the normal size).
 **Undo:** remove the `Source: "dist_tools\set_password.exe"` line; restore the old loader.
 
 ---
