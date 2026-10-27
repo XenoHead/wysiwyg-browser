@@ -3,10 +3,10 @@
 
 a = Analysis(
     ['scanner_server.py'],
-    pathex=[],
+    pathex=['..'],
     binaries=[],
     datas=[('scanner_test.html', '.')],
-    hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'win32timezone', 'pytesseract', 'PIL', 'PIL.Image'],
+    hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'win32timezone', 'pytesseract', 'PIL', 'PIL.Image', 'gemini_pool'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

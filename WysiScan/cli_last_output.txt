@@ -1,19 +1,35 @@
 Release:
-Band Name: To Scale The Throne
-Album Title: To Scale The Throne
+Band Name: Hank Williams, Jr.
+Album Name: Hank Williams, Jr.'s Greatest Hits
+Release Date: 1982
+Label: Elektra / Curb Records
+Catalogue Number: E4-60193
 
 Tracks:
-1: No One Left
-2: The Fog
-3: Mutilated Love Angel
-4: Through Satanic Eyes
-5: Angelic Suicide
+A1: Family Tradition
+A2: Whiskey Bent And Hell Bound
+A3: Women I've Never Had
+A4: Old Habits
+A5: Kaw-Liga
+B1: Dixie On My Mind
+B2: Texas Women
+B3: The American Dream
+B4: A Country Boy Can Survive
+B5: All My Rowdy Friends (Have Settled Down)
 
 Extra:
-Engineered, Mixed, And Layout By: Rick Wiggins
-Address: 326 Falk Ave La Porte, Texas 77571 USA
-Website: Www.toscalethethrone.com
+Produced By: Jimmy Bowen
+Phonographic Copyright: ℗ & © 1982 Elektra/Asylum Records For The United States And WEA International Inc. For The World Outside Of The United States
+Company: A Division Of Warner Communications Inc.
+Manufactured By: Columbia House Under License
+Printed In: U.S.A.
+Audio Format: Dolby System
 
 Media Description:
-Matrix / Runout: CDDC/CA-0317 TO SCALE THE THRONE-9889 IFPI-WA76 CD-R80 CJD-C002
-Mould IFPI: IFPI 1L11
+Shell Type/Style: Cassette Shell
+Shell Texture: Smooth
+Timing Window: 100 50 0
+Shell Color: Off-White
+Ink Color: Black
+Binding: Sonic Weld
+Stamps: None

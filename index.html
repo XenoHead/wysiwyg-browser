@@ -186,6 +186,13 @@
                 </select>
             </div>
 
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-shrink: 0;">
+                <input type="text" id="customOptionsSearch" class="full-width-input"
+                    placeholder="🔍 Search conditions..." style="flex: 1; margin-bottom: 0;">
+                <button id="clearCustomOptionsSearchBtn" class="nav-btn" title="Clear search"
+                    style="padding: 1px 6px; font-size: 11px; height: 20px; line-height: 1;">✕</button>
+            </div>
+
             <div id="customOptionsList"
                 style="flex: 1; min-height: 80px; margin-bottom: 10px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;">
 
@@ -217,7 +224,7 @@
                 <button id="copyCustomOptionBtn" class="nav-btn"
                     style="padding: 5px 15px; display: none;">Copy</button>
                 <button id="cancelEditCustomOptionBtn" class="nav-btn"
-                    style="padding: 5px 15px;">Cancel</button>
+                    style="padding: 5px 15px;">Close</button>
             </div>
         </div>
     </div>
@@ -236,12 +243,30 @@
                     <span id="closeConditionPickerBtn" class="close-btn">&times;</span>
                 </div>
             </div>
-            <input type="text" id="conditionPickerSearch" placeholder="Search conditions..."
-                style="flex-shrink: 0; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-bottom: 8px;">
+                <input type="text" id="conditionPickerSearch" placeholder="Search conditions..."
+                    style="flex: 1; margin-bottom: 0;">
+                <button id="clearConditionSearchBtn" class="nav-btn" title="Clear search"
+                    style="padding: 1px 6px; font-size: 11px; height: 20px; line-height: 1;">✕</button>
+            </div>
             <div id="conditionPickerColumns" style="display: flex; gap: 10px; align-items: stretch; flex: 1; min-height: 0;">
                 <!-- columns rendered by app.js -->
             </div>
             <div class="modal-actions" style="margin-top: 12px; flex-shrink: 0;">
+                <div id="allTypesControls" style="display: none; align-items: center; gap: 8px; margin-right: auto;">
+                    <select id="allTypesView" title="Switch between Media and Sleeve (All Types)"
+                        style="width: 120px; height: 22px; font-size: 10px; padding: 0 4px;">
+                        <option value="media">Media (All Types)</option>
+                        <option value="sleeve">Sleeve (All Types)</option>
+                    </select>
+                    <label style="font-size: 11px; font-weight: 600; white-space: nowrap;">Media Type:</label>
+                    <select id="allTypesMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
+                        <option value="lp">LP</option>
+                        <option value="cd">CD</option>
+                        <option value="cassette">CASS</option>
+                    </select>
+                    <button id="unfavoriteAllBtn" class="nav-btn" style="padding: 5px 10px;">☆ Unfavorite All</button>
+                </div>
                 <button id="clearConditionPickerBtn" class="nav-btn"
                     style="padding: 5px 15px; margin-right: 5px;">❌ Clear All</button>
                 <button id="doneConditionPickerBtn" class="btn-search" style="padding: 5px 15px;">Done</button>
@@ -457,11 +482,20 @@
             </div>
 
             <div class="form-grid" style="grid-template-columns: 1fr 0.5fr 0.5fr 1fr;">
-                <div class="form-group"><label>LABEL / CAT#</label><input type="text" id="recordLabel"></div>
+                <div class="form-group">
+                    <label>LABEL / CAT#</label>
+                    <input type="text" id="recordLabel">
+                    <div style="display:flex; align-items:center; gap:5px; margin-top:4px; white-space:nowrap;">
+                        <label id="oopLabel"
+                            style="font-weight:normal; font-size:11px; display:flex; align-items:center; gap:4px; white-space:nowrap;"><input
+                                type="checkbox" id="oopToggle"> OOP</label>
+                        <input type="text" id="trackTimeInfo" placeholder="Tracks"
+                            style="width:45px; height:22px; box-sizing:border-box; padding:2px; font-size:11px;">
+                    </div>
+                </div>
                 <div class="form-group"><label>YEAR</label><input type="text" id="Year"></div>
                 <div class="form-group"><label>COUNTRY</label><input type="text" id="country" value="USA"></div>
                 <div class="form-group">
-                    <label>OPTIONS</label>
                     <div style="display:flex; flex-wrap:nowrap; gap:5px; align-items:center; margin-top:5px;">
                         <div
                             style="display:flex; align-items:flex-start; gap: 6px; flex-grow: 1; justify-content: flex-end;">
@@ -470,13 +504,7 @@
                                     style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em; white-space: nowrap;">Media Type:</label>
                                 <div style="display:flex; align-items:center; gap:5px; height:22px; white-space:nowrap;">
                                     <div id="conditionQuickControls"
-                                        style="display:flex; align-items:center; gap:5px; height:22px; white-space:nowrap;">
-                                        <label id="oopLabel"
-                                            style="font-weight:normal; font-size:11px; display:flex; align-items:center; gap:4px; white-space:nowrap;"><input
-                                                type="checkbox" id="oopToggle"> OOP</label>
-                                        <input type="text" id="trackTimeInfo" placeholder="Tracks"
-                                            style="width:45px; height:22px; box-sizing:border-box; padding:2px; font-size:11px;">
-                                    </div>
+                                        style="display:flex; align-items:center; gap:5px; height:22px; white-space:nowrap;"></div>
                                     <select id="conditionMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
                                         <option value="lp">LP</option>
                                         <option value="cd">CD</option>
@@ -485,14 +513,22 @@
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 120px;">
-                                <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Media Condition</span>
+                                <div style="display: flex; align-items: center; gap: 3px;">
+                                    <span
+                                        style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Media Condition</span>
+                                    <button class="nav-btn condition-open-btn" data-condition="media"
+                                        title="Open Media (Current Type)">📂</button>
+                                </div>
                                 <select id="mediaConditionOptions" multiple
                                     style="width: 100%; height: 65px; font-size: 11px;"></select>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 120px;">
-                                <span
-                                    style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Sleeve Condition</span>
+                                <div style="display: flex; align-items: center; gap: 3px;">
+                                    <span
+                                        style="font-size: 10px; font-weight: 600; color: var(--text-color, #444); line-height: 1; margin-left: 2px; letter-spacing: 0.03em;">Sleeve Condition</span>
+                                    <button class="nav-btn condition-open-btn" data-condition="sleeve"
+                                        title="Open Sleeve (Current Type)">📂</button>
+                                </div>
                                 <select id="sleeveConditionOptions" multiple
                                     style="width: 100%; height: 65px; font-size: 11px;"></select>
                             </div>
@@ -788,6 +824,7 @@
             margin: 4px 0;
         }
     </style>
+    <script src="/heartbeat.js" defer></script>
     <script src="app.js" defer></script>
 </body>
 

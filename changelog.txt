@@ -1,3 +1,21 @@
+### v1.15.3.18 - 2026-10-27
+-- Conditions: the All Types picker now has a Media/Sleeve switch, a media-type selector and "Unfavorite All" in both views, with the active media type's column header highlighted blue.
+-- Conditions: the picker search box auto-focuses on open and has an X button that clears the filter and refocuses.
+-- Hot Keys: new "Conditions (Both, Current Type)" action (default Ctrl+Shift+K); Ctrl+Click on a condition folder icon opens the Both view for the current media type.
+-- UI: Escape now closes the topmost open modal or dismisses the condition context menu.
+-- Descriptions: sleeve description is written as "with ..." (no duplicate "with"), and CD "Artwork / Insert", cassette "JCard" and LP "Sleeve" collapse to "Artwork" when insert/Jcard/sleeve is already mentioned in the description or selected conditions.
+-- Descriptions: improved flaw grouping - Corner/Edge/Spine combinations ("Corner/Edge/Spine creasing"), shared adjectives ("light play/wear to Booklet"), description text merges with matching multiselect entries, and 3+ items separate as "A / B & C".
+-- Descriptions: the noun after to/through/on in a description box is capitalised (phrases like "to top of box" are left alone).
+-- Editor: Update to Server and Upload Menus back up the existing server files first (conditions_pre_/data_pre_ with timestamp), saves use toasts instead of pop-ups, and the conditions list refreshes immediately.
+-- Editor: the conditions search box has a clear (X) button and blank items always show while filtering.
+-- Security: editor/admin passwords can be stored as PBKDF2 hashes in allpass.json, verified server-side; a standalone set_password.exe manages them.
+-- Startup: the app no longer probes the network share at launch (conditions defaults are local; the update check runs after load), and closing every browser tab shuts the app down.
+-- WysiScan: long scans/OCR no longer block the UI or the heartbeat (work runs off the event loop), and the 60-second self-shutdown that closed the scanner while a tab was in the background is fixed.
+-- WysiScan: gallery and import thumbnails are cached on disk, the page is served from memory, and image edits always refresh (nanosecond cache busters).
+-- WysiScan: API hardened - CORS limited to the local app origins, foreign-Origin requests rejected, and /view-image, /thumb and /open-file restricted to image files under allowed folders.
+-- WysiScan: standalone single-file build fixed (Extract Text now bundles gemini_pool; Browse dialogs work without python.exe; import starts at This PC then the last folder used).
+-- Packaging: shipped Conditions.json never contains favorites.
+
 ### v1.14.3.0 - 2026-10-26
 -- UI: right-clicking a row in the Open Media (Current Type) and Open Sleeve (Current Type) condition pickers now offers Favorite / Unfavorite, and the picker repaints immediately so the star updates without closing.
 -- UI: the Sleeve column of the "Both" dual-column condition picker gained the same right-click Favorite / Unfavorite behavior.

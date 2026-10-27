@@ -370,6 +370,7 @@ function setupEventListeners() {
     // --- Service Status Polling ---
     // Check status every 5 seconds to reduce system load
     setInterval(updateServiceStatus, 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) updateServiceStatus(); });
 }
 
 
@@ -485,6 +486,8 @@ async function openAddsDiscogs() {
 }
 
 async function updateServiceStatus() {
+    // Nothing to update while the tab is in the background.
+    if (document.hidden) return;
     try {
         // 1. Check Walmart Window (Client-side check)
         const walBtn = document.getElementById('runWalmartSheetBtn');
@@ -539,33 +542,43 @@ async function updateServiceStatus() {
 }
 
 async function runWysiScan() {
+    // Open the tab/window IMMEDIATELY (synchronously) so the browser counts it as a
+    // user gesture. /run-wysiscan can take several seconds while the packaged
+    // scanner extracts, and Chrome blocks window.open() once the gesture expires.
+    const dock = document.getElementById('dockScanner')?.checked ?? true;
+    let wysiScanWindow;
+    if (dock) {
+        wysiScanWindow = window.open('about:blank', '_blank');
+    } else {
+        const windowFeatures = "width=1200,height=900,resizable=yes,scrollbars=yes,status=yes";
+        wysiScanWindow = window.open('about:blank', 'WysiScanWindow', windowFeatures);
+    }
+
+    if (!wysiScanWindow) {
+        customAlert('Popup window was blocked by the browser. Please allow popups for this site.');
+        return;
+    }
+
+    try {
+        wysiScanWindow.document.title = 'WysiScan';
+        wysiScanWindow.document.body.innerHTML =
+            '<p style="font-family:sans-serif;font-size:14px;padding:24px;">Starting WysiScan…</p>';
+    } catch (e) { /* cross-origin placeholder is fine */ }
+
     try {
         // Ask the main server to launch the WysiScan server
         const resp = await fetch('/run-wysiscan', { method: 'POST' });
         const res = await resp.json();
 
         if (res.status === 'success') {
-            // If launch is successful (or it was already running), open the UI in a popup window.
-            // dockScanner checkbox was removed from the header; default to docked (new tab).
-            const dock = document.getElementById('dockScanner')?.checked ?? true;
-            let wysiScanWindow;
-
-            if (dock) {
-                wysiScanWindow = window.open('http://127.0.0.1:8010/', '_blank');
-            } else {
-                const windowFeatures = "width=1200,height=900,resizable=yes,scrollbars=yes,status=yes";
-                wysiScanWindow = window.open('http://127.0.0.1:8010/', 'WysiScanWindow', windowFeatures);
-            }
-
-            if (wysiScanWindow) {
-                wysiScanWindow.focus();
-            } else {
-                customAlert('Popup window was blocked by the browser. Please allow popups for this site.');
-            }
+            wysiScanWindow.location.href = 'http://127.0.0.1:8010/';
+            wysiScanWindow.focus();
         } else {
+            try { wysiScanWindow.close(); } catch (e) { }
             customAlert('Could not start WysiScan: ' + res.message);
         }
     } catch (e) {
+        try { wysiScanWindow.close(); } catch (e2) { }
         customAlert('Failed to connect to server to run WysiScan: ' + e);
     }
 }
@@ -644,14 +657,26 @@ async function loadAppVersion() {
             titleHtml = `<span style="color: #ff9800;">🛠️ ${titleHtml}</span>`;
         }
 
-        if (v.update_available) {
-            titleHtml += ` <span onclick="event.stopPropagation(); runInstaller()" style="cursor:pointer; background: #ffc107; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; border: 1px solid #000; vertical-align: middle;" title="Click to run installer">* UPDATE AVAILABLE *</span>`;
-            document.getElementById('updateBanner').style.display = 'block';
-        } else {
-            document.getElementById('updateBanner').style.display = 'none';
-        }
+        document.getElementById('updateBanner').style.display = 'none';
         if (titleEl) titleEl.innerHTML = titleHtml;
+
+        // Update check happens after load so startup never waits on the network share.
+        checkServerUpdate();
     } catch (e) { console.error("Version load failed", e); }
+}
+
+async function checkServerUpdate() {
+    try {
+        const resp = await fetch('/api/server-version');
+        const r = await resp.json();
+        if (!r.update_available) return;
+        const banner = document.getElementById('updateBanner');
+        if (banner) banner.style.display = 'block';
+        const titleEl = document.getElementById('appTitleText');
+        if (titleEl) {
+            titleEl.innerHTML += ` <span onclick="event.stopPropagation(); runInstaller()" style="cursor:pointer; background: #ffc107; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; border: 1px solid #000; vertical-align: middle;" title="Click to run installer">* UPDATE AVAILABLE *</span>`;
+        }
+    } catch (e) { /* offline / share unavailable is not an error */ }
 }
 
 function runInstaller() {
@@ -1114,6 +1139,7 @@ const HOTKEY_ACTIONS = [
     { id: 'amazonAdds', label: 'Amazon Adds', run: () => openAddsAmazon() },
     { id: 'discogsAdds', label: 'Discogs Adds', run: () => openAddsDiscogs() },
     { id: 'calc', label: 'Cost Calculator', run: () => openCalcModal() },
+    { id: 'conditionsBoth', label: 'Conditions (Both, Current Type)', run: () => openConditionsBothCurrentType() },
     { id: 'refresh', label: 'Refresh', run: () => location.reload(true) },
     { id: 'reports', label: 'Reports', run: () => openReportsModal() },
     { id: 'shutdown', label: 'Shut Down', run: () => shutdownApp() }
@@ -1125,6 +1151,7 @@ const HOTKEY_DEFAULTS = {
     amazonAdds: 'Ctrl+Shift+A',
     discogsAdds: 'Ctrl+Shift+D',
     calc: 'Ctrl+Shift+C',
+    conditionsBoth: 'Ctrl+Shift+K',
     refresh: 'F5',
     reports: 'Ctrl+Shift+R',
     shutdown: 'Ctrl+Shift+X'
@@ -1259,7 +1286,7 @@ function initHotkeys() {
     // Global key handler
     document.addEventListener('keydown', (e) => {
         if (hotkeyCapture) {
-            if (e.key === 'Escape') { cancelCapture(); return; }
+            if (e.key === 'Escape') { e.__hotkeyEscape = true; cancelCapture(); return; }
             commitCapture(e);
             return;
         }
@@ -1275,6 +1302,30 @@ function initHotkeys() {
                 return;
             }
         }
+    });
+
+    // Escape closes the topmost open modal / context menu
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || e.__hotkeyEscape) return;
+
+        const menu = document.getElementById('customContextMenu');
+        if (menu && menu.style.display !== 'none') {
+            menu.style.display = 'none';
+            e.preventDefault();
+            return;
+        }
+
+        const openModals = Array.from(document.querySelectorAll('.modal'))
+            .filter(m => m.style.display !== 'none' && getComputedStyle(m).display !== 'none');
+        if (!openModals.length) return;
+
+        openModals.sort((a, b) =>
+            (parseInt(getComputedStyle(b).zIndex, 10) || 0) - (parseInt(getComputedStyle(a).zIndex, 10) || 0));
+        const top = openModals[0];
+        const closeBtn = top.querySelector('.close-btn');
+        if (closeBtn) closeBtn.click();
+        else top.style.display = 'none';
+        e.preventDefault();
     });
 }
 
@@ -1305,11 +1356,21 @@ function showModal(title, bodyHtml, buttons) {
         b.onclick = () => {
             overlay.style.display = 'none';
             if (btn.onClick) btn.onClick();
+            // Return focus to the admin password box so a retry needs no click
+            const pw = document.getElementById('passwordModal');
+            if (pw && pw.style.display === 'block') {
+                const inp = document.getElementById('adminPasswordInput');
+                if (inp) { inp.focus(); inp.select(); }
+            }
         };
         actionsEl.appendChild(b);
     });
 
     overlay.style.display = 'flex';
+    // Focus the primary/OK button so Enter dismisses the dialog
+    const actionBtns = actionsEl.querySelectorAll('button');
+    const focusBtn = actionBtns[actionBtns.length - 1];
+    if (focusBtn) setTimeout(() => focusBtn.focus(), 0);
 }
 
 function closeModal() {
@@ -1567,8 +1628,26 @@ function updateDynamicColors() {
 }
 
 let storedPasswords = {};
-function submitPassword() {
+async function submitPassword() {
     const input = document.getElementById('adminPasswordInput').value;
+
+    // Verify server-side so passwords can be stored hashed (PBKDF2) in allpass.json.
+    try {
+        const resp = await fetch('/api/verify-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: input })
+        });
+        if (resp.ok) {
+            const res = await resp.json();
+            if (res.role === 'editor') { window.open('editor', '_blank'); closePasswordModal(); return; }
+            if (res.role === 'admin') { window.open('admin', '_blank'); closePasswordModal(); return; }
+            customAlert("Incorrect password.");
+            return;
+        }
+    } catch (e) { /* fall through to legacy local check */ }
+
+    // Legacy fallback: plaintext values already loaded from allpass.json
     if (input === storedPasswords.editor) {
         window.open('editor', '_blank');
         closePasswordModal();
@@ -1992,6 +2071,13 @@ function processCountry(country) {
 function processFormatData(inputs) {
     let { formatLineRaw, mediaDesc, colorVal, preFM, weightSpeed, mediaFormat, postFM, sleevePkg, pkgFeature, edition, formatTags, customOptionsSelected, sleeveDesc, sleeveCond, mediaCustomOptionsSelected } = inputs;
 
+    // Sleeve description always reads as "with <text>": prefix it unless it already
+    // starts with "with"/"With" (in which case just normalize that word to lowercase).
+    if (sleeveDesc && sleeveDesc.trim() !== "") {
+        const withoutWith = sleeveDesc.trim().replace(/^with\b\s*/i, "");
+        sleeveDesc = withoutWith ? "with " + withoutWith : "with";
+    }
+
     // Color
     let colorPhrase = colorVal ? `Colored (${colorVal})` : "";
 
@@ -2043,16 +2129,32 @@ function processFormatData(inputs) {
 
     // Sleeve Type Label
     let sleeveTypeLabel = "";
+    // Text from the sleeve description + every selected sleeve condition.
+    // "Insert" mentioned anywhere -> CD label is just "Artwork".
+    // "Jcard"/"J-card"/"J Card" mentioned anywhere -> cassette label is "Artwork".
+    // "sleeve" mentioned anywhere -> LP label is "Artwork" (never repeat "Sleeve").
+    const sleeveConditionText = (customOptionsSelected || []).map(value => {
+        try {
+            const opt = JSON.parse(value);
+            return `${opt.title || ''} ${opt.text || ''}`;
+        } catch (e) {
+            return String(value);
+        }
+    }).join(' ');
+    const sleeveTextForRules = `${sleeveDesc || ''} ${sleeveConditionText}`;
+    const sleeveMentionsInsert = /insert/i.test(sleeveTextForRules);
+    const sleeveMentionsJcard = /j[\s-]?card/i.test(sleeveTextForRules);
+    const sleeveMentionsSleeve = /\bsleeves?\b/i.test(sleeveTextForRules);
     if (sleeveCond.trim() !== "" && !sleevePkg) {
-        if (mediaFormat === "Vinyl") sleeveTypeLabel = "Sleeve";
+        if (mediaFormat === "Vinyl") sleeveTypeLabel = sleeveMentionsSleeve ? "Artwork" : "Sleeve";
         else if (mediaFormat.includes("CD") || mediaFormat.includes("DVD") || mediaFormat.includes("Blu-ray")) {
-            if (sleeveDesc && sleeveDesc.toLowerCase().includes("insert")) {
+            if (sleeveMentionsInsert) {
                 sleeveTypeLabel = "Artwork";
             } else {
                 sleeveTypeLabel = "Artwork / Insert";
             }
         }
-        else if (mediaFormat === "Cassette") sleeveTypeLabel = "JCard";
+        else if (mediaFormat === "Cassette") sleeveTypeLabel = sleeveMentionsJcard ? "Artwork" : "JCard";
     }
 
     if (pkgFeature) pkgFeature = "with " + pkgFeature;
@@ -2115,7 +2217,7 @@ function processFormatData(inputs) {
     // --- 1. Collect media entries: text box text first, then multiselect flaws ---
     const hasMediaDesc = mediaDesc && mediaDesc.trim() !== "";
     const hasMediaCustomOptions = mediaCustomOptionsSelected && mediaCustomOptionsSelected.length > 0;
-    let mediaEntries = hasMediaDesc ? [mediaDesc.trim()] : [];
+    let mediaEntries = hasMediaDesc ? [capitalizeFlawContext(stripLeadingWith(mediaDesc))] : [];
     let mediaFinalSale = "";
 
     if (hasMediaCustomOptions) {
@@ -2155,37 +2257,38 @@ function processFormatData(inputs) {
         });
     }
 
-    // --- 3. Place sleeve entries ---
-    if (sleeveEntries.length > 0) {
-        // Group flaws to combine duplicates (e.g. "water damage to Booklet/Inlay")
-        const groupedSleeve = groupFlaws([...sleeveEntries]);
+    // --- 3. Place sleeve entries (description text + multiselect flaws grouped together) ---
+    const hasSleeveCondition = sleeveCond && sleeveCond.trim() !== "";
+    const hasSleeveDesc = sleeveDesc && sleeveDesc.trim() !== "";
 
-        // Join: first separator = " & ", all subsequent = " / "
-        const combinedSleeve = groupedSleeve.length === 1
-            ? groupedSleeve[0]
-            : groupedSleeve[0] + " & " + groupedSleeve.slice(1).join(" / ");
+    let sleeveEntriesAll = [...sleeveEntries];
+    if (hasSleeveDesc) {
+        // The description carries a "with " prefix from the size/condition rules;
+        // strip it for grouping with the multiselect flaws, re-added below.
+        const sleeveDescCore = capitalizeFlawContext(stripLeadingWith(sleeveDesc));
+        if (sleeveDescCore) sleeveEntriesAll.unshift(sleeveDescCore);
+    }
 
-        const hasSleeveCondition = sleeveCond && sleeveCond.trim() !== "";
-        const hasSleeveDesc = sleeveDesc && sleeveDesc.trim() !== "";
+    if (sleeveEntriesAll.length > 0) {
+        // Group flaws to combine duplicates / shared prefixes and contexts
+        // (e.g. "water damage to Booklet/Inlay").
+        const groupedSleeve = groupFlaws(sleeveEntriesAll);
 
-        if (hasSleeveCondition && hasSleeveDesc) {
-            // Case A: sleeveDesc text is treated as the FIRST condition.
-            // Menu item 1 -> " & ", menu items 2+ -> " / "
-            if (groupedSleeve.length === 1) {
-                sleeveDesc += ' & ' + groupedSleeve[0];
-            } else {
-                sleeveDesc += ' & ' + groupedSleeve[0] + ' / ' + groupedSleeve.slice(1).join(' / ');
-            }
-        } else if (hasSleeveCondition && !hasSleeveDesc) {
-            // Case B: sleeve cond set + sleeve desc BLANK -> goes AFTER sleevePkg
+        // Join: 1 item bare, 2 items with " & ", 3+ items "A / B & C"
+        const combinedSleeve = joinFlawItems(groupedSleeve);
+
+        if (hasSleeveDesc) {
+            // Description text (grouped with any matching sleeve multiselect
+            // flaws) stays in the sleeve-description slot.
+            sleeveDesc = /^with\s/i.test(combinedSleeve) ? combinedSleeve : "with " + combinedSleeve;
+        } else if (hasSleeveCondition) {
+            // Sleeve cond set + sleeve desc BLANK -> goes AFTER sleevePkg.
             // Store in conditionPhrase; assembleDescription will place it after sleevePkg.
             conditionPhrase = combinedSleeve;
-        } else if (sleevePkg && !hasSleeveCondition && !hasSleeveDesc) {
+        } else if (sleevePkg) {
             // If there is a sleeve pack but no sleeve condition, attach
             // the condition options directly to the sleeve pack.
             sleevePkg += " with " + combinedSleeve;
-        } else if (hasSleeveDesc) {
-            sleeveDesc += " & " + combinedSleeve;
         } else if (hasMediaContent) {
             // Media-first rule: the text box text / media multiselect choices
             // lead, and the sleeve multiselect choices follow them inside
@@ -2209,10 +2312,8 @@ function processFormatData(inputs) {
     if (mediaEntries.length > 0) {
         const groupedMedia = groupFlaws(mediaEntries);
 
-        // Join: first separator = " & ", all subsequent = " / "
-        let flawPhrase = groupedMedia.length === 1
-            ? groupedMedia[0]
-            : groupedMedia[0] + " & " + groupedMedia.slice(1).join(" / ");
+        // Join: 1 item bare, 2 items with " & ", 3+ items "A / B & C"
+        let flawPhrase = joinFlawItems(groupedMedia);
 
         const priorEndsWithWith = /\swith\s\S/i.test(finalFormatString);
         if (!/^with\s/i.test(flawPhrase) && !priorEndsWithWith) {
@@ -2304,10 +2405,44 @@ function assembleDescription(inputs, country, fmtData) {
 }
 
 
+// Join grouped flaw items:
+//   1 item  -> "A"
+//   2 items -> "A & B"
+//   3+ items -> "A / B & C" (ampersand only before the final item)
+function joinFlawItems(items) {
+    if (!items || items.length === 0) return "";
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return items[0] + " & " + items[1];
+    return items.slice(0, -1).join(" / ") + " & " + items[items.length - 1];
+}
+
+function stripLeadingWith(text) {
+    return String(text || '').replace(/^with\s+/i, '').trim();
+}
+
+function capitalizeFlawContext(text) {
+    // Capitalise the noun that follows a flaw separator in free-text descriptions:
+    // "waviness/bending to back" -> "waviness/bending to Back".
+    // Phrases like "to top of box" are left alone (the head word is not the noun).
+    // Articles are skipped.
+    return String(text).replace(/\b(to|through|on)\s+([A-Za-z][A-Za-z'-]*)(\s+of\b)?/gi,
+        (match, sep, word, ofPart) => {
+            if (ofPart) return match;
+            if (/^(a|an|the)$/i.test(word)) return match;
+            return `${sep} ${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+        });
+}
+
 function groupFlaws(flaws) {
     if (!flaws || flaws.length <= 1) return flaws;
 
     const separators = [' to ', ' through ', ' on '];
+    // Location prefixes that can share one flaw word: Corner/Edge/Spine creasing.
+    const LOCATION_CANON = {
+        corner: 'Corner', corners: 'Corner',
+        edge: 'Edge', edges: 'Edge',
+        spine: 'Spine', spines: 'Spine'
+    };
 
     // Helper to split a flaw into [prefix, separator, suffix]
     function splitFlaw(f) {
@@ -2317,13 +2452,107 @@ function groupFlaws(flaws) {
                 return [parts[0], sep, parts.slice(1).join(sep)];
             }
         }
-        if (f.toLowerCase().startsWith('corner ')) {
-            return ['Corner', ' ', f.substring(7)];
+        const loc = f.match(/^([A-Za-z]+)\s+(.+)$/);
+        if (loc) {
+            const canonical = LOCATION_CANON[loc[1].toLowerCase()];
+            if (canonical) return [canonical, ' ', loc[2]];
         }
         return [f, null, null];
     }
 
-    let result = [...flaws];
+    // Modifier adjectives that describe the same kind of flaw (e.g. light play,
+    // light wear to Booklet) are grouped so the adjective appears only once:
+    // "light play/wear to Booklet".
+    const ADJECTIVE_MODIFIERS = new Set([
+        'light', 'moderate', 'heavy', 'minor', 'major', 'slight', 'severe',
+        'significant', 'faint', 'deep', 'small', 'large', 'tiny'
+    ]);
+
+    function splitAdjective(f) {
+        const m = f.match(/^([A-Za-z-]+)\s+(.+)$/);
+        if (!m) return null;
+        if (!ADJECTIVE_MODIFIERS.has(m[1].toLowerCase())) return null;
+        return [m[1], m[2]];
+    }
+
+    function groupAdjectives(list) {
+        const out = [];
+        const used = new Set();
+        for (let i = 0; i < list.length; i++) {
+            if (used.has(i)) continue;
+            const parsed = splitAdjective(list[i]);
+            if (!parsed) { out.push(list[i]); continue; }
+
+            const [adj, rest] = parsed;
+            const [p1, s1, x1] = splitFlaw(rest);
+            const matches = [i];
+            let sharedSep = s1;
+            let sharedSuffix = x1;
+
+            for (let j = i + 1; j < list.length; j++) {
+                if (used.has(j)) continue;
+                const other = splitAdjective(list[j]);
+                if (!other || other[0].toLowerCase() !== adj.toLowerCase()) continue;
+                const [p2, s2, x2] = splitFlaw(other[1]);
+                // Only group when the trailing context agrees (e.g. "to Booklet").
+                if ((s1 || x1) && (s2 || x2) && (s1 !== s2 || x1 !== x2)) continue;
+                if (!sharedSep && !sharedSuffix) { sharedSep = s2; sharedSuffix = x2; }
+                matches.push(j);
+            }
+
+            if (matches.length > 1) {
+                const objects = matches.map(idx => splitFlaw(splitAdjective(list[idx])[1])[0]);
+                const joined = [...new Set(objects)].join('/');
+                let phrase = adj + ' ' + joined;
+                if (sharedSep) phrase += sharedSep + (sharedSuffix || '');
+                else if (sharedSuffix) phrase += ' ' + sharedSuffix;
+                out.push(phrase);
+                matches.forEach(idx => used.add(idx));
+            } else {
+                out.push(list[i]);
+                used.add(i);
+            }
+        }
+        return out;
+    }
+
+    let result = groupAdjectives([...flaws]);
+
+    // Leading-object grouping: "sticker mark" + "sticker residue" ->
+    // "sticker mark/residue". Only simple two-word flaws (no "to/through/on",
+    // no locations/adjectives already merged) participate.
+    function splitHeadTail(f) {
+        const m = f.match(/^([A-Za-z][A-Za-z']*)(?:[\s-]+)([A-Za-z][A-Za-z'-]*)$/);
+        if (!m) return null;
+        return [m[1], m[2]];
+    }
+
+    function groupLeadingObjects(list) {
+        const out = [];
+        const used = new Set();
+        for (let i = 0; i < list.length; i++) {
+            if (used.has(i)) continue;
+            const first = splitHeadTail(list[i]);
+            if (!first) { out.push(list[i]); continue; }
+            const matches = [i];
+            for (let j = i + 1; j < list.length; j++) {
+                if (used.has(j)) continue;
+                const other = splitHeadTail(list[j]);
+                if (other && other[0].toLowerCase() === first[0].toLowerCase()) matches.push(j);
+            }
+            if (matches.length > 1) {
+                const tails = matches.map(idx => splitHeadTail(list[idx])[1]);
+                out.push(first[0] + ' ' + [...new Set(tails)].join('/'));
+                matches.forEach(idx => used.add(idx));
+            } else {
+                out.push(list[i]);
+                used.add(i);
+            }
+        }
+        return out;
+    }
+
+    result = groupLeadingObjects(result);
 
     // 1. Prefix Grouping
     // Group by (prefix + separator)
@@ -2389,19 +2618,20 @@ function groupFlaws(flaws) {
             });
 
             let combinedParts = [];
+            let spaceParts = [];
             for (let [sep, prefixes] of sepMap.entries()) {
                 const uniquePrefixes = [...new Set(prefixes)];
-                if (sep === ' ') { // Special case for "Corner"
-                    combinedParts.push(uniquePrefixes.join('/'));
+                if (sep === ' ') {
+                    // Location prefixes (Corner / Edge) share the flaw word:
+                    // "Corner creasing" + "Edge creasing" -> "Corner/Edge creasing"
+                    spaceParts.push(uniquePrefixes.join('/') + ' ' + x1);
                 } else {
                     combinedParts.push(uniquePrefixes.join('/') + sep.trimEnd());
                 }
             }
             // Join parts with / and append the suffix
-            // If it was "Corner", sep was ' ' and suffix was the flaw part
-            const firstSep = splitFlaw(result[matches[0]])[1];
-            if (firstSep === ' ') {
-                suffixGrouped.push('Corner ' + combinedParts.join('/'));
+            if (spaceParts.length) {
+                suffixGrouped.push(spaceParts.join(' / '));
             } else {
                 suffixGrouped.push(combinedParts.join('/') + ' ' + x1);
             }
@@ -2827,6 +3057,7 @@ let editingCustomOptionIndex = -1;
 let editingCustomOption = null;
 let customOptionCopyDraft = false;
 let currentModalCategory = 'cassette';
+let customOptionsSearchTerm = '';
 let currentConditionMediaType = 'lp'; // Track current media type for condition dropdowns
 let conditionPickerViewMode = 'single'; // 'single' or 'dual'
 let conditionPickerSingleSource = 'media'; // 'media' | 'sleeve' - which single column the "Both" toggle returns to
@@ -2884,7 +3115,7 @@ function sortCustomOptionsData() {
 
 async function loadCustomOptions() {
     try {
-        const response = await fetch('/api/conditions');
+        const response = await fetch('/api/conditions?t=' + Date.now(), { cache: 'no-store' });
         if (response.ok) {
             customOptionsData = await response.json();
             // Ensure all keys exist
@@ -3037,10 +3268,17 @@ function syncConditionMultiselectsToLegacy() {
     });
 }
 
+function resetCustomOptionsSearchAndFocus() {
+    customOptionsSearchTerm = '';
+    const input = document.getElementById('customOptionsSearch');
+    if (input) input.value = '';
+    renderCustomOptionsModalList();
+    if (input) setTimeout(() => input.focus(), 0);
+}
+
 function renderCustomOptionsModalList() {
     const list = document.getElementById('customOptionsList');
     if (!list) return;
-
     // Both categories always show media type filter
     const mediaTypeFilter = document.getElementById('modalMediaTypeFilter');
     const newOptionMediaTypeContainer = document.getElementById('newOptionMediaTypeContainer');
@@ -3070,10 +3308,20 @@ function renderCustomOptionsModalList() {
         currentData = [];
     }
 
+    const hasAnyOptions = currentData && currentData.length > 0;
+    if (customOptionsSearchTerm) {
+        const term = customOptionsSearchTerm.toLowerCase();
+        currentData = (currentData || []).filter(opt =>
+            (opt.title || '').toLowerCase().includes(term) ||
+            (opt.text || '').toLowerCase().includes(term));
+    }
+
     list.innerHTML = '';
 
     if (!currentData || currentData.length === 0) {
-        list.innerHTML = '<div style="font-size: 11px; color: #666; text-align: center;">No options found for this category. Add one below.</div>';
+        list.innerHTML = hasAnyOptions
+            ? '<div style="font-size: 11px; color: #666; text-align: center;">No matches for this search.</div>'
+            : '<div style="font-size: 11px; color: #666; text-align: center;">No options found for this category. Add one below.</div>';
         return;
     }
 
@@ -3088,7 +3336,7 @@ function renderCustomOptionsModalList() {
         const textCol = document.createElement('div');
         textCol.style.cssText = 'font-size:11px; flex-grow:1; cursor:pointer; min-width:0;';
         textCol.title = 'Click to Edit';
-        textCol.onclick = () => editCustomOption(index);
+        textCol.onclick = () => editCustomOption(opt);
         // Show media_type for mediaCondition entries
         let mediaTypeDisplay = '';
         if (currentModalCategory === 'mediaCondition' && opt.media_type) {
@@ -3105,14 +3353,14 @@ function renderCustomOptionsModalList() {
         starBtn.title = opt.favorite ? 'Remove from Favorites' : 'Add to Favorites';
         starBtn.className = 'nav-btn';
         starBtn.style.cssText = 'padding:2px 5px; height:20px; font-size:10px; flex-shrink:0; cursor:pointer;';
-        starBtn.onclick = (e) => toggleFavoriteCustomOption(e, index);
+        starBtn.onclick = (e) => toggleFavoriteCustomOption(e, opt);
 
         const delBtn = document.createElement('button');
         delBtn.innerHTML = '❌';
         delBtn.title = 'Delete Option';
         delBtn.className = 'nav-btn';
         delBtn.style.cssText = 'padding:2px 5px; color:var(--danger-color); height:20px; font-size:10px; flex-shrink:0;';
-        delBtn.onclick = (e) => deleteCustomOption(e, index);
+        delBtn.onclick = (e) => deleteCustomOption(e, opt);
 
         item.appendChild(textCol);
         item.appendChild(starBtn);
@@ -3441,21 +3689,17 @@ window.resetListPickerPlacement = initDraggableModal('listPickerContent', 'listP
 window.resetCustomOptionsModalPlacement = initDraggableModal('customOptionsModalContent', 'customOptionsModalHeader');
 
 
-window.editCustomOption = function (index) {
-    editingCustomOptionIndex = index;
-    
-    // Get the correct data array based on category
-    let currentData;
+window.editCustomOption = function (opt) {
+    if (!opt || typeof opt !== 'object') return;
+
+    // Resolve by object identity: the visible list may be filtered by the
+    // search box and/or media type, so display indexes are not array indexes.
     const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
-    
-    if (currentModalCategory === 'mediaCondition') {
-        currentData = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === selectedMediaType);
-    } else if (currentModalCategory === 'sleeveCondition') {
-        currentData = customOptionsData[selectedMediaType] || [];
-    }
-    
-    const opt = currentData[index];
-    if (!opt) return;
+    const currentData = currentModalCategory === 'mediaCondition'
+        ? (customOptionsData.mediaCondition || [])
+        : (customOptionsData[selectedMediaType] || []);
+
+    editingCustomOptionIndex = currentData.indexOf(opt);
     editingCustomOption = opt;
     document.getElementById('newOptionTitle').value = opt.title;
     document.getElementById('newOptionText').value = opt.text;
@@ -3476,55 +3720,33 @@ window.editCustomOption = function (index) {
     renderCustomOptionsModalList();
 };
 
-window.deleteCustomOption = function (event, index) {
+window.deleteCustomOption = function (event, opt) {
     event.stopPropagation();
-    
-    // Get the correct data array based on category
+    if (!opt || typeof opt !== 'object') return;
+
     const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
-    let targetArray;
-    
-    if (currentModalCategory === 'mediaCondition') {
-        targetArray = customOptionsData.mediaCondition;
-        // Find the actual index in the full array (since we filter for display)
-        const filtered = targetArray.filter(opt => opt.media_type === selectedMediaType);
-        const actualIndex = targetArray.findIndex(opt => opt.title === filtered[index].title && opt.text === filtered[index].text && opt.media_type === filtered[index].media_type);
-        if (actualIndex !== -1) {
-            targetArray.splice(actualIndex, 1);
-        }
-    } else if (currentModalCategory === 'sleeveCondition') {
-        targetArray = customOptionsData[selectedMediaType];
-        targetArray.splice(index, 1);
-    }
-    
-    if (editingCustomOptionIndex === index) {
+    const targetArray = currentModalCategory === 'mediaCondition'
+        ? (customOptionsData.mediaCondition || [])
+        : (customOptionsData[selectedMediaType] || []);
+
+    const actualIndex = targetArray.indexOf(opt);
+    if (actualIndex === -1) return;
+    targetArray.splice(actualIndex, 1);
+
+    if (editingCustomOption === opt) {
         cancelEditCustomOption();
-    } else if (editingCustomOptionIndex > index) {
-        editingCustomOptionIndex--;
     }
     saveCustomOptions();
     renderCustomOptionsSelect();
     renderCustomOptionsModalList();
 };
 
-window.toggleFavoriteCustomOption = function (event, index) {
+window.toggleFavoriteCustomOption = function (event, opt) {
     event.stopPropagation();
-    
-    // Get the correct data array based on category
-    const selectedMediaType = document.getElementById('modalMediaTypeSelect')?.value || currentConditionMediaType;
-    let targetArray;
-    
-    if (currentModalCategory === 'mediaCondition') {
-        targetArray = customOptionsData.mediaCondition;
-        const filtered = targetArray.filter(opt => opt.media_type === selectedMediaType);
-        const actualIndex = targetArray.findIndex(opt => opt.title === filtered[index].title && opt.text === filtered[index].text && opt.media_type === filtered[index].media_type);
-        if (actualIndex !== -1) {
-            targetArray[actualIndex].favorite = !targetArray[actualIndex].favorite;
-        }
-    } else if (currentModalCategory === 'sleeveCondition') {
-        targetArray = customOptionsData[selectedMediaType];
-        targetArray[index].favorite = !targetArray[index].favorite;
-    }
-    
+    if (!opt || typeof opt !== 'object') return;
+
+    opt.favorite = !opt.favorite;
+
     saveCustomOptions();
     renderCustomOptionsSelect();
     renderCustomOptionsModalList();
@@ -3553,9 +3775,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCustomOptions();
     clearCurrentItem();
 
+    // Pick up condition edits made in the editor window without a full reload.
+    const refreshCustomOptions = () => { if (!document.hidden) loadCustomOptions(); };
+    window.addEventListener('focus', refreshCustomOptions);
+    document.addEventListener('visibilitychange', refreshCustomOptions);
+
     // Media type dropdown for condition multiselects
     document.getElementById('conditionMediaType')?.addEventListener('change', (e) => {
         currentConditionMediaType = e.target.value;
+        const allSelect = document.getElementById('allTypesMediaType');
+        if (allSelect) allSelect.value = e.target.value;
         // Update modal category to match
         currentModalCategory = currentConditionMediaType;
         const modalCatSelect = document.getElementById('modalCategorySelect');
@@ -3590,10 +3819,24 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelEditCustomOption();
         window.resetCustomOptionsModalPlacement?.();
         document.getElementById('customOptionsModal').style.display = 'block';
+        resetCustomOptionsSearchAndFocus();
     });
 
     document.getElementById('closeCustomOptionsModalBtn')?.addEventListener('click', () => {
         document.getElementById('customOptionsModal').style.display = 'none';
+    });
+
+    document.getElementById('customOptionsSearch')?.addEventListener('input', (e) => {
+        customOptionsSearchTerm = e.target.value.trim();
+        renderCustomOptionsModalList();
+    });
+
+    document.getElementById('clearCustomOptionsSearchBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        customOptionsSearchTerm = '';
+        const input = document.getElementById('customOptionsSearch');
+        if (input) { input.value = ''; input.focus(); }
+        renderCustomOptionsModalList();
     });
 
     document.getElementById('cancelEditCustomOptionBtn')?.addEventListener('click', () => {
@@ -3699,6 +3942,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderConditionPicker();
         const header = document.getElementById('conditionPickerHeader');
         if (header) header.textContent = currentConditionMediaType.toUpperCase() + ' MEDIA CONDITION';
+        setAllTypesControlsVisible(false);
         document.getElementById('conditionPickerModal').style.display = 'block';
     });
 
@@ -3709,6 +3953,36 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             renderConditionPicker();
         }
+    });
+
+    document.getElementById('clearConditionSearchBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const search = document.getElementById('conditionPickerSearch');
+        if (search) search.value = '';
+        if (conditionPickerRedraw) {
+            conditionPickerRedraw();
+        } else {
+            renderConditionPicker();
+        }
+        search?.focus();
+    });
+
+    document.getElementById('allTypesView')?.addEventListener('change', (e) => {
+        if (e.target.value === 'sleeve') {
+            openSleeveConditionThreeColumnModal(true);
+        } else {
+            openMediaConditionThreeColumnModal(true);
+        }
+    });
+
+    document.getElementById('allTypesMediaType')?.addEventListener('change', (e) => {
+        setConditionMediaTypeEverywhere(e.target.value);
+        if (conditionPickerRedraw) conditionPickerRedraw();
+    });
+
+    document.getElementById('unfavoriteAllBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        unfavoriteAllCurrentType();
     });
 
     // Handle dual column mode toggle in modal
@@ -3768,6 +4042,32 @@ document.addEventListener('DOMContentLoaded', () => {
         else renderConditionPicker();
         // Clearing must not touch the "Both" checkbox state
         if (dualCb) dualCb.checked = dualState;
+    });
+
+    // Auto-focus the search box whenever the condition picker opens
+    const conditionPickerEl = document.getElementById('conditionPickerModal');
+    if (conditionPickerEl) {
+        new MutationObserver(() => {
+            if (conditionPickerEl.style.display !== 'block') return;
+            const search = document.getElementById('conditionPickerSearch');
+            if (search && document.activeElement !== search) search.focus();
+        }).observe(conditionPickerEl, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    document.querySelectorAll('.condition-open-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const mediaTypeSelect = document.getElementById('conditionMediaType');
+            const mediaType = mediaTypeSelect ? mediaTypeSelect.value : currentConditionMediaType;
+            currentConditionMediaType = mediaType;
+            if (e.ctrlKey || e.metaKey) {
+                openConditionsBothCurrentType();
+            } else if (btn.dataset.condition === 'media') {
+                openConditionPickerForMedia(mediaType);
+            } else {
+                openConditionPickerForSleeve(mediaType);
+            }
+        });
     });
 
     document.querySelectorAll('.list-picker-open-btn').forEach(btn => {
@@ -3998,7 +4298,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
                 if (modalMediaTypeSelect) modalMediaTypeSelect.value = currentConditionMediaType;
             }
-            renderCustomOptionsModalList();
+            resetCustomOptionsSearchAndFocus();
             menu.style.display = 'none';
         };
     }
@@ -4071,8 +4371,13 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
 
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
-        headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
-        column.appendChild(headerEl);
+            const typeSelect = document.getElementById('allTypesMediaType');
+            const activeType = typeSelect ? typeSelect.value : currentConditionMediaType;
+            headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; text-align: center; flex-shrink: 0;' +
+                (config.key === activeType
+                    ? ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;'
+                    : ' color: var(--text-color, #444);');
+            column.appendChild(headerEl);
 
         const list = document.createElement('div');
         list.dataset.conditionPickerList = config.key;
@@ -4127,6 +4432,7 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
     header.textContent = 'Select Media Condition (All Types)';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'mediaCondition';
+    setAllTypesControlsVisible(true);
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openMediaConditionThreeColumnModal(true);
 }
@@ -4180,7 +4486,12 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
 
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
-        headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
+        const sleeveTypeSelect = document.getElementById('allTypesMediaType');
+        const sleeveActiveType = sleeveTypeSelect ? sleeveTypeSelect.value : currentConditionMediaType;
+        headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; text-align: center; flex-shrink: 0;' +
+            (config.key === sleeveActiveType
+                ? ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;'
+                : ' color: var(--text-color, #444);');
         column.appendChild(headerEl);
 
         const list = document.createElement('div');
@@ -4236,6 +4547,7 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
     header.textContent = 'Select Sleeve Condition (All Types)';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'sleeveCondition';
+    setAllTypesControlsVisible(true);
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openSleeveConditionThreeColumnModal(true);
 }
@@ -4420,6 +4732,7 @@ function openConditionPickerForMedia(mediaType, preserveSearch) {
     header.textContent = mediaType.toUpperCase() + ' MEDIA CONDITION';
     modal.style.display = 'block';
     window.currentThreeColumnMode = null;
+    setAllTypesControlsVisible(false);
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openConditionPickerForMedia(mediaType, true);
 }
@@ -4498,11 +4811,66 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
     header.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION';
     modal.style.display = 'block';
     window.currentThreeColumnMode = null;
+    setAllTypesControlsVisible(false);
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openConditionPickerForSleeve(mediaType, true);
 }
 
 // Open dual-column condition picker for both Media and Sleeve conditions (current media type)
+function openConditionsBothCurrentType() {
+    const mediaTypeSelect = document.getElementById('conditionMediaType');
+    const mediaType = mediaTypeSelect ? mediaTypeSelect.value : currentConditionMediaType;
+    currentConditionMediaType = mediaType;
+    conditionPickerViewMode = 'dual';
+    const search = document.getElementById('conditionPickerSearch');
+    if (search) search.value = '';
+    currentModalCategory = 'mediaCondition';
+    const modalCatSelect = document.getElementById('modalCategorySelect');
+    if (modalCatSelect) modalCatSelect.value = 'mediaCondition';
+    openDualColumnConditionPicker(mediaType);
+}
+
+function setAllTypesControlsVisible(visible) {
+    const el = document.getElementById('allTypesControls');
+    if (el) el.style.display = visible ? 'flex' : 'none';
+    if (visible) {
+        const sel = document.getElementById('allTypesMediaType');
+        if (sel) sel.value = currentConditionMediaType;
+        const viewSel = document.getElementById('allTypesView');
+        if (viewSel) viewSel.value = (window.currentThreeColumnMode === 'sleeveCondition') ? 'sleeve' : 'media';
+    }
+}
+
+function setConditionMediaTypeEverywhere(type) {
+    currentConditionMediaType = type;
+    const mainSelect = document.getElementById('conditionMediaType');
+    if (mainSelect) mainSelect.value = type;
+    const allSelect = document.getElementById('allTypesMediaType');
+    if (allSelect) allSelect.value = type;
+    renderConditionMultiselects();
+}
+
+function unfavoriteAllCurrentType() {
+    const select = document.getElementById('allTypesMediaType');
+    const type = select ? select.value : currentConditionMediaType;
+    const isSleeve = window.currentThreeColumnMode === 'sleeveCondition';
+    const list = isSleeve ? (customOptionsData[type] || []) : (customOptionsData.mediaCondition || []);
+    let changed = false;
+    list.forEach(item => {
+        const matchesType = isSleeve ? true : (item.media_type === type);
+        if (matchesType && item.favorite) {
+            item.favorite = false;
+            changed = true;
+        }
+    });
+    if (changed) {
+        saveCustomOptions();
+        renderCustomOptionsSelect();
+    }
+    if (conditionPickerRedraw) conditionPickerRedraw();
+    else renderConditionPicker();
+}
+
 function openDualColumnConditionPicker(mediaType, preserveSearch) {
     const modal = document.getElementById('conditionPickerModal');
     const container = document.getElementById('conditionPickerColumns');
@@ -4641,6 +5009,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     header.textContent = mediaType.toUpperCase() + ' CONDITIONS';
     modal.style.display = 'block';
     window.currentThreeColumnMode = 'dualColumn';
+    setAllTypesControlsVisible(false);
     // This view owns the search bar until another picker is opened
     conditionPickerRedraw = () => openDualColumnConditionPicker(mediaType, true);
 }

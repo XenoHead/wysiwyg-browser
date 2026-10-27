@@ -17,6 +17,14 @@ def build_exe():
         ("scanner_test.html", "WysiScan"),
         ("WysiScan.ico", "WysiScan"),
         ("WysiScan.png", "WysiScan"),
+        # Image Convert sub-app (only its runtime files; skip .venvic / __pycache__)
+        ("imageconvert/app.py", "imageconvert"),
+        ("imageconvert/config.json", "imageconvert"),
+        ("imageconvert/index.html", "imageconvert"),
+        ("imageconvert/script.js", "imageconvert"),
+        ("imageconvert/styles.css", "imageconvert"),
+        ("imageconvert/assets/css", "imageconvert/assets/css"),
+        ("imageconvert/assets/webfonts", "imageconvert/assets/webfonts"),
     ]
 
     params = [
@@ -26,6 +34,12 @@ def build_exe():
         f"--name={exe_name}",
         f"--icon={icon_path}",
         "--hidden-import=tkinter",
+        "--hidden-import=gemini_pool",
+        "--hidden-import=webview",
+        "--hidden-import=clr",
+        "--hidden-import=clr_loader",
+        "--collect-all=webview",
+        "--paths=..",
         "--clean",
     ]
 

@@ -11,6 +11,10 @@ SESSION_HANDOFF.md
 .continuity/*
 /.venv # Already present
 
+# Tool builds
+build_tools/
+dist_tools/
+
 # Python
 __pycache__/
 *.pyc

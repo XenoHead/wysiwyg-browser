@@ -103,6 +103,7 @@
         </div>
     </div>
 
+    <script src="/heartbeat.js" defer></script>
     <script>
         // Apply theme on load
         const savedTheme = localStorage.getItem('wysiwyg_theme');
@@ -370,9 +371,9 @@
                     body: JSON.stringify(currentData)
                 });
                 if (resp.ok) {
-                    alert("Settings saved successfully!");
+                    showToast("Settings saved successfully!");
                     // Full reload so the editor shows the freshly saved data.
-                    location.reload();
+                    setTimeout(() => location.reload(), 1200);
                 } else {
                     alert("Save failed. Check server connection.");
                 }
@@ -386,7 +387,7 @@
             try {
                 const resp = await fetch('/upload-menus', {method: 'POST'});
                 const res = await resp.json();
-                alert(res.message);
+                showToast(res.message);
             } catch(e) { alert("Error: " + e); }
         }
 
@@ -401,7 +402,7 @@
 
         async function openConditions() {
             try {
-                const resp = await fetch('/api/conditions');
+                const resp = await fetch('/api/conditions?t=' + Date.now(), { cache: 'no-store' });
                 localConditions = await resp.json();
                 // Ensure mediaCondition is a flat array
                 if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
@@ -421,13 +422,17 @@
 
         async function refreshConditionsData() {
             try {
-                const resp = await fetch('/api/conditions');
+                const resp = await fetch('/api/conditions?t=' + Date.now(), { cache: 'no-store' });
                 localConditions = await resp.json();
                 if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
                 renderConditionsEditor();
             } catch (e) {
                 console.error('Could not refresh conditions:', e);
             }
+        }
+
+        function isBlankConditionItem(item) {
+            return !(item.title || '').trim() && !(item.text || '').trim();
         }
 
         function matchesConditionSearch(item, catLabel) {
@@ -446,18 +451,30 @@
 
             if (!conditionsSearchInput) {
                 const searchWrap = document.createElement('div');
-                searchWrap.style.cssText = 'margin-bottom: 20px;';
+                searchWrap.style.cssText = 'margin-bottom: 20px; display: flex; align-items: center; gap: 6px;';
                 conditionsSearchInput = document.createElement('input');
                 conditionsSearchInput.type = 'text';
                 conditionsSearchInput.id = 'conditionsSearchInput';
                 conditionsSearchInput.value = conditionsSearchTerm;
                 conditionsSearchInput.placeholder = '🔍 Search all conditions...';
-                conditionsSearchInput.style.cssText = 'width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--input-text);';
+                conditionsSearchInput.style.cssText = 'flex: 1; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--input-text);';
                 conditionsSearchInput.oninput = (e) => {
                     conditionsSearchTerm = e.target.value.trim();
                     renderConditionsEditor();
                 };
+                const clearSearchBtn = document.createElement('button');
+                clearSearchBtn.type = 'button';
+                clearSearchBtn.title = 'Clear search';
+                clearSearchBtn.innerText = '✕';
+                clearSearchBtn.style.cssText = 'flex-shrink: 0; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color, #6c757d); color: #fff; font-weight: bold; cursor: pointer;';
+                clearSearchBtn.onclick = () => {
+                    conditionsSearchTerm = '';
+                    conditionsSearchInput.value = '';
+                    renderConditionsEditor();
+                    conditionsSearchInput.focus();
+                };
                 searchWrap.appendChild(conditionsSearchInput);
+                searchWrap.appendChild(clearSearchBtn);
                 container.appendChild(searchWrap);
             }
 
@@ -515,7 +532,7 @@
             titleInput.value = item.title;
             titleInput.placeholder = 'Title (e.g. Tearing)';
             titleInput.style.cssText = 'flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; background: var(--input-bg); color: var(--input-text);';
-            titleInput.onchange = (e) => {
+            titleInput.oninput = (e) => {
                 item.title = e.target.value;
             };
 
@@ -524,7 +541,7 @@
             textInput.value = item.text;
             textInput.placeholder = 'Generated Text (e.g. cellophane tearing)';
             textInput.style.cssText = 'flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
-            textInput.onchange = (e) => {
+            textInput.oninput = (e) => {
                 item.text = e.target.value;
             };
 
@@ -566,7 +583,7 @@
             categories.forEach(cat => {
                 const itemEntries = (localConditions[cat.key] || [])
                     .map((item, index) => ({ item, index }))
-                    .filter(({ item }) => matchesConditionSearch(item, cat.label));
+                    .filter(({ item }) => matchesConditionSearch(item, cat.label) || isBlankConditionItem(item));
 
                 if (conditionsSearchTerm && itemEntries.length === 0) {
                     return;
@@ -620,7 +637,7 @@
                 const itemEntries = (localConditions.mediaCondition || [])
                     .filter(item => item.media_type === cat.key)
                     .map((item, index) => ({ item, index }))
-                    .filter(({ item }) => matchesConditionSearch(item, cat.label));
+                    .filter(({ item }) => matchesConditionSearch(item, cat.label) || isBlankConditionItem(item));
 
                 if (conditionsSearchTerm && itemEntries.length === 0) {
                     return;
@@ -666,6 +683,26 @@
             renderConditionsEditor();
         }
 
+        function showToast(message, duration = 2000) {
+            let toast = document.getElementById('editorToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'editorToast';
+                toast.style.cssText = 'position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background: #28a745; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; z-index: 5000; pointer-events: none;';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = message;
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            });
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(20px)';
+            }, duration);
+        }
+
         async function saveConditions() {
             ['cassette', 'cd', 'lp'].forEach(cat => {
                 if (Array.isArray(localConditions[cat])) {
@@ -685,8 +722,9 @@
                 const res = await resp.json();
                 if (res.status === 'success') {
                     conditionsDirty = true;
-                    alert("Conditions saved.");
-                    // Refresh the list in place - keep this window open.
+                    // Show the saved state right away, then confirm it from disk.
+                    renderConditionsEditor();
+                    showToast("Conditions saved.");
                     await refreshConditionsData();
                 } else {
                     alert("Error: " + res.message);
@@ -713,7 +751,7 @@
                 });
                 const res = await resp.json();
                 if (res.status === 'success') {
-                    alert("Success: " + res.message);
+                    showToast("Success: " + res.message);
                     closeConditionsModal();
                 } else {
                     alert("Error: " + res.message);

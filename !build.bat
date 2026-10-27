@@ -10,6 +10,10 @@ IF NOT EXIST "Conditions.json" (
     EXIT /B 1
 )
 
+rem Strip favorites from the source list before every build (dev editing can re-add them)
+.\.venv311\Scripts\python.exe -c "import json,io;p=r'Conditions.json';d=json.load(io.open(p,encoding='utf-8'));[i.pop('favorite',None) for k,v in d.items() if isinstance(v,list) for i in v if isinstance(i,dict)];json.dump(d,io.open(p,'w',encoding='utf-8'),indent=4,ensure_ascii=False)"
+IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
+
 ECHO.
 ECHO [1/2] Cleaning up previous build folders...
 IF EXIST "build" RMDIR /S /Q "build"
@@ -30,6 +34,18 @@ IF NOT EXIST "dist\WYSIWYG\WYSIWYG.exe" (
 )
 COPY /Y "Conditions.json" "dist\WYSIWYG\Conditions.json" >NUL
 IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
+
+rem Shipped conditions list must never contain favorites
+.\.venv311\Scripts\python.exe -c "import json,io;p=r'dist\WYSIWYG\Conditions.json';d=json.load(io.open(p,encoding='utf-8'));[i.pop('favorite',None) for k,v in d.items() if isinstance(v,list) for i in v if isinstance(i,dict)];json.dump(d,io.open(p,'w',encoding='utf-8'),indent=4,ensure_ascii=False)"
+IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
+
+rem Credentials for the portable (un-installed) build
+IF EXIST ".env" COPY /Y ".env" "dist\WYSIWYG\.env" >NUL
+IF EXIST "keys.txt" COPY /Y "keys.txt" "dist\WYSIWYG\keys.txt" >NUL
+
+rem Dev-only helpers must never ship
+IF EXIST "dist\WYSIWYG\set_password.py" DEL /Q "dist\WYSIWYG\set_password.py"
+IF EXIST "dist\WYSIWYG\hash_password.py" DEL /Q "dist\WYSIWYG\hash_password.py"
 
 rem IF EXIST ""%SERVER_SHARE%\WYSIWYG.exe" DEL /Q""
 rem copy /Y "dist\WYSIWYG.exe" "%SERVER_SHARE%\"

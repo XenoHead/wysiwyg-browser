@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.14.3.14"
+#define MyAppVersion "1.15.3.18"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 

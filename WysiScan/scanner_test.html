@@ -560,6 +560,45 @@
             margin: 0;
             min-width: 45px;
         }
+
+        /* ==== COMPACT TOP AREA (2026-10-27) ====
+           Shrinks scanner settings, the Image Convert panel, the Scan/Import
+           controls and the "Crop Mode" box so the previews/results below get
+           more vertical room. Undo = delete this whole block. */
+        body { padding: 8px; }
+        .container { padding: 8px 10px; }
+        .container > p { font-size: 11px; margin: 0 0 6px; }
+        .app-topbar { margin-bottom: 4px; }
+
+        .top-row-layout { gap: 8px !important; margin-bottom: 6px !important; }
+        .scanner-settings-left { gap: 4px !important; }
+        .scanner-settings-left label { font-size: 11px; }
+        #scannerSelect { padding: 3px 6px !important; font-size: 12px !important; }
+        #saveLocation, #groupName { padding: 3px 6px !important; font-size: 12px !important; margin-bottom: 0 !important; }
+        .scanner-settings-left .input-group button { padding: 3px 8px; font-size: 11px; }
+
+        .converter-panel-right { padding: 6px 8px !important; gap: 4px !important; }
+        .converter-panel-right > div:first-child { font-size: 12px !important; padding-bottom: 2px !important; }
+        .converter-panel-right label,
+        .converter-panel-right span,
+        .converter-panel-right strong { font-size: 11px !important; }
+        .converter-panel-right input[type="text"],
+        .converter-panel-right input[type="number"] { padding: 2px 5px !important; font-size: 11px !important; margin-bottom: 0 !important; }
+        .converter-panel-right input[type="radio"],
+        .converter-panel-right input[type="checkbox"] { width: 11px; height: 11px; margin: 0; }
+        .converter-panel-right button { padding: 2px 8px !important; font-size: 11px !important; }
+        #convWidth, #convHeight { width: 58px !important; }
+        #btnBatchConvert, #btnOpenGUI { padding: 4px !important; font-size: 12px !important; }
+
+        .controls { margin-bottom: 6px !important; padding: 6px 0 !important; gap: 5px !important; }
+        .controls button { padding: 3px 10px !important; font-size: 12px !important; margin-right: 0; }
+        .controls label { font-size: 12px !important; }
+        .controls > div { padding: 2px 8px !important; gap: 8px !important; font-size: 11px !important; }
+        .controls > div label { font-size: 11px !important; }
+        .controls input[type="number"] { padding: 2px 4px !important; font-size: 12px !important; margin-bottom: 0 !important; }
+        .controls input[type="checkbox"],
+        .controls input[type="radio"] { width: 12px; height: 12px; margin: 0; }
+        #cropPadding { width: 48px !important; }
     </style>
 </head>
 
@@ -567,9 +606,6 @@
     <div class="container">
         <div class="app-topbar">
             <button class="menu-btn" onclick="openWysiScanDrawer()">☰ Menu</button>
-            <button onclick="openCliModal()" title="Process Selected with AI"
-                style="background-color: #6f42c1; color: white; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🤖
-                Extract Text</button>
         </div>
 
         <!-- Hamburger drawer: Hot Keys / Theme / Exit -->
@@ -869,6 +905,10 @@
                             style="background-color: #dc3545; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🗑️</button>
                         <button onclick="openSaveFolder()" title="Open Folder"
                             style="background-color: #17a2b8; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">📂</button>
+                        <span style="border-left: 1px solid var(--border-color); height: 20px; margin: 0 4px;"></span>
+                        <button onclick="openCliModal()" title="Process Selected with AI"
+                            style="background-color: #6f42c1; color: white; padding: 4px 8px; font-size: 12px; min-width: auto; margin-right: 0;">🤖
+                            Extract Text</button>
                     </div>
                 </div>
                 <div id="scan-gallery" style="overflow-y: auto; flex: 1; margin-top: 0;">
@@ -1406,10 +1446,15 @@
                 flushMedia();
             }
             function sendHeartbeat() {
-            fetch('/api/heartbeat', { method: 'POST' }).catch(() => { });
-        }
-        sendHeartbeat();
-        setInterval(sendHeartbeat, 3000);
+                        fetch('/api/heartbeat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ hidden: document.hidden })
+                        }).catch(() => { });
+                    }
+                    sendHeartbeat();
+                    setInterval(sendHeartbeat, 3000);
+                    document.addEventListener('visibilitychange', sendHeartbeat);
         const PLACEHOLDER_SVG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg==";
         let scanCounter = 0;
         let lastCliResultText = '';
@@ -1782,7 +1827,7 @@
                     div.onclick = () => processImportedFile(path);
 
                     const img = document.createElement('img');
-                    img.src = `/view-image?path=${encodeURIComponent(path)}`;
+                    img.src = `/thumb?path=${encodeURIComponent(path)}&w=200`;
 
                     div.appendChild(img);
                     queue.appendChild(div);
@@ -1990,6 +2035,11 @@
             itemDiv.dataset.croppedPath = croppedPath || "";
 
             const croppedName = getFilename(croppedPath);
+            // Gallery tiles use a small cached thumbnail; the full image is kept
+            // in the dataset for the main preview when clicked.
+            const thumbSrc = croppedPath
+                ? `/thumb?path=${encodeURIComponent(croppedPath)}&w=220`
+                : croppedSrc;
 
             itemDiv.innerHTML = `
                 <div style="width: 100%;">
@@ -2001,7 +2051,7 @@
                         <button onclick="rotateImage(document.getElementById('${croppedImgId}'), 'left')" title="Rotate Left 90°">⟲</button>
                         <button onclick="rotateImage(document.getElementById('${croppedImgId}'), 'right')" title="Rotate Right 90°">⟳</button>
                     </div>
-                    <img id="${croppedImgId}" src="${croppedSrc}" alt="Cropped Scan ${itemNumber}" data-path="${croppedPath}" style="cursor: pointer;" title="Click to edit in main view">
+                    <img id="${croppedImgId}" src="${thumbSrc}" alt="Cropped Scan ${itemNumber}" data-path="${croppedPath}" style="cursor: pointer;" title="Click to edit in main view">
                 </div>
             `;
 
@@ -2343,6 +2393,26 @@
             }
         }
 
+        function withCacheBuster(url) {
+            if (!url) return url;
+            url = url.split('&v=')[0].split('&t=')[0];
+            return url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+        }
+
+        // Refresh every <img> that shows this file. Gallery tiles stay on the
+        // cheap /thumb URL (their server-side cache key includes the new mtime);
+        // everything else reloads the full image with a fresh cache buster.
+        function refreshImageElements(path, fullUrl) {
+            document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
+                const current = img.getAttribute('src') || '';
+                if (current.includes('/thumb?')) {
+                    img.src = current.split('&v=')[0] + '&v=' + Date.now();
+                } else if (fullUrl) {
+                    img.src = withCacheBuster(fullUrl);
+                }
+            });
+        }
+
         async function rotateImage(imgElement, direction) {
             const path = imgElement.dataset.path;
             if (!path) {
@@ -2378,9 +2448,7 @@
 
                     if (data.status === 'success') {
                         // Update all images on the page that share this path
-                        document.querySelectorAll(`img[data-path="${CSS.escape(p)}"]`).forEach(img => {
-                            img.src = data.new_url;
-                        });
+                        refreshImageElements(p, data.new_url);
                     } else {
                         console.error("Error rotating image: " + data.message);
                     }
@@ -2661,9 +2729,7 @@
 
                     if (data.status === 'success') {
                         success = true;
-                        document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
-                            img.src = data.new_url;
-                        });
+                        refreshImageElements(path, data.new_url);
                     } else if (data.message !== 'No undo history found for this file.') {
                         showToast(`Undo failed for ${path.split(/[\\/]/).pop()}: ${data.message}`, "error")
                     }
@@ -2698,9 +2764,7 @@
 
                     if (data.status === 'success') {
                         success = true;
-                        document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
-                            img.src = data.new_url;
-                        });
+                        refreshImageElements(path, data.new_url);
                     }
                 } catch (e) { console.error("Redo network error:", e); }
             }
@@ -3121,9 +3185,7 @@
                     const res = await resp.json();
                     if (res.status === 'success') {
                         // Refresh any image on the page using this path
-                        document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
-                            img.src = res.new_url;
-                        });
+                        refreshImageElements(path, res.new_url);
                     } else {
                         showToast(`Error rotating ${path.split(/[\\/]/).pop()}: ${res.message}`, "error")
                     }
@@ -3164,9 +3226,7 @@
                     });
                     const res = await resp.json();
                     if (res.status === 'success') {
-                        document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
-                            img.src = res.new_url;
-                        });
+                        refreshImageElements(path, res.new_url);
                     } else {
                         showToast(`Error aligning ${path.split(/[\\/]/).pop()}: ${res.message}`, "error")
                     }

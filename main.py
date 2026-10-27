@@ -30,6 +30,8 @@ import socket
 import shutil
 import re
 import json
+import hashlib
+import hmac
 import os
 import sys
 import signal
@@ -173,6 +175,14 @@ def get_local_path(filename):
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, filename)
 
+def backup_pre_overwrite(path, prefix):
+    if not os.path.exists(path):
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = os.path.join(os.path.dirname(path), f"{prefix}_pre_{stamp}.json")
+    shutil.copy2(path, backup)
+    return backup
+
 def init_cost_calc():
     path = get_local_path("cost_calc.json")
     if not os.path.exists(path):
@@ -227,41 +237,60 @@ CHANGELOG_FILE = "changelog.txt"
 HISTORY_FILE = "wysiwyg_history.json"
 WALMART_CONTEXT_CACHE_FILE = "walmart_context_cache.json"
 LAST_HEARTBEAT = time.time()
+PAGE_HIDDEN = False
+ACTIVE_TABS = {}  # tab_id -> {"last": epoch, "hidden": bool}
 
 def init_conditions():
     local_path = get_local_path("Conditions.json")
-    server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
-    
-    if not os.path.exists(local_path):
-        if os.path.exists(server_path):
-            try:
-                shutil.copy2(server_path, local_path)
-                print("Conditions.json initialized from server.")
-            except Exception as e:
-                print(f"Failed to copy Conditions.json from server: {e}")
-        else:
-            # Create default if server also unavailable
-            default = {"lp": [], "cd": [], "cassette": [], "media": [], "mediaCondition": []}
-            try:
-                with open(local_path, "w") as f:
-                    json.dump(default, f, indent=4)
-                print("Conditions.json initialized with defaults.")
-            except: pass
 
+    # Never probe the network at startup. Defaults are created locally; the
+    # editor's "Update from server" / Conditions screen pulls the live file.
+    if not os.path.exists(local_path):
+        default = {"lp": [], "cd": [], "cassette": [], "media": [], "mediaCondition": []}
+        try:
+            with open(local_path, "w") as f:
+                json.dump(default, f, indent=4)
+            print("Conditions.json initialized with defaults.")
+        except Exception:
+            pass
+
+DEFAULT_SERVER_ROOT = r"\\192.168.0.108\FYRShare\Tools\FYRTools"
 POSSIBLE_ROOTS = [
-    r"\\192.168.0.108\FYRShare\Tools\FYRTools",
+    DEFAULT_SERVER_ROOT,
     r"Z:\Tools\FYRTools"
 ]
-def resolve_server_paths():
-    for path in POSSIBLE_ROOTS:
-        if os.path.exists(path): 
-            return path, os.path.join(path, "WYSIWYG")
-    return r"\\192.168.0.108\FYRShare\Tools\FYRTools", r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG"
+_SERVER_PATHS_CACHE = None
 
-SERVER_ROOT, WYSIWYG_SERVER_DIR = resolve_server_paths()
-SERVER_VERSION_PATH = os.path.join(WYSIWYG_SERVER_DIR, "version.json")
-SERVER_EXE_PATH = os.path.join(WYSIWYG_SERVER_DIR, "WYSIWYG.exe")
-INSTALLER_PATH = os.path.join(WYSIWYG_SERVER_DIR, "INSTALL_WYSIWYG.exe")
+def get_server_conditions_path(lowercase=False):
+    _, server_dir = resolve_server_paths()
+    return os.path.join(server_dir, "conditions.json" if lowercase else "Conditions.json")
+
+def get_reports_path():
+    # reports.txt lives one level above FYRTools on the same share.
+    return os.path.join(os.path.dirname(DEFAULT_SERVER_ROOT), "reports.txt")
+
+def resolve_server_paths():
+    """Resolve the FYR share lazily; never touch the network at import/startup."""
+    global _SERVER_PATHS_CACHE
+    if _SERVER_PATHS_CACHE is not None:
+        return _SERVER_PATHS_CACHE
+    for path in POSSIBLE_ROOTS:
+        try:
+            if os.path.exists(path):
+                _SERVER_PATHS_CACHE = (path, os.path.join(path, "WYSIWYG"))
+                return _SERVER_PATHS_CACHE
+        except OSError:
+            continue
+    # Not cached: the share may come online later, so retry on the next call.
+    return (POSSIBLE_ROOTS[0], os.path.join(POSSIBLE_ROOTS[0], "WYSIWYG"))
+
+def get_server_version_path():
+    _, server_dir = resolve_server_paths()
+    return os.path.join(server_dir, "version.json")
+
+def get_installer_path():
+    _, server_dir = resolve_server_paths()
+    return os.path.join(server_dir, "INSTALL_WYSIWYG.exe")
 
 
 def load_json_data(filename):
@@ -295,31 +324,34 @@ async def get_version_endpoint():
             with open(path, "r") as f: local_version = json.load(f)
         except Exception as e:
             logging.error(f"Failed to load local version.json: {e}")
-        
-    # Check Server Version
-    update_available = False
-    server_ver_obj = None
-    try:
-        if os.path.exists(SERVER_VERSION_PATH):
-            with open(SERVER_VERSION_PATH, "r") as f:
-                server_version = json.load(f)
-                
-                l_ver = (int(local_version.get("major", 0)), int(local_version.get("minor", 0)), int(local_version.get("patch", 0)), int(local_version.get("build", 0)))
-                s_ver = (int(server_version.get("major", 0)), int(server_version.get("minor", 0)), int(server_version.get("patch", 0)), int(server_version.get("build", 0)))
-                
-                if s_ver > l_ver:
-                    update_available = True
-                server_ver_obj = server_version
-        else:
-            logging.info(f"Server version file not found, cannot check for updates. Path: {SERVER_VERSION_PATH}")
 
+    # Server/update check is deliberately NOT done here: it would touch the
+    # network during page load. The UI calls /api/server-version afterwards.
+    local_version["update_available"] = False
+    return local_version
+
+@app.get("/api/server-version")
+async def get_server_version_endpoint():
+    """Lazy update check. Called by the UI after load, never blocks startup."""
+    try:
+        server_path = get_server_version_path()
+        if not os.path.exists(server_path):
+            return {"update_available": False}
+        with open(server_path, "r") as f:
+            server_version = json.load(f)
+
+        local_path = resource_path("version.json")
+        local_version = {}
+        if os.path.exists(local_path):
+            with open(local_path, "r") as f:
+                local_version = json.load(f)
+
+        l_ver = tuple(int(local_version.get(k, 0)) for k in ("major", "minor", "patch", "build"))
+        s_ver = tuple(int(server_version.get(k, 0)) for k in ("major", "minor", "patch", "build"))
+        return {"update_available": s_ver > l_ver, "server_version": server_version}
     except Exception as e:
         logging.error(f"Error checking server version: {e}")
-        
-    local_version["update_available"] = update_available
-    if server_ver_obj:
-        local_version["server_version"] = server_ver_obj
-    return local_version
+        return {"update_available": False}
 
 @app.get("/api/changelog")
 async def get_changelog_endpoint():
@@ -382,7 +414,7 @@ async def add_report_endpoint(request: Request):
         if not text:
             return JSONResponse(status_code=400, content={"status": "error", "message": "No report text provided."})
         # Network share path (UNC). Use forward-slashes so Python's pathlib handles it on Windows.
-        report_path = "//192.168.0.108/FYRShare/Tools/reports.txt"
+        report_path = get_reports_path()
         report_dir = os.path.dirname(report_path)
         try:
             os.makedirs(report_dir, exist_ok=True)
@@ -485,7 +517,8 @@ async def view_requests_endpoint():
 @app.post("/run-installer")
 async def run_installer_endpoint():
     try:
-        if os.path.exists(INSTALLER_PATH):
+        installer_path = get_installer_path()
+        if os.path.exists(installer_path):
             import tempfile
             bat_path = os.path.join(tempfile.gettempdir(), "update_wysiwyg.bat")
             
@@ -498,12 +531,12 @@ async def run_installer_endpoint():
                         f'taskkill /F /IM WysiScan.exe\n'
                         f'taskkill /F /IM XDevHubX.exe\n'
                         f'timeout /t 1 /nobreak >nul\n'
-                        f'start "" "{INSTALLER_PATH}"\n'
+                        f'start "" "{installer_path}"\n'
                         f'exit\n')
             
             os.startfile(bat_path)
             return {"status": "success"}
-        return JSONResponse(status_code=404, content={"status": "error", "message": f"Installer not found at {INSTALLER_PATH}"})
+        return JSONResponse(status_code=404, content={"status": "error", "message": f"Installer not found at {installer_path}"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
@@ -543,7 +576,7 @@ async def run_uberpaste_endpoint():
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @app.post("/run-wysiscan")
-async def run_wysiscan_endpoint():
+def run_wysiscan_endpoint():
     try:
         # Standardized port for WysiScan (8010)
         target_port = 8010
@@ -551,9 +584,11 @@ async def run_wysiscan_endpoint():
             logging.info(f"WysiScan server is already running on port {target_port}.")
             return {"status": "success", "message": "WysiScan is already running."}
 
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+
         if getattr(sys, 'frozen', False):
             # Running as compiled EXE: Dispatch to self with flag
-            proc = subprocess.Popen([sys.executable, "--wysiscan", "--launched-by-main"])
+            proc = subprocess.Popen([sys.executable, "--wysiscan", "--launched-by-main"], creationflags=creationflags)
         else:
             # Running as script
             wysiscan_script_path = resource_path(os.path.join("WysiScan", "scanner_server.py"))
@@ -565,12 +600,29 @@ async def run_wysiscan_endpoint():
 
             # Use Popen to run the script in a new, non-blocking process
             # Pass an argument to prevent it from opening its own browser window
-            proc = subprocess.Popen([python_executable, wysiscan_script_path, "--launched-by-main"])
-            
+            proc = subprocess.Popen([python_executable, wysiscan_script_path, "--launched-by-main"],
+                                    creationflags=creationflags)
+
         CHILD_PROCESSES["wysiscan"] = proc
-        
-        time.sleep(2.0) # Give the server a moment to start
-        return {"status": "success", "message": "WysiScan launched."}
+
+        # Wait for the server to actually listen before the UI opens its window,
+        # otherwise the popup can hit "connection refused".
+        for _ in range(60):  # up to ~15s
+            if is_port_in_use(target_port):
+                return {"status": "success", "message": "WysiScan launched."}
+            if proc.poll() is not None:
+                CHILD_PROCESSES.pop("wysiscan", None)
+                logging.error(f"WysiScan exited during startup (code {proc.returncode}).")
+                return JSONResponse(status_code=500, content={
+                    "status": "error",
+                    "message": f"WysiScan exited during startup (code {proc.returncode}). See WysiScan\\wysiscan_debug.log."
+                })
+            time.sleep(0.25)
+
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "message": "WysiScan did not start listening on port 8010 in time."
+        })
     except Exception as e:
         logging.error(f"Failed to launch WysiScan: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
@@ -686,6 +738,7 @@ async def upload_menus():
             return JSONResponse(status_code=404, content={"status": "error", "message": "Local data.json not found."})
             
         if os.path.exists(server_path):
+            backup_pre_overwrite(server_path, "data")
             backup = server_path + ".old"
             if os.path.exists(backup):
                 os.remove(backup)
@@ -956,10 +1009,43 @@ async def save_css_endpoint(data: dict = Body(...)):
 @app.get("/allpass.json")
 async def get_password_file():
     file_path = get_local_path("allpass.json")
-    
+    no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
     if os.path.exists(file_path):
-        return FileResponse(file_path)
+        return FileResponse(file_path, headers=no_cache)
     return Response(status_code=404)
+
+
+def _password_matches(stored, supplied):
+    if not isinstance(stored, str) or not stored:
+        return False
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt, digest = stored.split("$")
+            calc = hashlib.pbkdf2_hmac(
+                "sha256", supplied.encode("utf-8"), bytes.fromhex(salt), int(iterations)
+            ).hex()
+            return hmac.compare_digest(calc, digest)
+        except Exception:
+            return False
+    return hmac.compare_digest(stored, supplied)
+
+
+@app.post("/api/verify-password")
+async def verify_password(data: dict = Body(...)):
+    file_path = get_local_path("allpass.json")
+    supplied = data.get("password", "") or ""
+    if not os.path.exists(file_path):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Admin file not present"})
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            creds = json.load(f)
+    except Exception:
+        return JSONResponse(status_code=500, content={"status": "error", "message": "Admin file unreadable"})
+    if _password_matches(creds.get("editor"), supplied):
+        return {"status": "success", "role": "editor"}
+    if _password_matches(creds.get("admin"), supplied):
+        return {"status": "success", "role": "admin"}
+    return {"status": "error", "role": None}
 
 @app.get("/api/variable-conditions")
 async def get_variable_conditions():
@@ -1016,22 +1102,23 @@ async def get_cost_calc():
 
 @app.get("/api/conditions")
 async def get_conditions(master: bool = False):
+    no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
     if master:
-        server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
+        server_path = get_server_conditions_path()
         if os.path.exists(server_path):
-            return FileResponse(server_path)
-        return {"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}
+            return FileResponse(server_path, headers=no_cache)
+        return JSONResponse(content={"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}, headers=no_cache)
     
     file_path = get_local_path("Conditions.json")
     if os.path.exists(file_path):
-        return FileResponse(file_path)
+        return FileResponse(file_path, headers=no_cache)
     # Return empty default if file missing
-    return {"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}
+    return JSONResponse(content={"cassette": [], "cd": [], "lp": [], "media": [], "mediaCondition": []}, headers=no_cache)
 
 @app.post("/api/save-conditions")
 async def save_conditions(data: dict = Body(...), master: bool = False):
     if master:
-        server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
+        server_path = get_server_conditions_path()
         try:
             with open(server_path, "w") as f:
                 json.dump(data, f, indent=4)
@@ -1050,8 +1137,9 @@ async def save_conditions(data: dict = Body(...), master: bool = False):
 @app.post("/api/admin/sync-conditions")
 async def sync_conditions(data: dict = Body(...)):
     # User requested this admin edit screen should NOT edit local, only server.
-    server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
+    server_path = get_server_conditions_path()
     try:
+        backup_pre_overwrite(server_path, "conditions")
         with open(server_path, "w") as f:
             json.dump(data, f, indent=4)
         return {"status": "success", "message": "Master file updated on server."}
@@ -1061,10 +1149,10 @@ async def sync_conditions(data: dict = Body(...)):
 @app.post("/api/merge-conditions")
 async def merge_conditions(merge: bool = False):
     local_path = get_local_path("Conditions.json")
-    server_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\Conditions.json"
+    server_path = get_server_conditions_path()
     
     if not os.path.exists(server_path):
-        alt_path = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG\conditions.json"
+        alt_path = get_server_conditions_path(lowercase=True)
         if os.path.exists(alt_path):
             server_path = alt_path
         else:
@@ -1131,11 +1219,52 @@ async def merge_conditions(merge: bool = False):
         return {"status": "error", "message": f"Merge failed: {e}"}
 
 
-@app.get("/heartbeat")
-async def heartbeat():
-    global LAST_HEARTBEAT
-    LAST_HEARTBEAT = time.time()
+@app.api_route("/heartbeat", methods=["GET", "POST"])
+async def heartbeat(request: Request):
+    global LAST_HEARTBEAT, PAGE_HIDDEN
+    now = time.time()
+    LAST_HEARTBEAT = now
+    try:
+        data = await request.json()
+        if isinstance(data, dict):
+            tab_id = data.get("tab_id")
+            if tab_id:
+                if data.get("closed"):
+                    ACTIVE_TABS.pop(tab_id, None)
+                else:
+                    ACTIVE_TABS[tab_id] = {"last": now, "hidden": bool(data.get("hidden"))}
+            PAGE_HIDDEN = bool(data.get("hidden"))
+    except Exception:
+        PAGE_HIDDEN = False
     return {"status": "ok"}
+
+
+HEARTBEAT_JS = """
+(function () {
+    var TAB_ID = sessionStorage.getItem('wysiwyg_tab_id');
+    if (!TAB_ID) {
+        TAB_ID = Date.now().toString(36) + Math.random().toString(36).slice(2);
+        sessionStorage.setItem('wysiwyg_tab_id', TAB_ID);
+    }
+    function send(extra, keepalive) {
+        fetch('/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: !!keepalive,
+            body: JSON.stringify(Object.assign({ tab_id: TAB_ID, hidden: document.hidden }, extra || {}))
+        }).catch(function () { });
+    }
+    send();
+    setInterval(send, 3000);
+    document.addEventListener('visibilitychange', function () { send(); });
+    window.addEventListener('pagehide', function () { send({ closed: true }, true); });
+})();
+"""
+
+@app.get("/heartbeat.js")
+async def heartbeat_js():
+    return Response(content=HEARTBEAT_JS, media_type="application/javascript",
+                    headers={"Cache-Control": "no-store"})
 
 @app.exception_handler(Exception)
 async def validation_exception_handler(request: Request, exc: Exception):
@@ -2421,9 +2550,16 @@ def is_port_in_use(port):
         # Returns 0 if connection successful (port in use)
         return s.connect_ex(('127.0.0.1', port)) == 0
 
+_SERVICE_STATUS_CACHE = {"ts": 0.0, "data": None}
+
 @app.get("/api/service-status")
 async def get_service_status():
-    """Checks if external tools are currently running."""
+    """Checks if external tools are currently running (cached ~20s)."""
+    global _SERVICE_STATUS_CACHE
+    now = time.time()
+    if _SERVICE_STATUS_CACHE["data"] is not None and now - _SERVICE_STATUS_CACHE["ts"] < 20:
+        return _SERVICE_STATUS_CACHE["data"]
+
     uberpaste = False
     wysiscan = False
     wysichat = False
@@ -2453,8 +2589,12 @@ async def get_service_status():
                 pass
     except Exception:
         pass
-            
-    return {"wysiscan": wysiscan, "uberpaste": uberpaste, "wysichat": wysichat}
+
+    _SERVICE_STATUS_CACHE = {
+        "ts": time.time(),
+        "data": {"wysiscan": wysiscan, "uberpaste": uberpaste, "wysichat": wysichat},
+    }
+    return _SERVICE_STATUS_CACHE["data"]
 
 # --- LOGGING CONFIGURATION ---
 logging.basicConfig(
@@ -2470,6 +2610,20 @@ if __name__ == "__main__":
     import sys # Already imported
     
     logging.info(f"Executable entry point called with sys.argv: {sys.argv}")
+
+    # --- Dialog runner used by the embedded scanner's Browse buttons ---
+    if "--run-script" in sys.argv:
+        import runpy
+        script_path = sys.argv[sys.argv.index("--run-script") + 1]
+        result_path = sys.argv[sys.argv.index("--run-result") + 1]
+        with open(result_path, "w", encoding="utf-8") as fh:
+            previous_stdout = sys.stdout
+            sys.stdout = fh
+            try:
+                runpy.run_path(script_path, run_name="__main__")
+            finally:
+                sys.stdout = previous_stdout
+        sys.exit(0)
 
     # --- DISPATCHER FOR SUB-PROCESSES (FROZEN MODE) ---
     if getattr(sys, 'frozen', False):
@@ -2902,6 +3056,31 @@ if __name__ == "__main__":
             webbrowser.open(url)
         except Exception as e:
             logging.warning(f"Could not auto-open browser ({e}). Open {url} manually.")
+
+        # Exit automatically once every browser tab has closed. Tabs register on
+        # load and send a keepalive "closed" beacon on pagehide, so a reload
+        # re-registers within the grace period and does not kill the server.
+        def monitor_heartbeat():
+            time.sleep(8)  # allow the browser to load and send the first heartbeat
+            while True:
+                time.sleep(2)
+                now = time.time()
+                for tid, info in list(ACTIVE_TABS.items()):
+                    limit = 1800 if info.get("hidden") else 120
+                    if now - info.get("last", 0) > limit:
+                        ACTIVE_TABS.pop(tid, None)
+                if ACTIVE_TABS:
+                    continue
+                if now - LAST_HEARTBEAT > 12:
+                    logging.info("All browser tabs closed. Shutting down WYSIWYG.")
+                    try:
+                        os.kill(os.getpid(), signal.SIGTERM)
+                    except Exception:
+                        os._exit(0)
+                    break
+
+        threading.Thread(target=monitor_heartbeat, daemon=True).start()
+
         # Keep the process alive so the server thread keeps serving.
         while True:
             try:

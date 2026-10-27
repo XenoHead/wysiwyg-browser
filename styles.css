@@ -245,7 +245,8 @@ select[multiple] { min-height: 60px; }
 .modal-content-narrow { width: 400px; text-align: left; }
 .modal-actions { text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
 /* Tiny icon-only button beside a form label that opens a list-picker modal */
-.list-picker-open-btn {
+.list-picker-open-btn,
+.condition-open-btn {
     padding: 1px 4px;
     font-size: 10px;
     height: 16px;

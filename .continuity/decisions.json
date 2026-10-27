@@ -3459,5 +3459,1526 @@
       "source": "cli",
       "timestamp": "2026-10-26T22:44:22.998Z"
     }
+  },
+  {
+    "id": "222a3c57-e928-4662-805a-59a459137547",
+    "question": "What notification style should UI actions use?",
+    "answer": "Toast notifications for all success/informational messages (auto-dismiss ~2s). alert() only for OK/Cancel or confirm decisions. Reference: showToast() in editor.html.",
+    "timestamp": "2026-10-27T14:57:41.747Z",
+    "tags": [
+      "ui notifications conventions"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T14:57:41.748Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T14:57:41.744Z"
+    }
+  },
+  {
+    "id": "5a494036-d4bb-497a-8487-c991f3bee17e",
+    "question": "How was the WysiScan top area compacted?",
+    "answer": "Added a single scoped CSS override block (COMPACT TOP AREA 2026-10-27) at the end of scanner_test.html style section; no markup/JS changes. Full before/after table and undo steps in WysiScan/UI-COMPACTION-NOTES.md. Undo = delete that CSS block.",
+    "timestamp": "2026-10-27T15:48:12.499Z",
+    "tags": [
+      "how",
+      "ui wysiscan scanner css"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T15:48:12.500Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T15:48:12.495Z"
+    }
+  },
+  {
+    "id": "ff656929-05c4-4b5c-b0a1-dcd9c0fc875a",
+    "question": "Why did the WysiScan scanner window keep closing by itself?",
+    "answer": "Heartbeat watchdog killed the server after 60s without a heartbeat; Chrome throttles timers in background tabs. Fix: heartbeat now reports document.hidden and the server uses 120s (visible) / 1800s (hidden) limits. Extract Text 500s were caused by gemini_pool.py not being bundled into frozen scanner builds; added gemini_pool hidden-import + paths=.. to both scanner build scripts and specs.",
+    "timestamp": "2026-10-27T15:57:10.537Z",
+    "tags": [
+      "why",
+      "wysiscan scanner heartbeat build bugfix"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T15:57:10.538Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T15:57:10.534Z"
+    }
+  },
+  {
+    "id": "8daf0e3c-5ef6-4e4f-b175-82e73615a435",
+    "question": "How to keep the WysiScan server responsive?",
+    "answer": "Converted all blocking (WIA/PIL/OCR/subprocess/file copy) endpoints from async def to plain def so FastAPI runs them in its threadpool; async event loop no longer stalls and heartbeats/UI stay responsive. ocr_and_lookup also switched from httpx.AsyncClient to sync httpx.get. Import dialog now starts at This PC and remembers last_import_dir instead of probing network paths.",
+    "timestamp": "2026-10-27T16:06:27.693Z",
+    "tags": [
+      "how",
+      "wysiscan concurrency performance"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:06:27.694Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "async"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:06:27.690Z"
+    }
+  },
+  {
+    "id": "40996d60-296a-45f8-9138-f45df519eb55",
+    "question": "How does WYSIWYG exit when the browser closes, and how is the FYR share resolved?",
+    "answer": "Added shared /heartbeat.js served by main.py (loaded by index/editor/admin/search/walmart/style_guide); /heartbeat accepts POST with {hidden}. A visibility-aware watchdog thread (started only in browser mode) shuts the app down after 90s visible / 30min hidden without a heartbeat. Server share paths are now lazy: resolve_server_paths caches successes only, no network probe at import; /api/version returns local data and the UI calls /api/server-version after load; init_conditions no longer copies from the network at startup.",
+    "timestamp": "2026-10-27T16:11:55.515Z",
+    "tags": [
+      "api",
+      "heartbeat startup network main-app",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:11:55.516Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api",
+        "cache"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:11:55.511Z"
+    }
+  },
+  {
+    "id": "1fac7121-fe16-4b6f-bdba-04a28df463b8",
+    "question": "How are scanner performance improvements implemented?",
+    "answer": "Added /thumb endpoint (PIL, EXIF-corrected, disk-cached in temp/thumbs keyed by path+mtime, 24h cleanup) used by gallery tiles and import queue; scanner index HTML cached in memory; /api/service-status cached 20s and skipped while document.hidden (refreshes on visibilitychange).",
+    "timestamp": "2026-10-27T16:20:21.338Z",
+    "tags": [
+      "api",
+      "how",
+      "performance",
+      "wysiscan thumbnails caching performance"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:20:21.338Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api",
+        "performance",
+        "cache",
+        "queue"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:20:21.334Z"
+    }
+  },
+  {
+    "id": "6d0bb914-8189-4628-8f0d-e6567b273db2",
+    "question": "How is the WysiScan API secured?",
+    "answer": "CORS restricted to local app origins (127.0.0.1/localhost:8008 and :8010), plus middleware blocking any request with a foreign Origin header. /view-image and /open-file only serve image extensions under temp/scans/configured save or import dirs; /thumb accepts image files only. Detailed change log maintained in docs/WORK_LOG.md.",
+    "timestamp": "2026-10-27T16:26:04.721Z",
+    "tags": [
+      "api",
+      "cors",
+      "how",
+      "wysiscan security cors"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:26:04.722Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "rest"
+      ],
+      "patterns": [],
+      "concepts": [
+        "api",
+        "cors"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:26:04.718Z"
+    }
+  },
+  {
+    "id": "f4e78e64-891b-43c2-b71d-58d62010c0f0",
+    "question": "Why did scanner image rotations appear to be skipped?",
+    "answer": "Server cache-buster used int(time.time()) (whole seconds), so two rotations within one second produced identical /view-image URLs and the browser reused the cached image. Switched all new_url busters to time.time_ns(); client now uses refreshImageElements() so gallery tiles refresh via /thumb and previews reload with a unique v= param.",
+    "timestamp": "2026-10-27T16:37:20.319Z",
+    "tags": [
+      "cache",
+      "why",
+      "wysiscan images cache bugfix"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:37:20.320Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "cache"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:37:20.315Z"
+    }
+  },
+  {
+    "id": "a479829e-d667-4701-b3f4-65fa59724a1e",
+    "question": "How are FYR share paths defined?",
+    "answer": "main.py now has a single DEFAULT_SERVER_ROOT constant; get_server_conditions_path() and get_reports_path() derive all UNC paths. No hardcoded \\\\192.168.0.108 strings remain outside that constant (audit item 11).",
+    "timestamp": "2026-10-27T16:41:40.863Z",
+    "tags": [
+      "audit",
+      "how",
+      "main-app refactor paths"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:41:40.864Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "audit"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:41:40.859Z"
+    }
+  },
+  {
+    "id": "fa48ef76-e7cc-493b-a07d-dd8fba00371c",
+    "question": "How is the standalone password manager built?",
+    "answer": "set_password.py finds allpass.json beside the exe, then CWD, C:\\FYRTOOLS\\WYSIWYG, then the dev repo. Built onefile console exe with .venv311 PyInstaller into dist_tools/set_password.exe (build_tools/dist_tools git-ignored).",
+    "timestamp": "2026-10-27T16:47:59.433Z",
+    "tags": [
+      "how",
+      "tooling passwords build"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T16:47:59.434Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "git"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T16:47:59.430Z"
+    }
+  },
+  {
+    "id": "612d6eab-a69d-49da-934f-e999546ae941",
+    "question": "How is the standalone WysiScan exe built and how do its Browse dialogs work?",
+    "answer": "Built onefile windowed WysiScan.exe via WysiScan/build_scanner.py with .venv311: bundles scanner_test.html/icons/config, hidden-import gemini_pool and paths=..; imageconvert is not bundled and its endpoints return a clear error. Frozen Browse dialogs relaunch the exe with --run-script/--run-result (runpy + stdout redirect) because no python.exe exists in the bundle.",
+    "timestamp": "2026-10-27T17:37:35.721Z",
+    "tags": [
+      "how",
+      "python",
+      "wysiscan build dialogs standalone"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T17:37:35.722Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "python"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T17:37:35.717Z"
+    }
+  },
+  {
+    "id": "d4b8e18c-8277-4410-bd4e-f0b6035db65d",
+    "question": "How do the All Types condition pickers behave after unification?",
+    "answer": "Both Media (All Types) and Sleeve (All Types) share one footer: a view dropdown (media/sleeve), Media Type selector, and Unfavorite All. Switching the view reopens the other all-types picker preserving search; Unfavorite All is mode-aware (mediaCondition vs customOptionsData[type]); active media-type column header is highlighted blue in both views.",
+    "timestamp": "2026-10-27T17:44:37.911Z",
+    "tags": [
+      "conditions ui main-app",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T17:44:37.912Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T17:44:37.907Z"
+    }
+  },
+  {
+    "id": "8ad86b7a-3409-4597-a339-7b74cdb805cb",
+    "question": "How is the sleeve description prefixed in generated descriptions?",
+    "answer": "In processFormatData (app.js and WalmartSheet/walmartapp.js) a non-empty sleeveDesc is normalized to start with lowercase 'with ': an existing leading with/With is stripped first, then 'with ' is prepended. 'Without...' is untouched because of the word boundary. Stored input value is unchanged.",
+    "timestamp": "2026-10-27T17:56:34.301Z",
+    "tags": [
+      "descriptions sleeve formatting",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T17:56:34.302Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T17:56:34.298Z"
+    }
+  },
+  {
+    "id": "7d275627-57b8-42ad-8838-16f43669e42d",
+    "question": "When does the CD sleeve label become Artwork instead of Artwork / Insert?",
+    "answer": "In app.js processFormatData, /insert/i is tested against the sleeve description AND every selected sleeve condition (title+text from customOptionsSelected); if found, sleeveTypeLabel is 'Artwork'. Artwork itself is never dropped. Walmart sheet has no sleeve multiselects, so its description-only check stays.",
+    "timestamp": "2026-10-27T18:13:14.291Z",
+    "tags": [
+      "cd",
+      "descriptions sleeve artwork conditions"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:13:14.292Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:13:14.288Z"
+    }
+  },
+  {
+    "id": "dfcf8702-bfcb-493e-8bfc-77917887eb7a",
+    "question": "Which areas must never be edited without explicit permission?",
+    "answer": "Walmart Sheet (WalmartSheet/, walmart.html, walmartapp.js, walmart.py, generate_sheet.py) and Amazon Adds (Adds/, amazon_add_page.html). Main-app logic must not be mirrored into them automatically; only edit when the user explicitly asks in the current request. Recorded in docs/CONVENTIONS.md.",
+    "timestamp": "2026-10-27T18:14:12.650Z",
+    "tags": [
+      "rules protected walmart amazon"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:14:12.650Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:14:12.646Z"
+    }
+  },
+  {
+    "id": "e700ee8e-d2f1-47f1-9e0c-abffc4a85653",
+    "question": "When does the cassette sleeve label become Artwork instead of JCard?",
+    "answer": "In app.js processFormatData, sleeveTextForRules (sleeve description + selected sleeve conditions) is tested with /j[\\s-]?card/i; if it matches, a cassette sleeve label becomes 'Artwork' instead of 'JCard' so Jcard is not repeated. CD insert rule shares the same helper text.",
+    "timestamp": "2026-10-27T18:26:24.824Z",
+    "tags": [
+      "cd",
+      "descriptions cassette artwork"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:26:24.824Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:26:24.820Z"
+    }
+  },
+  {
+    "id": "da1a4868-e402-4b6b-af6a-8da448ca1f8d",
+    "question": "How are Corner/Edge creasing conditions grouped?",
+    "answer": "groupFlaws now treats Edge/Edges like Corner (prefix + space separator + flaw word) and the suffix merge emits '<Corner/Edge> <flaw>' instead of assuming a single 'Corner' prefix. Corner creasing + Edge creasing -> 'Corner/Edge creasing'; same-prefix flaws still merge as 'Corner creasing/dent'.",
+    "timestamp": "2026-10-27T18:39:17.964Z",
+    "tags": [
+      "descriptions grouping conditions",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:39:17.964Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:39:17.961Z"
+    }
+  },
+  {
+    "id": "fa5c4034-c9ae-482a-9133-0e4128b88deb",
+    "question": "How are repeated adjective modifiers in flaws grouped?",
+    "answer": "groupFlaws now runs groupAdjectives() first: flaws sharing a modifier (light/moderate/heavy/minor/major/slight/severe/significant/faint/deep/small/large/tiny) and a compatible trailing context merge into 'light play/wear to Booklet'. Contexts must match when both present; different adjectives never merge.",
+    "timestamp": "2026-10-27T18:44:42.299Z",
+    "tags": [
+      "descriptions grouping flaws",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:44:42.299Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:44:42.295Z"
+    }
+  },
+  {
+    "id": "61753f70-a5ae-4f6e-907c-fccd8b6fa485",
+    "question": "How are multiple location flaws grouped?",
+    "answer": "splitFlaw uses LOCATION_CANON (corner/corners->Corner, edge(s)->Edge, spine(s)->Spine) instead of hardcoded Corner/Edge; suffix grouping joins any number of unique prefixes: Corner creasing + Edge creasing + Spine creasing -> 'Corner/Edge/Spine creasing'. Add new locations by extending the map.",
+    "timestamp": "2026-10-27T18:51:39.696Z",
+    "tags": [
+      "descriptions grouping flaws",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T18:51:39.697Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T18:51:39.693Z"
+    }
+  },
+  {
+    "id": "1b38009d-da6c-4293-842f-8193615c0233",
+    "question": "How do description text boxes participate in flaw grouping?",
+    "answer": "mediaDesc and sleeveDesc are normalized (leading 'with ' stripped, noun after to/through/on capitalized) and merged into their own side's entry list before groupFlaws: sleeveDesc groups only with sleeve multiselects, mediaDesc only with media multiselects. The sleeve merged phrase is re-prefixed with 'with ' in the sleeve-description slot.",
+    "timestamp": "2026-10-27T19:07:17.768Z",
+    "tags": [
+      "descriptions grouping media sleeve",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T19:07:17.769Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T19:07:17.765Z"
+    }
+  },
+  {
+    "id": "2f73d825-a665-4754-a842-d2478a2fbc07",
+    "question": "How are 3+ flaw items separated?",
+    "answer": "joinFlawItems: 1 item bare, 2 items 'A & B', 3+ items 'A / B & C' (ampersand only before the final item). Applied to sleeve and media combined phrases; description text stays first. Confirmed with user before implementing.",
+    "timestamp": "2026-10-27T19:29:16.066Z",
+    "tags": [
+      "descriptions separators grouping",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T19:29:16.067Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T19:29:16.063Z"
+    }
+  },
+  {
+    "id": "5e9c2326-a977-473a-ae60-db162e04e13b",
+    "question": "When is the noun after to/through/on NOT capitalized in descriptions?",
+    "answer": "capitalizeFlawContext leaves 'to <word> of ...' untouched because the head word isn't the noun (e.g. 'to top of box'). Plain 'to back' still becomes 'to Back'; a/an/the skipped.",
+    "timestamp": "2026-10-27T19:35:28.867Z",
+    "tags": [
+      "descriptions capitalization"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T19:35:28.868Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T19:35:28.864Z"
+    }
+  },
+  {
+    "id": "5eb86705-caad-4afa-8183-ce5d0eda0329",
+    "question": "What does the 2026-10-27 production build contain?",
+    "answer": "Built dist/WYSIWYG/WYSIWYG.exe with !build.bat (.venv311, PyInstaller 6.22.2) after all of today's main-app changes; Conditions.json copied, set_password/hash_password excluded by the build guard. Standalone WysiScan.exe built earlier (dist/WysiScan).",
+    "timestamp": "2026-10-27T19:45:40.778Z",
+    "tags": [
+      "build release"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T19:45:40.778Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T19:45:40.774Z"
+    }
+  },
+  {
+    "id": "812116a4-7f64-404b-b707-94bf511d022f",
+    "question": "When does an LP sleeve label become Artwork?",
+    "answer": "Same rule as CD insert and cassette Jcard: if /\\\\bsleeves?\\\\b/i matches the sleeve description or any selected sleeve condition, the Vinyl sleeve label is 'Artwork' instead of 'Sleeve' (sleeveless does not match).",
+    "timestamp": "2026-10-27T19:47:48.606Z",
+    "tags": [
+      "cd",
+      "descriptions sleeve vinyl artwork"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T19:47:48.606Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T19:47:48.602Z"
+    }
+  },
+  {
+    "id": "b073b8d0-d83e-4509-bbbf-28d9dad67237",
+    "question": "How are favorites kept out of shipped builds?",
+    "answer": "Repo conditions.json has favorite keys removed; !build.bat sanitises dist/WYSIWYG/Conditions.json after copying (drops every favorite key via .venv311 Python, fails the build on error). Existing dist file re-sanitised, verified 0 occurrences.",
+    "timestamp": "2026-10-27T20:08:50.542Z",
+    "tags": [
+      "build conditions favorites",
+      "how",
+      "python"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T20:08:50.543Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "python"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T20:08:50.537Z"
+    }
+  },
+  {
+    "id": "cc1236e0-e19b-4d01-a0f4-4d3442059175",
+    "question": "What did the installer rebuild include and what packaging issue exists?",
+    "answer": "Rebuilt WYSIWYG.exe (dist/WYSIWYG) and INSTALL_WYSIWYG.exe (dist + dist/WYSIWYG). Installer copies a fixed whitelist from its own folder, but onedir assets live in _internal, so installing from dist/WYSIWYG is incomplete; needs _internal/subdir handling before shipping.",
+    "timestamp": "2026-10-27T20:15:51.710Z",
+    "tags": [
+      "build installer packaging"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T20:15:51.711Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T20:15:51.707Z"
+    }
+  },
+  {
+    "id": "0d230dd9-3709-44a6-87a9-5c7ab8e8969a",
+    "question": "Which installer is actually used for WYSIWYG releases?",
+    "answer": "Inno Setup wysiWyg-installer.iss (output dist_install/INSTALL_WYSIWYG.exe, built with ISCC.exe), not the legacy install.py/PyInstaller spec. Installer sources dist/WYSIWYG (incl. _internal) + loose root files; stray INSTALL_WYSIWYG.exe copies removed from dist so they are not nested in the install.",
+    "timestamp": "2026-10-27T20:20:54.558Z",
+    "tags": [
+      "build installer inno"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T20:20:54.559Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T20:20:54.554Z"
+    }
+  },
+  {
+    "id": "77502324-7292-443d-bd09-592d5309a526",
+    "question": "What version is the project on?",
+    "answer": "version.json and wysiWyg-installer.iss set to 1.15.3.18 (was 1.14.3.14). Existing build artifacts still report 1.14.3.14 until rebuilt; changelog has no 1.15.3.18 entry yet.",
+    "timestamp": "2026-10-27T20:42:20.856Z",
+    "tags": [
+      "version build"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T20:42:20.856Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T20:42:20.852Z"
+    }
+  },
+  {
+    "id": "23b68e78-957d-4e39-ad1c-d35d438eb488",
+    "question": "Why did scanner Browse reopen the app and Batch Convert fail in the packaged build?",
+    "answer": "The embedded scanner passes --run-script to WYSIWYG.exe for Browse dialogs; main.py had no handler so it booted a second app. Added a runpy dialog-runner branch to main.py. imageconvert_available also missed the <bundle>/WysiScan/imageconvert path used by the main build. Both fixed and rebuilt (1.15.3.18 app + Inno installer).",
+    "timestamp": "2026-10-27T20:56:13.655Z",
+    "tags": [
+      "why",
+      "wysiscan packaging bugfix"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T20:56:13.655Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T20:56:13.651Z"
+    }
+  },
+  {
+    "id": "4a837660-c05d-4671-9f1f-5b335d45ccf4",
+    "question": "Does WYSIWYG ever use the standalone WysiScan.exe, and is Image Convert in the standalone now?",
+    "answer": "No: dev runs scanner_server.py via Python, frozen re-launches WYSIWYG.exe --wysiscan and imports the bundled module; Image Convert runs as WYSIWYG.exe --imageconvert; installer ships no WysiScan.exe. The standalone WysiScan.exe now bundles Image Convert (runtime files only, excluding .venvic) with -c and --imageconvert dispatch; verified /batch-convert success.",
+    "timestamp": "2026-10-27T21:03:37.934Z",
+    "tags": [
+      "python",
+      "wysiscan standalone imageconvert architecture"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T21:03:37.935Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "python"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T21:03:37.931Z"
+    }
+  },
+  {
+    "id": "afdd0f85-1f19-40ed-9776-0be84bbc7ed5",
+    "question": "Why did clicking WysiScan open nothing in the packaged app but work in raw code?",
+    "answer": "runWysiScan awaited /run-wysiscan before window.open; the endpoint now waits for the slow packaged scanner to boot, so Chrome expired the user gesture and blocked the popup. Fix: open the tab synchronously on click with a placeholder, then navigate to 127.0.0.1:8010 when the server reports success. Rebuilt app + installer.",
+    "timestamp": "2026-10-27T21:13:47.078Z",
+    "tags": [
+      "why",
+      "wysiscan popup packaging bugfix"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T21:13:47.079Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T21:13:47.074Z"
+    }
+  },
+  {
+    "id": "46af9015-6f1c-4c1b-b5f9-ab5c7798f983",
+    "question": "How are flaws sharing a leading object grouped?",
+    "answer": "groupFlaws runs groupLeadingObjects after adjective grouping: simple two-word flaws with the same first word merge the second word, e.g. 'sticker mark' + 'sticker residue' -> 'sticker mark/residue' (hyphen allowed). Only plain pairs participate; context/location/adjective grouping unaffected.",
+    "timestamp": "2026-10-27T22:06:04.186Z",
+    "tags": [
+      "descriptions grouping flaws",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:06:04.187Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:06:04.183Z"
+    }
+  },
+  {
+    "id": "2c2618a1-cde1-4f3a-8c95-57dc7914003c",
+    "question": "How does the Edit Conditions modal search work?",
+    "answer": "Added #customOptionsSearch + clear button to the Edit Conditions modal; filters title/text for the selected category and media type. resetCustomOptionsSearchAndFocus clears the term, renders and focuses the input whenever the modal opens (Edit button and Edit List context menu).",
+    "timestamp": "2026-10-27T22:12:19.658Z",
+    "tags": [
+      "conditions ui search",
+      "how"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:12:19.658Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:12:19.654Z"
+    }
+  },
+  {
+    "id": "1dc79494-e833-470f-8ece-276f6b3402d4",
+    "question": "What is the close button called in the Edit Conditions modal?",
+    "answer": "The former Cancel button (cancelEditCustomOptionBtn) now reads 'Close'. Its behaviour is unchanged: cancels an in-progress edit first, otherwise closes the modal.",
+    "timestamp": "2026-10-27T22:12:59.775Z",
+    "tags": [
+      "ui conditions"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:12:59.775Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:12:59.771Z"
+    }
+  },
+  {
+    "id": "c3dbaf5d-1b73-4c35-aac3-2d0099eace84",
+    "question": "Why did clicking a filtered condition row edit the wrong item?",
+    "answer": "The Edit Conditions list passed filtered display indexes into edit/delete/favourite, which re-filtered by media type, so search shifted the target by one (acted on the row below). Actions now pass the option object and resolve by identity: indexOf for edit/delete, direct mutation for favourite.",
+    "timestamp": "2026-10-27T22:16:20.727Z",
+    "tags": [
+      "conditions ui bugfix",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:16:20.728Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:16:20.723Z"
+    }
+  },
+  {
+    "id": "ef5e50a6-0c2e-445d-9670-e6b4b1aa1e3e",
+    "question": "What was included in the 17:26 full rebuild?",
+    "answer": "1.15.3.18: WYSIWYG.exe (17:22, favorites stripped, .env/keys.txt copied into dist), standalone WysiScan.exe (17:23, 87.2MB with Image Convert), Inno installer (17:26, 487.2MB), set_password.exe unchanged. Changelog head v1.15.3.18.",
+    "timestamp": "2026-10-27T22:26:56.941Z",
+    "tags": [
+      "build release"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:26:56.942Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:26:56.938Z"
+    }
+  },
+  {
+    "id": "e896270e-e265-40e1-90bb-bc4e70c8ee46",
+    "question": "Why did set_password.exe crash on another machine and how is it preserved?",
+    "answer": "allpass.json there was empty/corrupt, causing a raw JSONDecodeError. The loader now tolerates UTF-8 BOM, warns and starts empty for blank files (backup kept), and exits cleanly with a message for invalid JSON. Installer ships dist_tools/set_password.exe with uninsneveruninstall so install/upgrade/uninstall never remove it.",
+    "timestamp": "2026-10-27T22:31:56.171Z",
+    "tags": [
+      "how",
+      "tooling passwords installer bugfix",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-10-27T22:31:56.171Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-10-27T22:31:56.167Z"
+    }
   }
 ]

@@ -27,6 +27,23 @@ trusting it to carry across a chat. Project-specific conventions stay here.
 Enforced for: Amazon Add modal, WysiScan `ocr-modal`s (cliModal / Extract Text,
 ocrResultModal, helpModal, renameModal, paddingModal), and any future modal.
 
+### Protected areas — do not edit without explicit permission (mandatory)
+- **Walmart Sheet** (`WalmartSheet/`, `walmart.html`, `walmartapp.js`, `walmart.py`, `generate_sheet.py`)
+- **Amazon Adds** (`Adds/`, `amazon_add_page.html`, related Amazon add code)
+Never modify these files unless the user explicitly asks in the current request. Main-app
+changes that would normally be mirrored (e.g. description rules) must NOT be copied into them
+automatically.
+
+### Detailed change notes (mandatory)
+Every change must be recorded in **`docs/WORK_LOG.md`** (files touched, why, what changed,
+how to undo). Add entries as work happens, not at the end of the session.
+
+### Notifications: toast, not alert (mandatory)
+The user prefers **toast notifications** over `alert()` popups.
+- Pure notifications / success confirmations → non-blocking toast, auto-dismiss after ~2s.
+- Use `alert()` (or `confirm()`) ONLY when a decision is required (OK/Cancel, Proceed?).
+- Reference implementation: `showToast(message, duration)` in `editor.html`.
+
 ### Pixel parity (mandatory)
 Repeated controls (e.g. every "Copy" button, every "Copy Desc." button) must be
 **identical fixed width** — never let content size them differently. User is OCD

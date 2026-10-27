@@ -913,8 +913,26 @@ function updateDynamicColors() {
 }
 
 let storedPasswords = {};
-function submitPassword() {
+async function submitPassword() {
     const input = document.getElementById('adminPasswordInput').value;
+
+    // Verify server-side so passwords can be stored hashed (PBKDF2) in allpass.json.
+    try {
+        const resp = await fetch('/api/verify-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: input })
+        });
+        if (resp.ok) {
+            const res = await resp.json();
+            if (res.role === 'editor') { window.open('editor', '_blank'); closePasswordModal(); return; }
+            if (res.role === 'admin') { window.open('admin', '_blank'); closePasswordModal(); return; }
+            customAlert("Incorrect password.");
+            return;
+        }
+    } catch (e) { /* fall through to legacy local check */ }
+
+    // Legacy fallback: plaintext values already loaded from allpass.json
     if (input === storedPasswords.editor) {
         window.open('editor', '_blank');
         closePasswordModal();

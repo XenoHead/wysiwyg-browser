@@ -7,6 +7,7 @@ import time
 import signal
 import shutil
 import json
+import hashlib
 import uvicorn
 import webbrowser
 from contextlib import asynccontextmanager
@@ -63,6 +64,17 @@ else:
 # images without re-running the (slow/costly) AI call.
 CLI_CACHE_FILE = os.path.join(APP_DIR, "cli_cache.json")
 CLI_CACHE_MAX = 3
+
+
+def imageconvert_available():
+    """True when the Image Convert sub-app is present in this build."""
+    if getattr(sys, 'frozen', False):
+        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        # Standalone scanner bundles it at <base>/imageconvert; the main WYSIWYG
+        # build bundles the whole WysiScan folder at <base>/WysiScan.
+        return (os.path.exists(os.path.join(base, "imageconvert", "app.py")) or
+                os.path.exists(os.path.join(base, "WysiScan", "imageconvert", "app.py")))
+    return os.path.exists(os.path.join(ASSET_DIR, "imageconvert", "app.py"))
 
 
 def _cli_cache_key(files):
@@ -201,6 +213,44 @@ TEMP_DIR = os.path.join(APP_DIR, "temp")
 if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
 
+THUMB_DIR = os.path.join(TEMP_DIR, "thumbs")
+if not os.path.exists(THUMB_DIR):
+    os.makedirs(THUMB_DIR)
+
+# --- Path safety for file-serving endpoints -------------------------------
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
+
+def _is_image_file(path):
+    try:
+        return os.path.isfile(path) and os.path.splitext(path)[1].lower() in IMAGE_EXTS
+    except Exception:
+        return False
+
+def _allowed_media_roots():
+    roots = [TEMP_DIR, SCAN_DIR]
+    try:
+        cfg = load_config() or {}
+        for key in ("save_location", "last_import_dir"):
+            value = cfg.get(key)
+            if isinstance(value, str) and value.strip():
+                roots.append(value)
+    except Exception:
+        pass
+    return [os.path.abspath(r) for r in roots if r]
+
+def _is_under_allowed_root(path):
+    try:
+        target = os.path.abspath(path)
+    except Exception:
+        return False
+    for root in _allowed_media_roots():
+        try:
+            if os.path.commonpath([target, root]) == root:
+                return True
+        except ValueError:
+            continue
+    return False
+
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 
 def cleanup_directory(directory, older_than=0):
@@ -237,6 +287,7 @@ async def lifespan(app: FastAPI):
         while True:
             time.sleep(1800) # Check every 30 minutes
             cleanup_temp(older_than=3600) # Delete files older than 1 hour
+            cleanup_directory(THUMB_DIR, older_than=86400) # Stale thumbnails
             
     threading.Thread(target=periodic_cleanup, daemon=True).start()
     yield
@@ -303,17 +354,31 @@ async def _unhandled_exception_json(request: Request, exc: Exception):
     )
 
 
-# Allow cross-origin requests. The scanner page is normally served from this
-# server (8010), but if it's opened via the main app's static mount (8008) the
-# API calls would otherwise be blocked by the browser. Permissive CORS here is
-# fine: the scanner server only listens on 127.0.0.1 (localhost).
+# Only the local app origins may call this API. The scanner page is normally
+# served by this server (8010); the main app also mounts it statically (8008),
+# which legitimately needs cross-origin access. Everything else is blocked so a
+# random website cannot read local files or drive the filesystem APIs.
+ALLOWED_ORIGINS = {
+    "http://127.0.0.1:8008",
+    "http://localhost:8008",
+    "http://127.0.0.1:8010",
+    "http://localhost:8010",
+}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=sorted(ALLOWED_ORIGINS),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
+
+@app.middleware("http")
+async def block_cross_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin and origin not in ALLOWED_ORIGINS:
+        return JSONResponse(status_code=403,
+                            content={"status": "error", "message": "Cross-origin request blocked."})
+    return await call_next(request)
 
 def get_prompt_file_path():
     candidates = [
@@ -484,7 +549,7 @@ async def save_prompt(data: dict = Body(default={})):
 
 # 2. Endpoint to run CLI command with prompt and images
 @app.post('/run-cli-prompt')
-async def run_cli_prompt(data: dict = Body(default={})):
+def run_cli_prompt(data: dict = Body(default={})):
     prompt = data.get('prompt', '')
     files = data.get('files', [])
 
@@ -545,7 +610,7 @@ async def get_cli_cache(data: dict = Body(default={})):
 
 # 4. Endpoint to dump the Extract Text content into Notepad and bring it forward.
 @app.post('/open-in-notepad')
-async def open_in_notepad(data: dict = Body(default={})):
+def open_in_notepad(data: dict = Body(default={})):
     text = data.get('text', '') or ''
     try:
         out_path = os.path.join(APP_DIR, "cli_last_output.txt")
@@ -1096,17 +1161,18 @@ def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
     
     return save_path
 
+_INDEX_HTML_CACHE = None
+
 @app.get("/")
 async def index():
-    # Read the HTML file
-    path = os.path.join(ASSET_DIR, "scanner_test.html")
-    if not os.path.exists(path):
-        return HTMLResponse("Error: scanner_test.html not found")
-        
-    with open(path, 'r', encoding='utf-8') as f:
-        content = f.read()
-        
-    return HTMLResponse(content)
+    global _INDEX_HTML_CACHE
+    if _INDEX_HTML_CACHE is None:
+        path = os.path.join(ASSET_DIR, "scanner_test.html")
+        if not os.path.exists(path):
+            return HTMLResponse("Error: scanner_test.html not found")
+        with open(path, 'r', encoding='utf-8') as f:
+            _INDEX_HTML_CACHE = f.read()
+    return HTMLResponse(_INDEX_HTML_CACHE, headers={"Cache-Control": "no-store"})
 
 @app.get("/config")
 async def get_config():
@@ -1128,6 +1194,32 @@ async def get_config():
 def _run_py_dialog(script: str) -> str:
     """Run a Python script in an isolated subprocess to show a dialog."""
     try:
+        # --- FROZEN (standalone exe): there is no python.exe to run scripts with,
+        # so re-launch ourselves in "dialog runner" mode and pass results via a file.
+        if getattr(sys, 'frozen', False):
+            import tempfile, uuid, runpy  # noqa: F401  (runpy used in __main__)
+            token = uuid.uuid4().hex
+            script_path = os.path.join(tempfile.gettempdir(), f"wysiscan_dialog_{token}.py")
+            result_path = os.path.join(tempfile.gettempdir(), f"wysiscan_dialog_{token}.txt")
+            with open(script_path, "w", encoding="utf-8") as fh:
+                fh.write(script)
+            logging.info("Launching Tkinter dialog via frozen dialog runner")
+            subprocess.run(
+                [sys.executable, "--run-script", script_path, "--run-result", result_path],
+                creationflags=0x08000000,
+                check=True,
+            )
+            stdout = ""
+            if os.path.exists(result_path):
+                with open(result_path, "r", encoding="utf-8") as fh:
+                    stdout = fh.read()
+            for p in (script_path, result_path):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+            return stdout
+
         # Set an environment variable so the sub-instance of WYSIWYG.exe 
         # knows to act as a dialog runner and skip server startup/cleanup.
         env = os.environ.copy()
@@ -1191,6 +1283,15 @@ def browse_folder(data: dict = Body(default={})):
 @app.post("/browse-file")
 def browse_file():
     try:
+        # Start in the last folder used for import; otherwise "This PC" (no network probing).
+        last_dir = ""
+        try:
+            cfg_dir = (load_config() or {}).get("last_import_dir") or ""
+            if cfg_dir and os.path.isdir(cfg_dir):
+                last_dir = cfg_dir
+        except Exception:
+            last_dir = ""
+
         script = [
             "import tkinter as tk",
             "from tkinter import filedialog",
@@ -1198,19 +1299,31 @@ def browse_file():
             "root = tk.Tk()",
             "root.withdraw()",
             "root.wm_attributes('-topmost', 1)",
+            "kwargs = {'parent': root, 'title': 'Select Images'}"
+        ]
+        if last_dir:
+            escaped = last_dir.replace("\\", "\\\\").replace("'", "\\'")
+            script.append(f"kwargs['initialdir'] = '{escaped}'")
+        else:
+            script.append("kwargs['initialdir'] = '::{20D04FE0-3AEA-1069-A2D8-08002B30309D}'")
+        script.extend([
             "paths = filedialog.askopenfilenames(",
-            "    parent=root, title='Select Images',",
-            "    filetypes=[('Image Files', '*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff')]",
+            "    filetypes=[('Image Files', '*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff')],",
+            "    **kwargs",
             ")",
             "for p in root.tk.splitlist(paths):",
             "    if p: print(p)"
-        ]
+        ])
         
         stdout = _run_py_dialog("\n".join(script))
         # Tkinter returns forward slashes, normalize to backslashes
         paths = [os.path.normpath(p.strip()) for p in stdout.strip().splitlines() if p.strip()]
         
         if paths:
+            try:
+                save_config_setting("last_import_dir", os.path.dirname(paths[0]))
+            except Exception:
+                pass
             return {"status": "success", "paths": paths}
         return {"status": "cancelled"}
     except Exception as e:
@@ -1224,7 +1337,7 @@ async def update_config(data: dict = Body(...)):
     return {"status": "success"}
 
 @app.post("/batch-convert")
-async def batch_convert(data: dict = Body(...)):
+def batch_convert(data: dict = Body(...)):
     source_folder = data.get("source_folder")
     output_folder = data.get("output_folder")
     format_type = data.get("format", "jpg")
@@ -1239,6 +1352,9 @@ async def batch_convert(data: dict = Body(...)):
         
     # Build command
     if getattr(sys, 'frozen', False):
+        if not imageconvert_available():
+            return {"status": "error",
+                    "message": "Image Convert is not bundled in this standalone WysiScan build. Use the full WYSIWYG app for batch conversion."}
         cmd = [sys.executable, "--imageconvert"]
     else:
         python_exe = sys.executable
@@ -1287,6 +1403,9 @@ async def batch_convert(data: dict = Body(...)):
 @app.post("/open-convert-gui")
 async def open_convert_gui():
     if getattr(sys, 'frozen', False):
+        if not imageconvert_available():
+            return {"status": "error",
+                    "message": "Image Convert is not bundled in this standalone WysiScan build. Use the full WYSIWYG app."}
         cmd = [sys.executable, "--imageconvert"]
     else:
         python_exe = sys.executable
@@ -1303,20 +1422,57 @@ async def open_convert_gui():
         logging.error(f"Failed to open GUI process: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
+def _thumb_cache_path(path, width):
+    try:
+        mtime = int(os.path.getmtime(path))
+    except OSError:
+        return None
+    key = hashlib.md5(f"{os.path.abspath(path)}|{mtime}|{width}".encode("utf-8", "ignore")).hexdigest()
+    return os.path.join(THUMB_DIR, f"{key}.jpg")
+
+@app.get("/thumb")
+def thumb(path: str, w: int = 220):
+    """Small, disk-cached JPEG thumbnail for the gallery grid."""
+    if not path or not _is_image_file(path):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "File not found"})
+    try:
+        width = max(80, min(int(w), 600))
+    except Exception:
+        width = 220
+
+    thumb_path = _thumb_cache_path(path, width)
+    try:
+        fresh = thumb_path and os.path.exists(thumb_path)
+        if not fresh or os.path.getmtime(thumb_path) < os.path.getmtime(path):
+            with Image.open(path) as img:
+                try:
+                    from PIL import ImageOps
+                    img = ImageOps.exif_transpose(img)
+                except Exception:
+                    pass
+                img.thumbnail((width, width), Image.LANCZOS)
+                if img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=82)
+        return FileResponse(thumb_path, headers={"Cache-Control": "private, max-age=60"})
+    except Exception as e:
+        logging.warning(f"Thumbnail generation failed for {path}: {e}")
+        return FileResponse(path)
+
 @app.get("/view-image")
 async def view_image(path: str):
-    if os.path.exists(path):
-        return FileResponse(path)
-        headers = {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        }
-        return FileResponse(path, headers=headers)
-    return {"status": "error", "message": "File not found"}
+    if not _is_image_file(path) or not _is_under_allowed_root(path):
+        return JSONResponse(status_code=403,
+                            content={"status": "error", "message": "File not allowed"})
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+    return FileResponse(path, headers=headers)
 
 @app.post("/trigger-scan")
-async def trigger_scan(data: dict = Body(...)):
+def trigger_scan(data: dict = Body(...)):
     group_name = data.get("group_name", "scan")
     scan_counter = data.get("scan_counter", 0)
     file_number = scan_counter + 1
@@ -1492,7 +1648,7 @@ async def trigger_scan(data: dict = Body(...)):
     return {"status": "error", "message": "Scan cancelled or failed"}
 
 @app.get("/list-scanners")
-async def list_scanners():
+def list_scanners():
     """Lists all available WIA scanner devices."""
     device_manager = None
     device_infos = None
@@ -1534,7 +1690,7 @@ async def set_scanner(data: dict = Body(...)):
     return {"status": "success", "message": "Preferred scanner updated."}
 
 @app.post("/import-file")
-async def import_file(data: dict = Body(...)):
+def import_file(data: dict = Body(...)):
     source_path = data.get("source_path")
     group_name = data.get("group_name", "scan")
     scan_counter = data.get("scan_counter", 0)
@@ -1614,7 +1770,7 @@ async def import_file(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/recrop")
-async def recrop(data: dict = Body(...)):
+def recrop(data: dict = Body(...)):
     original_path = data.get("original_path")
     cropped_path = data.get("cropped_path")
     padding = data.get("padding", 5)
@@ -1640,7 +1796,7 @@ async def recrop(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/rotate-image")
-async def rotate_image(data: dict = Body(...)):
+def rotate_image(data: dict = Body(...)):
     path = data.get("path")
     direction = data.get("direction") # 'left' or 'right'
 
@@ -1665,7 +1821,7 @@ async def rotate_image(data: dict = Body(...)):
         cv2.imwrite(path, rotated_img)
         
        # Add a cache-busting query parameter to the URL for the client
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         
         return {"status": "success", "message": "Image rotated", "new_url": new_url}
     except Exception as e:
@@ -1686,7 +1842,7 @@ def get_image_background_color(img):
         return (255, 255, 255) # Fallback to white if tiny image
 
 @app.post("/rotate-image-fine")
-async def rotate_image_fine(data: dict = Body(...)):
+def rotate_image_fine(data: dict = Body(...)):
     path = data.get("path")
     direction = data.get("direction")  # 'left' or 'right'
     angle = 45  # Fixed rotation angle of 45 degrees
@@ -1714,7 +1870,7 @@ async def rotate_image_fine(data: dict = Body(...)):
         rotated_img = cv2.warpAffine(img, rotation_matrix, (w, h), borderValue=bg_color)
 
         cv2.imwrite(path, rotated_img)
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
 
         return {"status": "success", "message": f"Image rotated {angle} degrees", "new_url": new_url}
 
@@ -1722,7 +1878,7 @@ async def rotate_image_fine(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/deskew-image")
-async def deskew_image(data: dict = Body(...)):
+def deskew_image(data: dict = Body(...)):
     path = data.get("path")
     angle = data.get("angle", 0.0)
     padding = data.get("padding", 5)
@@ -1770,7 +1926,7 @@ async def deskew_image(data: dict = Body(...)):
             auto_crop_image(image_path=temp_rotated_path, output_path=path, padding=int(padding))
             os.remove(temp_rotated_path)
 
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": "Image deskewed", "new_url": new_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -1846,7 +2002,7 @@ def perform_auto_deskew(path, padding=5):
         return False, str(e)
 
 @app.post("/auto-deskew")
-async def auto_deskew(data: dict = Body(...)):
+def auto_deskew(data: dict = Body(...)):
     path = data.get("path")
     padding = data.get("padding", 5)
     if not path or not os.path.exists(path):
@@ -1855,13 +2011,13 @@ async def auto_deskew(data: dict = Body(...)):
     success, message = perform_auto_deskew(path, padding)
     
     if success or message == "Already aligned.":
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": message, "new_url": new_url}
     else:
         return {"status": "error", "message": message}
 
 @app.post("/manual-crop")
-async def manual_crop(data: dict = Body(...)):
+def manual_crop(data: dict = Body(...)):
     path = data.get("path")
     crop_data = data.get("crop_data")
 
@@ -1897,7 +2053,7 @@ async def manual_crop(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/manual-crop-as-new")
-async def manual_crop_as_new(data: dict = Body(...)):
+def manual_crop_as_new(data: dict = Body(...)):
     path = data.get("path") # This is the original image path
     crop_data = data.get("crop_data") 
     group_name = data.get("group_name", "scan")
@@ -1943,7 +2099,7 @@ async def manual_crop_as_new(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/manual-crop-replace")
-async def manual_crop_replace(data: dict = Body(...)):
+def manual_crop_replace(data: dict = Body(...)):
     source_path = data.get("source_path")
     target_path = data.get("target_path")
     crop_data = data.get("crop_data")
@@ -1975,7 +2131,7 @@ async def manual_crop_replace(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/detect-bounds")
-async def detect_bounds(data: dict = Body(...)):
+def detect_bounds(data: dict = Body(...)):
     path = data.get("path")
     if not path or not os.path.exists(path):
         return {"status": "error", "message": "File not found"}
@@ -2019,7 +2175,7 @@ async def detect_bounds(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/revert-crop")
-async def revert_crop(data: dict = Body(...)):
+def revert_crop(data: dict = Body(...)):
     original_path = data.get("original_path")
     cropped_path = data.get("cropped_path")
 
@@ -2063,7 +2219,7 @@ def _clean_bak_in_dir(directory):
         logging.error(error_msg)
 
 @app.post("/cleanup-backups")
-async def cleanup_backups():
+def cleanup_backups():
     """Deletes all .bak files from known scan locations."""
     config = load_config()
     save_location = config.get("save_location")
@@ -2081,7 +2237,7 @@ async def cleanup_backups():
     return {"status": "success", "message": "Cleanup triggered."}
 
 @app.post("/manage-files")
-async def manage_files(data: dict = Body(...)):
+def manage_files(data: dict = Body(...)):
     action = data.get("action")
     files = data.get("files", [])
     save_location = data.get("save_location")
@@ -2244,7 +2400,7 @@ async def manage_files(data: dict = Body(...)):
     return {"status": "success", "processed": success_count, "errors": errors}
 
 @app.post("/open-folder")
-async def open_folder(data: dict = Body(default={})):
+def open_folder(data: dict = Body(default={})):
     path = data.get("path", "")
     
     if "view-image?path=" in path:
@@ -2265,15 +2421,15 @@ async def open_folder(data: dict = Body(default={})):
         return {"status": "error", "message": str(e)}
 
 @app.post("/open-file")
-async def open_file(data: dict = Body(...)):
+def open_file(data: dict = Body(...)):
     path = data.get("path", "")
     
     if "view-image?path=" in path:
         path = path.split("view-image?path=")[-1].split("&")[0]
     path = urllib.parse.unquote(path)
     
-    if not path or not os.path.exists(path):
-        return {"status": "error", "message": "File not found"}
+    if not path or not _is_image_file(path) or not _is_under_allowed_root(path):
+        return {"status": "error", "message": "File not allowed"}
     try:
         # Use os.path.abspath to ensure startfile works correctly
         os.startfile(os.path.abspath(path))
@@ -2282,7 +2438,7 @@ async def open_file(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.get("/get-groups")
-async def get_groups(path: str = None):
+def get_groups(path: str = None):
     target_dir = path
     if not target_dir:
         config = load_config()
@@ -2317,7 +2473,7 @@ async def get_groups(path: str = None):
     return {"groups": groups}
 
 @app.get("/get-group-images")
-async def get_group_images(group_name: str, path: str = None):
+def get_group_images(group_name: str, path: str = None):
     target_dir = path
     if not target_dir:
         config = load_config()
@@ -2517,7 +2673,7 @@ def analyze_cassette_shell(image_path, ocr_text):
         return ""
 
 @app.post("/ocr-and-lookup")
-async def ocr_and_lookup(data: dict = Body(...)):
+def ocr_and_lookup(data: dict = Body(...)):
     if not pytesseract:
         return {"status": "error", "message": "The 'pytesseract' library is missing from the application bundle."}
 
@@ -2536,23 +2692,22 @@ async def ocr_and_lookup(data: dict = Body(...)):
         if barcode_match:
             barcode = barcode_match.group(1)
             try:
-                async with httpx.AsyncClient() as client:
-                    search_url = f"https://api.discogs.com/database/search?barcode={barcode}"
-                    search_resp = await client.get(search_url, headers=HEADERS, timeout=10)
-                    
-                    if search_resp.status_code == 200:
-                        search_data = search_resp.json()
-                        if search_data.get("results"):
-                            release_url = search_data["results"][0].get("resource_url")
-                            if release_url:
-                                release_resp = await client.get(release_url, headers=HEADERS, timeout=10)
-                                if release_resp.status_code == 200:
-                                    release_data = release_resp.json()
-                                    scraped_text = format_discogs_data(release_data)
-                                    # Append cassette analysis if applicable
-                                    cassette_info = analyze_cassette_shell(path, raw_ocr_text)
-                                    if cassette_info: scraped_text += "\n" + cassette_info
-                                    return {"status": "success", "scraped_text": scraped_text}
+                search_url = f"https://api.discogs.com/database/search?barcode={barcode}"
+                search_resp = httpx.get(search_url, headers=HEADERS, timeout=10)
+
+                if search_resp.status_code == 200:
+                    search_data = search_resp.json()
+                    if search_data.get("results"):
+                        release_url = search_data["results"][0].get("resource_url")
+                        if release_url:
+                            release_resp = httpx.get(release_url, headers=HEADERS, timeout=10)
+                            if release_resp.status_code == 200:
+                                release_data = release_resp.json()
+                                scraped_text = format_discogs_data(release_data)
+                                # Append cassette analysis if applicable
+                                cassette_info = analyze_cassette_shell(path, raw_ocr_text)
+                                if cassette_info: scraped_text += "\n" + cassette_info
+                                return {"status": "success", "scraped_text": scraped_text}
             except Exception as e:
                 logging.error(f"Discogs API lookup failed for barcode {barcode}: {e}")
 
@@ -2578,7 +2733,7 @@ async def ocr_and_lookup(data: dict = Body(...)):
         return {"status": "error", "message": f"An unexpected error occurred during OCR: {str(e)}"}
 
 @app.post("/undo-action")
-async def undo_action(data: dict = Body(...)):
+def undo_action(data: dict = Body(...)):
     path = data.get("path")
     if not path:
         return {"status": "error", "message": "File path not provided."}
@@ -2611,7 +2766,7 @@ async def undo_action(data: dict = Body(...)):
             if os.path.exists(source_bak_path):
                 shutil.move(source_bak_path, dest_bak_path)
         
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         
         return {"status": "success", "message": "Last action undone.", "new_url": new_url}
     except Exception as e:
@@ -2619,7 +2774,7 @@ async def undo_action(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 @app.post("/redo-action")
-async def redo_action(data: dict = Body(...)):
+def redo_action(data: dict = Body(...)):
     path = data.get("path")
     if not path:
         return {"status": "error", "message": "File path not provided."}
@@ -2633,17 +2788,23 @@ async def redo_action(data: dict = Body(...)):
         create_backup(path)
         shutil.move(redo_path, path)
         
-        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={int(time.time())}"
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": "Redo successful.", "new_url": new_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 LAST_HEARTBEAT = time.time()
+PAGE_HIDDEN = False
 
 @app.post("/api/heartbeat")
-async def heartbeat():
-    global LAST_HEARTBEAT
+async def heartbeat(request: Request):
+    global LAST_HEARTBEAT, PAGE_HIDDEN
     LAST_HEARTBEAT = time.time()
+    try:
+        data = await request.json()
+        PAGE_HIDDEN = bool(data.get("hidden")) if isinstance(data, dict) else False
+    except Exception:
+        PAGE_HIDDEN = False
     return {"status": "ok"}
 
 @app.post("/exit")
@@ -2674,13 +2835,19 @@ def run_server():
 
     # Start heartbeat monitor thread to auto-shutdown when browser tab is closed
     def monitor_heartbeat():
-        global LAST_HEARTBEAT
+        global LAST_HEARTBEAT, PAGE_HIDDEN
         # Allow 15 seconds for browser to load and send initial heartbeat
         time.sleep(15)
         while True:
             time.sleep(2)
-            if time.time() - LAST_HEARTBEAT > 60:
-                logging.info("No heartbeat received for 60 seconds. Shutting down WysiScan server...")
+            if PAGE_HIDDEN:
+                # Chrome throttles timers in background tabs (down to ~1/min),
+                # so only give up on a hidden page after a long grace period.
+                limit = 1800
+            else:
+                limit = 120
+            if time.time() - LAST_HEARTBEAT > limit:
+                logging.info(f"No heartbeat received for {limit} seconds. Shutting down WysiScan server...")
                 os.kill(os.getpid(), signal.SIGTERM)
                 break
 
@@ -2702,4 +2869,40 @@ def run_server():
         logging.critical(f"WysiScan Server Crashed: {e}", exc_info=True)
 
 if __name__ == "__main__":
+    # Dialog-runner mode ("-c <code>") used by the bundled Image Convert app.
+    if "-c" in sys.argv:
+        try:
+            code_to_run = sys.argv[sys.argv.index("-c") + 1]
+            exec(code_to_run)
+            sys.exit(0)
+        except Exception:
+            logging.exception("Failed to execute dynamic code via -c")
+            sys.exit(1)
+
+    # Image Convert sub-app (GUI or --source/--output batch mode).
+    if "--imageconvert" in sys.argv:
+        sys.argv.remove("--imageconvert")
+        if hasattr(sys, "_MEIPASS") and sys._MEIPASS not in sys.path:
+            sys.path.insert(0, sys._MEIPASS)
+        try:
+            from imageconvert.app import main as run_imageconvert
+        except ImportError:
+            from WysiScan.imageconvert.app import main as run_imageconvert
+        run_imageconvert()
+        sys.exit(0)
+
+    # Dialog-runner mode (used by the frozen standalone exe for Browse dialogs):
+    # run a script with stdout redirected to a result file, then exit.
+    if "--run-script" in sys.argv:
+        import runpy
+        script_path = sys.argv[sys.argv.index("--run-script") + 1]
+        result_path = sys.argv[sys.argv.index("--run-result") + 1]
+        with open(result_path, "w", encoding="utf-8") as fh:
+            previous_stdout = sys.stdout
+            sys.stdout = fh
+            try:
+                runpy.run_path(script_path, run_name="__main__")
+            finally:
+                sys.stdout = previous_stdout
+        sys.exit(0)
     run_server()

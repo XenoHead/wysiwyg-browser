@@ -1,6 +1,6 @@
 {
-  "editor": "rockout!",
-  "admin": "admin!",
+  "editor": "pbkdf2_sha256$200000$6333afe69c7e70129ba2de38787bc9e6$082392629bb5f58d43902bf5b8ff07a1a27155f952164cb3af6c01c35e8c7241",
+  "admin": "pbkdf2_sha256$200000$db5ea969cfa5b55364c260952cd1eccf$b813712721e5aa49631c9759434e504e0fbf49dce3b5095ae4721dee472b360b",
   "media_condition": "Used Like New",
   "is_oop": true
 }
