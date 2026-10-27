@@ -60,3 +60,28 @@
 
 ---
 *Last updated by AI: 2026-07-15 11:08*
+
+---
+
+## Session 2026-10-27 (release 1.15.3.18)
+
+### Completed
+- Editor: pre-overwrite server backups (conditions_pre_/data_pre_ timestamps), toast notifications, search clear + blank-item visibility, no-store caching.
+- Passwords: PBKDF2 in allpass.json + server-side verify; set_password.exe (icon, BOM/empty/corrupt-JSON tolerant, not shipped).
+- Main app: lazy share probing (no UNC at startup), tab-aware heartbeat auto-exit, service-status cache, share paths via DEFAULT_SERVER_ROOT.
+- Heartbeat/exit, WYSIWYG dialog runner (--run-script), Image Convert availability check for packaged layout.
+- Conditions: All Types pickers unified (Media/Sleeve switch, type selector, Unfavorite All, blue active column), search autofocus + clear in picker and Edit Conditions, Close button, object-identity row actions (fixed filtered-index bug).
+- Descriptions: "with" sleeve prefix, Artwork collapse rules (Insert / Jcard / LP Sleeve), flaw grouping (Corner/Edge/Spine, adjectives, leading objects, 3+ separators A / B & C, description text joins its own side, noun capitalisation with "of" exception).
+- WysiScan: all blocking endpoints moved off the event loop, visibility-aware heartbeat, thumbnails + disk cache + in-memory HTML, CORS/path hardening, frozen launch polling, popup-gesture fix (open tab before await), Image Convert bundled in standalone (excluding .venvic).
+- Build: favorites stripped from source + shipped Conditions.json, .env/keys.txt copied into dist, version 1.15.3.18, changelog entry, Inno installer rebuilt.
+
+### Artifacts (final)
+- dist\WYSIWYG\WYSIWYG.exe (1.15.3.18)
+- dist_install\INSTALL_WYSIWYG.exe (487,189,876 bytes, 17:43)
+- WysiScan\dist\WysiScan.exe (87.2 MB, Image Convert bundled)
+- dist_tools\set_password.exe (private tool)
+
+### Notes
+- Full details/undo steps: docs\WORK_LOG.md (entries 1-43).
+- Rebuild order: `!build.bat` -> `WysiScan\build_scanner.py` -> ISCC on wysiWyg-installer.iss -> optional set_password PyInstaller.
+- Standing rule: never edit WalmartSheet/ or Adds/ without explicit request.
