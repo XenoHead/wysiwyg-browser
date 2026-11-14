@@ -1,7 +1,5 @@
 let data = {};
 let mediaFormats = {};
-let walmartWindow = null; // Track the Walmart window globally
-let walmartFilteredDesc = ""; // Track the filtered description for Walmart
 
 // --- INITIALIZATION & EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
         location.reload(true);
         return;
     }
-    clearWalmartCache();
     initializeDropdowns();
     loadAppVersion();
     loadProfile();
@@ -67,12 +64,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dockScanner').checked = true;
     }
 
-    // Initialize Dock Walmart Preference
-    const walmartDockPref = localStorage.getItem('wysiwyg_dock_walmart');
-    if (walmartDockPref === 'true' && document.getElementById('dockWalmartSheet')) {
-        document.getElementById('dockWalmartSheet').checked = true;
-    }
-
     // Initialize Auto Generate Preference
     const autoGenPref = localStorage.getItem('wysiwyg_auto_generate');
     if (autoGenPref !== null && document.getElementById('autoGenerateToggle')) {
@@ -124,7 +115,6 @@ function setupEventListeners() {
     // --- Top Nav ---
     addClickListener('runUberPasteBtn', runUberPaste);
     addClickListener('runWysiScanBtn', runWysiScan);
-    addClickListener('runWalmartSheetBtn', runWalmartSheet);
     addClickListener('addsToggleBtn', toggleAddsSubmenu);
     addClickListener('addsAmazonBtn', openAddsAmazon);
     addClickListener('addsDiscogsBtn', openAddsDiscogs);
@@ -292,15 +282,27 @@ function setupEventListeners() {
     });
 
     // --- Scraper ---
+    // Mirror the current Discogs URL into localStorage so Adds > Amazon's
+    // "Pull from WYSIWYG" button can grab whatever is in this box. Both pages are
+    // served from the same origin, so they share localStorage.
+    const rememberDiscogsUrl = (value) => {
+        const v = (value || '').trim();
+        if (!v) return; // never blank out a previously stored URL
+        try { localStorage.setItem('wysiwyg_last_discogs_url', v); } catch (e) { }
+    };
     document.getElementById('discogsUrlInput')?.addEventListener('click', async function () {
         if (document.getElementById('autoPasteToggle').checked) {
             try {
                 const text = await navigator.clipboard.readText();
                 if (text) this.value = text;
+                rememberDiscogsUrl(this.value);
             } catch (err) {
                 console.error('Autopaste failed:', err);
             }
         }
+    });
+    document.getElementById('discogsUrlInput')?.addEventListener('input', function () {
+        rememberDiscogsUrl(this.value);
     });
 
     // --- Market Lookup Tab ---
@@ -315,6 +317,38 @@ function setupEventListeners() {
         if (document.getElementById('lockSku')) document.getElementById('lockSku').checked = false;
         if (document.getElementById('lockDesc')) document.getElementById('lockDesc').checked = false;
     });
+
+    // --- Reset All before every scrape ---
+    // Manual click, Enter in the URL box, the SSE bridge and the Chrome extension
+    // (which clicks #scrapeBtn) all end up as a submit on this form. The listener
+    // sits on document in the CAPTURE phase so it runs before htmx's own handler
+    // and can hold the request back until Reset All has finished - otherwise a
+    // leftover value from the previous item could land on the incoming scrape.
+    const scrapeForm = document.querySelector('form[hx-post="/scrape"]');
+    if (scrapeForm) {
+        let resettingForScrape = false;
+        document.addEventListener('submit', async (ev) => {
+            if (ev.target !== scrapeForm || resettingForScrape) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            resettingForScrape = true;
+
+            // fullReset() blanks the URL box too, so keep the value we are scraping.
+            const urlEl = document.getElementById('discogsUrlInput');
+            const pendingUrl = urlEl ? urlEl.value : '';
+            try {
+                await fullReset();
+            } catch (err) {
+                console.error('Reset All before scrape failed:', err);
+            }
+            if (urlEl) urlEl.value = pendingUrl;
+
+            // Re-submit for real; the guard lets this second event through.
+            if (typeof scrapeForm.requestSubmit === 'function') scrapeForm.requestSubmit();
+            else scrapeForm.submit();
+            setTimeout(() => { resettingForScrape = false; }, 0);
+        }, true);
+    }
 
     document.getElementById('conditionOfMedia')?.addEventListener('change', function () {
         if (!this.value) document.getElementById('mediaDescriptionText').value = "";
@@ -351,9 +385,6 @@ function setupEventListeners() {
     // --- Details Tab ---
     addClickListener('copyLivePreviewBtn', copyLivePreview);
     addClickListener('copyHtmlBtn', copyGeneratedHtml);
-    addClickListener('copyScratchpadBtn', (e) => copyScratchpad(e.currentTarget));
-    addClickListener('selectAllScratchpadBtn', () => document.getElementById('manualInputBox').select());
-    addClickListener('pasteToScratchpadBtn', pasteToManualInput);
 
     // Live Preview is editable; every change is mirrored into the HTML CODE box
     document.getElementById('htmlPreview')?.addEventListener('input', syncLivePreviewToCode);
@@ -387,52 +418,6 @@ async function runUberPaste() {
         }
     } catch (e) {
         customAlert('Failed to connect to server to run UberPaste: ' + e);
-    }
-}
-
-async function runWalmartSheet() {
-    try {
-        await clearWalmartCache(); // Clear cache before populating it
-        const dock = document.getElementById('dockWalmartSheet')?.checked ?? true;
-
-        // Try to get text from Scratchpad first, then fall back to the hidden scraper result
-        const scratchpadEl = document.getElementById('manualInputBox');
-        const hiddenScrapeEl = document.getElementById('scraperResultText');
-        const rawText = (scratchpadEl && scratchpadEl.value) ? scratchpadEl.value : (hiddenScrapeEl ? hiddenScrapeEl.textContent : '');
-
-        // Prepare the full context and send it to the server cache
-        const context = {
-            sku: document.getElementById('outputSku')?.value || '',
-            builderDescription: document.getElementById('mediaDescriptionText')?.value || '',
-            generatedDescription: walmartFilteredDesc || document.getElementById('outputDesc')?.value || '',
-            label: document.getElementById('recordLabel')?.value || '',
-            raw_text: rawText,
-            discogsUrl: document.getElementById('discogsUrlInput')?.value || ''
-        };
-        await fetch('/api/walmart/cache-context', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(context)
-        });
-
-        const url = '/walmart-sheet';
-
-        if (dock) {
-            walmartWindow = window.open(url, '_blank');
-        } else {
-            const windowFeatures = "width=1000,height=800,resizable=yes,scrollbars=yes,status=yes";
-            walmartWindow = window.open(url, 'WalmartSheetWindow', windowFeatures);
-        }
-
-        if (walmartWindow) {
-            walmartWindow.focus();
-            // Trigger an immediate UI update
-            updateServiceStatus();
-        } else {
-            customAlert('Popup window was blocked by the browser. Please allow popups for this site.');
-        }
-    } catch (e) {
-        customAlert('Failed to open Walmart Sheet: ' + e);
     }
 }
 
@@ -489,21 +474,7 @@ async function updateServiceStatus() {
     // Nothing to update while the tab is in the background.
     if (document.hidden) return;
     try {
-        // 1. Check Walmart Window (Client-side check)
-        const walBtn = document.getElementById('runWalmartSheetBtn');
-        if (walBtn) {
-            if (walmartWindow && !walmartWindow.closed) {
-                walBtn.disabled = true;
-                walBtn.style.opacity = "0.5";
-                walBtn.title = "Walmart Sheet is already open";
-            } else {
-                walBtn.disabled = false;
-                walBtn.style.opacity = "1";
-                walBtn.title = "Open Walmart Spreadsheet Exporter";
-            }
-        }
-
-        // 2. Check Backend Services (Server-side check)
+        // 1. Check Backend Services (Server-side check)
         const resp = await fetch('/api/service-status');
         const status = await resp.json();
 
@@ -1135,7 +1106,6 @@ async function submitReport() {
 const HOTKEY_ACTIONS = [
     { id: 'menu', label: 'Open Menu', run: () => { const b = document.getElementById('hamburgerBtn'); if (b) b.click(); } },
     { id: 'wysiscan', label: 'WysiScan', run: () => runWysiScan() },
-    { id: 'walmart', label: 'Walmart Sheet', run: () => runWalmartSheet() },
     { id: 'amazonAdds', label: 'Amazon Adds', run: () => openAddsAmazon() },
     { id: 'discogsAdds', label: 'Discogs Adds', run: () => openAddsDiscogs() },
     { id: 'calc', label: 'Cost Calculator', run: () => openCalcModal() },
@@ -1147,7 +1117,6 @@ const HOTKEY_ACTIONS = [
 const HOTKEY_DEFAULTS = {
     menu: 'Ctrl+Shift+M',
     wysiscan: 'Ctrl+Shift+W',
-    walmart: 'Ctrl+Shift+B',
     amazonAdds: 'Ctrl+Shift+A',
     discogsAdds: 'Ctrl+Shift+D',
     calc: 'Ctrl+Shift+C',
@@ -1735,13 +1704,14 @@ async function fullReset() {
     document.getElementById('scraperOutput').innerHTML = "";
     document.getElementById('scraperError').innerHTML = "";
 
-    await clearWalmartCache();
-
     clearCurrentItem(); // Clear the blue-bar last-item indicator on Reset All
 
     loadProfile(); // Revert to profile settings first (box, lister, skuFlag)
     loadVariableConditions(); // Restore saved variables after reset
     updateDynamicColors(); // Update dynamic colors using the restored values
+    // Packaging may have changed (or been cleared), so re-pick the sleeve list:
+    // a box set shows Box Sleeve conditions, anything else the media type's own.
+    renderConditionMultiselects();
 }
 
 function saveProfile() {
@@ -1762,20 +1732,6 @@ function loadProfile() {
     const skuFlag = localStorage.getItem('wysiwyg_profile_sku_flag') || "";
     if (document.getElementById('skuFlag')) {
         document.getElementById('skuFlag').value = skuFlag;
-    }
-}
-
-async function clearWalmartCache() {
-    walmartFilteredDesc = "";
-    localStorage.removeItem('wysiwyg_walmart_context');
-    try {
-        await fetch('/api/walmart/cache-context', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}) // Send empty object to clear the server-side cache
-        });
-    } catch (e) {
-        console.error("Failed to clear Walmart context cache:", e);
     }
 }
 
@@ -1907,6 +1863,10 @@ function parsePastedData(input) {
                 }
             });
 
+            // Box Set switches the sleeve conditions to their own list, so this
+            // has to re-render after the packaging values above were selected.
+            renderConditionMultiselects();
+
             // Extract Colors to Media Description
             const colors = (data && data['Color']) ? data['Color'] : ["Gold", "Silver", "Clear", "Red", "Blue", "White", "Green", "Yellow", "Pink", "Orange", "Purple", "Splatter", "Swirl", "Marble", "Teal", "Turquoise", "Black", "Brown", "Grey", "Gray", "Coke Bottle", "Translucent", "Transparent", "Crystal", "Rainbow", "Glow In The Dark", "Glow-in-the-Dark", "Glow", "Beige", "Cream", "Tan", "Violet", "Burgundy", "Magenta", "Peach", "Lime", "Rose", "Amber", "Neon"];
 
@@ -1939,21 +1899,6 @@ function parsePastedData(input) {
     });
     updateDynamicColors();
     loadVariableConditions(); // Restore saved variables after paste/parse
-
-    // AUTO-SYNC: Immediately push fresh scrape data to the Walmart context cache
-    const context = {
-        sku: document.getElementById('outputSku')?.value || '',
-        builderDescription: document.getElementById('mediaDescriptionText')?.value || '',
-        generatedDescription: document.getElementById('outputDesc')?.value || '',
-        label: document.getElementById('recordLabel')?.value || '',
-        raw_text: input,
-        discogsUrl: document.getElementById('discogsUrlInput')?.value || ''
-    };
-    fetch('/api/walmart/cache-context', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(context)
-    }).catch(err => console.error("Auto-sync to Walmart failed:", err));
     updateDynamicColors();
 }
 
@@ -1986,7 +1931,8 @@ function generateListingData() {
         customOptionsSelected: [
             ...Array.from(document.getElementById('lpOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('cdOptions')?.selectedOptions || []).map(o => o.value),
-            ...Array.from(document.getElementById('customOptions')?.selectedOptions || []).map(o => o.value)
+            ...Array.from(document.getElementById('customOptions')?.selectedOptions || []).map(o => o.value),
+            ...Array.from(document.getElementById('boxSleeveOptions')?.selectedOptions || []).map(o => o.value)
         ],
         mediaCustomOptionsSelected: [
             ...Array.from(document.getElementById('mediaConditionOptions')?.selectedOptions || []).map(o => o.value)
@@ -1999,9 +1945,6 @@ function generateListingData() {
 
     // 3. Assemble Description
     const desc = assembleDescription(inputs, processedCountry, fmtData);
-
-    // 3b. Assemble Walmart Description (Filtered)
-    walmartFilteredDesc = assembleWalmartDescription(inputs, processedCountry, fmtData);
 
     // 4. Generate SKU
     const skuCode = inferSkuCode(inputs.formatLineRaw, inputs.mediaFormat, inputs.sleevePkg);
@@ -2207,6 +2150,20 @@ function processFormatData(inputs) {
         finalFormatString = finalFormatString.replace(/\bDigipak\b/gi, "").replace(/\s\s+/g, ' ').trim();
     }
 
+    // Triggerable sleeve-packaging terms that reappear in the sleeve description
+    // or sleeve multiselect collapse to "Artwork" (same rule as Jcard/Sleeve):
+    // packaging "Digipak" + flaw "to Digipak" -> "Artwork with ... to Digipak".
+    if (sleevePkg) {
+        const packagingTerms = ['Cardboard Sleeve', 'Card Sleeve', 'Cardsleeve', 'Digipak'];
+        const matchedTerm = packagingTerms.find(term => {
+            const re = new RegExp(`\\b${term}\\b`, 'i');
+            return re.test(sleevePkg) && re.test(sleeveTextForRules);
+        });
+        if (matchedTerm) {
+            sleevePkg = sleevePkg.replace(new RegExp(`\\b${matchedTerm}\\b`, 'gi'), 'Artwork');
+        }
+    }
+
     // Edition Logic
     // (Handled in getVal)
 
@@ -2227,8 +2184,8 @@ function processFormatData(inputs) {
                 if (opt.title === "Final Sale") {
                     mediaFinalSale = (mediaFinalSale ? mediaFinalSale + " " : "") + opt.text;
                 } else {
-                    if (opt.text) mediaEntries.push(opt.text);
-                    else mediaEntries.push(opt.title);
+                    if (opt.text) mediaEntries.push(capitalizeFlawContext(opt.text));
+                    else mediaEntries.push(capitalizeFlawContext(opt.title));
                 }
             } catch (e) { }
         });
@@ -2250,8 +2207,8 @@ function processFormatData(inputs) {
                     // format string (appended bare, ahead of everything else).
                     finalFormatString += " " + opt.text;
                 } else {
-                    if (opt.text) sleeveEntries.push(opt.text);
-                    else sleeveEntries.push(opt.title);
+                    if (opt.text) sleeveEntries.push(capitalizeFlawContext(opt.text));
+                    else sleeveEntries.push(capitalizeFlawContext(opt.title));
                 }
             } catch (e) { }
         });
@@ -2262,6 +2219,10 @@ function processFormatData(inputs) {
     const hasSleeveDesc = sleeveDesc && sleeveDesc.trim() !== "";
 
     let sleeveEntriesAll = [...sleeveEntries];
+    // Sleeve flaws appended to the media phrase — grouped on their own so they
+    // never merge with media flaws.
+    let sleeveFlawsForMedia = [];
+
     if (hasSleeveDesc) {
         // The description carries a "with " prefix from the size/condition rules;
         // strip it for grouping with the multiselect flaws, re-added below.
@@ -2293,7 +2254,8 @@ function processFormatData(inputs) {
             // Media-first rule: the text box text / media multiselect choices
             // lead, and the sleeve multiselect choices follow them inside
             // mediaconditionPhrase instead of landing on the format string.
-            mediaEntries = mediaEntries.concat(groupedSleeve);
+            // Kept separate so sleeve flaws never group with media flaws.
+            sleeveFlawsForMedia = groupedSleeve;
         } else if (postFM) {
             finalFormatString += " with " + combinedSleeve;
         } else {
@@ -2309,8 +2271,10 @@ function processFormatData(inputs) {
     // phrase does not already start with one AND the text immediately before
     // it does not already end in a with-clause.
     let mediaconditionPhrase = "";
-    if (mediaEntries.length > 0) {
-        const groupedMedia = groupFlaws(mediaEntries);
+    if (mediaEntries.length > 0 || sleeveFlawsForMedia.length > 0) {
+        // Media and sleeve flaws are grouped separately (no cross-grouping),
+        // then presented media-first.
+        const groupedMedia = [...groupFlaws(mediaEntries), ...sleeveFlawsForMedia];
 
         // Join: 1 item bare, 2 items with " & ", 3+ items "A / B & C"
         let flawPhrase = joinFlawItems(groupedMedia);
@@ -2331,8 +2295,14 @@ function processFormatData(inputs) {
             : mediaFinalSale;
     }
 
-    if (sleevePkg && sleevePkg.toLowerCase().includes('gatefold') && sleeveDesc) {
-        sleevePkg = sleevePkg.replace(/gatefold/ig, 'Gatefold Sleeve');
+    // A "Gatefold" packaging only needs its noun when another sleeve attribute
+    // follows it: "Very Good Gatefold Sleeve with Corner creasing". With no
+    // sleeve condition, no sleeve description and no sleeve flaws it stays bare
+    // ("... LP Vinyl Gatefold is Out-of-Print ..."). The lookahead stops an
+    // existing "Gatefold Sleeve" from becoming "Gatefold Sleeve Sleeve".
+    const sleeveHasContent = hasSleeveCondition || hasSleeveDesc || sleeveEntriesAll.length > 0;
+    if (sleevePkg && sleeveHasContent && /gatefold/i.test(sleevePkg)) {
+        sleevePkg = sleevePkg.replace(/gatefold(?!\s*sleeve)/ig, 'Gatefold Sleeve');
     }
 
     return {
@@ -2351,6 +2321,15 @@ function processFormatData(inputs) {
 function assembleDescription(inputs, country, fmtData) {
     let parts;
 
+    // A bare "Gatefold" sleeve condition needs its noun, otherwise the sentence
+    // reads "... LP Vinyl Gatefold with light Cellophane tearing". Only the
+    // no-sleeve-description path is touched (fmtData.conditionPhrase is set only
+    // then) - with a sleeve description the formatting stays exactly as it was.
+    let sleeveCondText = inputs.sleeveCond;
+    if (fmtData.conditionPhrase && /gatefold/i.test(sleeveCondText || '')) {
+        sleeveCondText = String(sleeveCondText).replace(/gatefold(?!\s*sleeve)/ig, 'Gatefold Sleeve');
+    }
+
     if (fmtData.conditionPhrase) {
         // Case B: sleeve condition set, sleeve desc BLANK.
         // Order: ... sleeveCond, sleeveTypeLabel, "sleevePkg with condition"
@@ -2368,7 +2347,7 @@ function assembleDescription(inputs, country, fmtData) {
             fmtData.finalFormatString,
             fmtData.mediaconditionPhrase || '',
             fmtData.mediaDesc,
-            inputs.sleeveCond,
+            sleeveCondText,
             fmtData.sleeveTypeLabel,
             sleeveTail ? sleeveTail : ''
         ];
@@ -2384,7 +2363,7 @@ function assembleDescription(inputs, country, fmtData) {
             fmtData.finalFormatString,
             fmtData.mediaconditionPhrase || '',
             fmtData.mediaDesc,
-            inputs.sleeveCond,
+            sleeveCondText,
             fmtData.sleevePkg,
             fmtData.sleeveTypeLabel,
             fmtData.sleeveDesc
@@ -2425,12 +2404,24 @@ function capitalizeFlawContext(text) {
     // "waviness/bending to back" -> "waviness/bending to Back".
     // Phrases like "to top of box" are left alone (the head word is not the noun).
     // Articles are skipped.
-    return String(text).replace(/\b(to|through|on)\s+([A-Za-z][A-Za-z'-]*)(\s+of\b)?/gi,
-        (match, sep, word, ofPart) => {
+    let out = String(text).replace(
+        /\b(to|through|on|at|near|around|along)([\s-]+)([A-Za-z][A-Za-z'-]*)(\s+of\b)?/gi,
+        (match, sep, gap, word, ofPart) => {
             if (ofPart) return match;
             if (/^(a|an|the)$/i.test(word)) return match;
-            return `${sep} ${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+            return `${sep}${gap}${word.charAt(0).toUpperCase()}${word.slice(1)}`;
         });
+
+    // Location nouns read as proper nouns when they open the phrase, optionally
+    // behind an intensity adjective: "corner denting" -> "Corner denting",
+    // "light corner-wear" -> "light Corner-wear".
+    const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
+    out = out.replace(/^(\s*)(corner|edge|ring|spine)\b/i, (m, sp, loc) => `${sp}${cap(loc)}`);
+    out = out.replace(
+        /^(\s*(?:light|moderate|heavy|minor|major|slight|severe|significant|faint|deep|small|large|tiny)\s+)(corner|edge|ring|spine)\b/i,
+        (m, sp, loc) => `${sp}${cap(loc)}`
+    );
+    return out;
 }
 
 function groupFlaws(flaws) {
@@ -2441,15 +2432,22 @@ function groupFlaws(flaws) {
     const LOCATION_CANON = {
         corner: 'Corner', corners: 'Corner',
         edge: 'Edge', edges: 'Edge',
+        ring: 'Ring', rings: 'Ring',
         spine: 'Spine', spines: 'Spine'
     };
 
-    // Helper to split a flaw into [prefix, separator, suffix]
+    // Helper to split a flaw into [prefix, separator, suffix].
+    // Separators are whitespace/hyphen/case agnostic: "wear-to Booklet" and
+    // "wear TO Booklet" both split like "wear to Booklet".
     function splitFlaw(f) {
         for (const sep of separators) {
-            if (f.includes(sep)) {
-                const parts = f.split(sep);
-                return [parts[0], sep, parts.slice(1).join(sep)];
+            const m = f.match(new RegExp(`[\\s-]${sep.trim()}[\\s-]`, 'i'));
+            if (m) {
+                return [
+                    f.slice(0, m.index).trim(),
+                    sep,
+                    f.slice(m.index + m[0].length).trim()
+                ];
             }
         }
         const loc = f.match(/^([A-Za-z]+)\s+(.+)$/);
@@ -2460,6 +2458,34 @@ function groupFlaws(flaws) {
         return [f, null, null];
     }
 
+    // Case-insensitive de-dupe: keeps the first spelling seen.
+    function uniqueCI(values) {
+        const seen = new Set();
+        return values.filter(v => {
+            const key = String(v).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    // Hyphens are ignored for grouping: "ring-wear" is read as "ring wear".
+    const splitWords = f => String(f).trim().split(/[\s-]+/).filter(Boolean);
+
+    // "Corner edge creasing" -> "Corner/Edge creasing": consecutive leading
+    // location words collapse into a slash set.
+    const canonicalizeLocations = (f) => {
+        const tokens = splitWords(f);
+        const locs = [];
+        let i = 0;
+        while (i < tokens.length - 1 && LOCATION_CANON[tokens[i].toLowerCase()]) {
+            locs.push(LOCATION_CANON[tokens[i].toLowerCase()]);
+            i++;
+        }
+        if (locs.length < 2) return f;
+        return uniqueCI(locs).join('/') + ' ' + tokens.slice(i).join(' ');
+    };
+
     // Modifier adjectives that describe the same kind of flaw (e.g. light play,
     // light wear to Booklet) are grouped so the adjective appears only once:
     // "light play/wear to Booklet".
@@ -2469,7 +2495,7 @@ function groupFlaws(flaws) {
     ]);
 
     function splitAdjective(f) {
-        const m = f.match(/^([A-Za-z-]+)\s+(.+)$/);
+        const m = f.match(/^([A-Za-z]+)[\s-]+(.+)$/);
         if (!m) return null;
         if (!ADJECTIVE_MODIFIERS.has(m[1].toLowerCase())) return null;
         return [m[1], m[2]];
@@ -2484,28 +2510,76 @@ function groupFlaws(flaws) {
             if (!parsed) { out.push(list[i]); continue; }
 
             const [adj, rest] = parsed;
-            const [p1, s1, x1] = splitFlaw(rest);
             const matches = [i];
-            let sharedSep = s1;
-            let sharedSuffix = x1;
 
             for (let j = i + 1; j < list.length; j++) {
                 if (used.has(j)) continue;
                 const other = splitAdjective(list[j]);
                 if (!other || other[0].toLowerCase() !== adj.toLowerCase()) continue;
-                const [p2, s2, x2] = splitFlaw(other[1]);
-                // Only group when the trailing context agrees (e.g. "to Booklet").
-                if ((s1 || x1) && (s2 || x2) && (s1 !== s2 || x1 !== x2)) continue;
-                if (!sharedSep && !sharedSuffix) { sharedSep = s2; sharedSuffix = x2; }
                 matches.push(j);
             }
 
             if (matches.length > 1) {
-                const objects = matches.map(idx => splitFlaw(splitAdjective(list[idx])[1])[0]);
-                const joined = [...new Set(objects)].join('/');
-                let phrase = adj + ' ' + joined;
-                if (sharedSep) phrase += sharedSep + (sharedSuffix || '');
-                else if (sharedSuffix) phrase += ' ' + sharedSuffix;
+                // Each subject keeps its own trailing context; only a context
+                // shared by every subject may be appended once.
+                const contexts = matches.map(idx => splitFlaw(splitAdjective(list[idx])[1]));
+                const ctxKey = c => `${(c[1] || '').toLowerCase()}\u0000${(c[2] || '').toLowerCase()}`;
+                let phrase;
+                if (new Set(contexts.map(ctxKey)).size === 1) {
+                    const [, sharedSep, sharedSuffix] = contexts[0];
+                    const objs = uniqueCI(contexts.map(c => c[0]));
+                    if (sharedSep) {
+                        phrase = adj + ' ' + objs.join('/') + sharedSep + (sharedSuffix || '');
+                    } else if (sharedSuffix) {
+                        phrase = adj + ' ' + objs.join('/') + ' ' + sharedSuffix;
+                    } else {
+                        // No context: hoist a shared trailing head word so it is
+                        // not repeated on every object.
+                        const words = objs.map(splitWords);
+                        const heads = uniqueCI(words.map(w => w[w.length - 1]));
+                        const bodies = uniqueCI(words.map(w => w.slice(0, -1).join(' ')));
+                        phrase = (heads.length === 1 && bodies.every(b => b))
+                            ? adj + ' ' + bodies.join('/') + ' ' + heads[0]
+                            : adj + ' ' + objs.join('/');
+                    }
+                } else {
+                    // Contexts differ: hoist only the words every subject shares,
+                    // then keep each subject's own context ("wear to Booklet/
+                    // Cellophane tearing", "scratching to Disc/spindle-wear").
+                    const subjects = uniqueCI(matches.map(idx => splitAdjective(list[idx])[1]));
+                    const lists = subjects.map(splitWords);
+                    const minLen = Math.min(...lists.map(t => t.length));
+                    let k = 0;
+                    while (k < minLen && lists.every(t => t[k].toLowerCase() === lists[0][k].toLowerCase())) k++;
+                    // Strip the shared lead words from the original text so
+                    // hyphens and casing survive ("spindle-wear").
+                    const stripLead = (s, n) => {
+                        let r = String(s).trim();
+                        for (let c = 0; c < n; c++) r = r.replace(/^[^\s-]+[\s-]*/, '');
+                        return r.trim();
+                    };
+                    const lead = (subjects[0].match(/[^\s-]+/g) || []).slice(0, k).join(' ');
+                    const remainders = uniqueCI(subjects.map(s => stripLead(s, k)));
+                    const nonEmpty = remainders.filter(r => r !== '');
+                    const use = nonEmpty.length ? nonEmpty : remainders;
+
+                    const ctxMatch = r => r.match(/^(to|through|on)\s+(.+)$/i);
+                    const first = ctxMatch(use[0]);
+                    const sharedCtx = !!first && use.every(r => {
+                        const m = ctxMatch(r);
+                        return m && m[1].toLowerCase() === first[1].toLowerCase();
+                    });
+
+                    if (!lead && !sharedCtx) {
+                        phrase = adj + ' ' + use.join('/');
+                    } else if (sharedCtx) {
+                        const sepWord = first[1].toLowerCase();
+                        const tails = use.map(r => ctxMatch(r)[2]);
+                        phrase = adj + ' ' + (lead ? lead + ' ' + sepWord : sepWord) + ' ' + tails.join('/');
+                    } else {
+                        phrase = adj + ' ' + (lead ? lead + ' ' : '') + use.join('/');
+                    }
+                }
                 out.push(phrase);
                 matches.forEach(idx => used.add(idx));
             } else {
@@ -2516,15 +2590,131 @@ function groupFlaws(flaws) {
         return out;
     }
 
-    let result = groupAdjectives([...flaws]);
+    result = groupAdjectives(flaws.map(canonicalizeLocations));
+
+    // Shared head word across a contexted flaw and a modifier-first flaw:
+    // "tearing to Box" + "Sleeve tearing" -> "tearing to Box/Sleeve".
+    // Only single-word heads (tearing, wear, creasing) participate.
+    function groupSharedHeads(list) {
+        const groups = [];
+        const groupOf = new Array(list.length).fill(null);
+
+        list.forEach((f, idx) => {
+            const [p, s, x] = splitFlaw(f);
+            if (!s || /\s/.test(p)) return;
+            let g = groups.find(g => g.prefix.toLowerCase() === p.toLowerCase() && g.sep === s);
+            if (!g) { g = { prefix: p, sep: s, members: [] }; groups.push(g); }
+            g.members.push({ idx, part: x });
+            groupOf[idx] = g;
+        });
+
+        list.forEach((f, idx) => {
+            if (groupOf[idx]) return;
+            const [p, s] = splitFlaw(f);
+            if (s) return;
+            const tokens = splitWords(f);
+            if (tokens.length < 2) return;
+            const head = tokens[tokens.length - 1].toLowerCase();
+            // Adjective-modified flaws never join plain ones
+            // ("light Cellophane tearing" stays out of "tearing to Booklet").
+            if (ADJECTIVE_MODIFIERS.has(tokens[0].toLowerCase())) return;
+            const modifier = tokens.slice(0, -1).join(' ');
+            const g = groups.find(g => g.prefix.toLowerCase() === head);
+            if (!g) return;
+            g.members.push({ idx, part: modifier });
+            groupOf[idx] = g;
+        });
+
+        const out = [];
+        const emitted = new Set();
+        list.forEach((f, idx) => {
+            const g = groupOf[idx];
+            if (!g || g.members.length < 2) { out.push(f); return; }
+            if (emitted.has(g)) return;
+            // Objects keep the order their source flaws were selected in.
+            const ordered = [];
+            g.members.slice().sort((a, b) => a.idx - b.idx).forEach(m => {
+                String(m.part || '').split('/').map(t => t.trim()).filter(Boolean).forEach(t => {
+                    if (!ordered.some(o => o.toLowerCase() === t.toLowerCase())) ordered.push(t);
+                });
+            });
+            out.push(g.prefix + g.sep + ordered.join('/'));
+            emitted.add(g);
+        });
+        return out;
+    }
+
+    result = groupSharedHeads(result);
+
+    // Items sharing a trailing head word collapse together, hoisting one shared
+    // leading adjective: "light Cellophane tearing" + "Sleeve tearing" ->
+    // "light Cellophane/Sleeve tearing". Items with a context separator
+    // (to/through/on) are left to prefix/suffix grouping.
+    function groupSuffixHeads(list) {
+        const describe = (f) => {
+            // '/' is a grouping separator too, so an existing slash set
+            // ("Corner creasing/Edge creasing") is read as one head word set.
+            const tokens = String(f).trim().split(/[\/\s-]+/).filter(Boolean);
+            const sep = splitFlaw(f)[1];
+            // Only real contexts (to/through/on) are left to prefix/suffix
+            // grouping; a location pseudo-separator still groups by head word.
+            if (tokens.length < 2 || (sep && sep !== ' ')) return null;
+            const head = tokens.pop();
+            const body = tokens.filter(t => t.toLowerCase() !== head.toLowerCase());
+            const adjs = [];
+            const rest = body.slice();
+            while (rest.length > 1 && ADJECTIVE_MODIFIERS.has(rest[0].toLowerCase())) adjs.push(rest.shift());
+            // Keep an existing slash set as separate objects.
+            const raw = /[\/]/.test(f) ? body.join('/') : body.join(' ');
+            return { head, adjs, raw, core: rest.join(' ') };
+        };
+
+        const out = [];
+        const used = new Set();
+        for (let i = 0; i < list.length; i++) {
+            if (used.has(i)) continue;
+            const first = describe(list[i]);
+            if (!first) { out.push(list[i]); used.add(i); continue; }
+
+            const members = [{ idx: i, ...first }];
+            for (let j = i + 1; j < list.length; j++) {
+                if (used.has(j)) continue;
+                const d = describe(list[j]);
+                if (!d || d.head.toLowerCase() !== first.head.toLowerCase()) continue;
+                members.push({ idx: j, ...d });
+            }
+
+            // Only hoist when every member that has adjectives uses the same one.
+            const adjSets = [...new Set(members.filter(m => m.adjs.length).map(m => m.adjs.join(' ').toLowerCase()))];
+            const hoisted = adjSets.length === 1 ? members.find(m => m.adjs.length).adjs : null;
+            const values = members.map(m => (hoisted ? m.core : m.raw));
+
+            // Existing slash sets are flattened so "Corner/Edge" + "Edge" union.
+            const objects = [];
+            values.forEach(v => String(v).split('/').map(t => t.trim()).filter(Boolean).forEach(t => {
+                if (!objects.some(o => o.toLowerCase() === t.toLowerCase())) objects.push(t);
+            }));
+
+            if (members.length < 2 || (hoisted && values.some(v => !v))) {
+                out.push(list[i]);
+                used.add(i);
+                continue;
+            }
+            out.push([...(hoisted || []), objects.join('/'), first.head].filter(x => x).join(' '));
+            members.forEach(m => used.add(m.idx));
+        }
+        return out;
+    }
+
+    result = groupSuffixHeads(result);
 
     // Leading-object grouping: "sticker mark" + "sticker residue" ->
     // "sticker mark/residue". Only simple two-word flaws (no "to/through/on",
     // no locations/adjectives already merged) participate.
     function splitHeadTail(f) {
-        const m = f.match(/^([A-Za-z][A-Za-z']*)(?:[\s-]+)([A-Za-z][A-Za-z'-]*)$/);
-        if (!m) return null;
-        return [m[1], m[2]];
+        const tokens = splitWords(f);
+        if (tokens.length !== 2) return null;
+        return [tokens[0], tokens[1]];
     }
 
     function groupLeadingObjects(list) {
@@ -2542,7 +2732,7 @@ function groupFlaws(flaws) {
             }
             if (matches.length > 1) {
                 const tails = matches.map(idx => splitHeadTail(list[idx])[1]);
-                out.push(first[0] + ' ' + [...new Set(tails)].join('/'));
+                out.push(first[0] + ' ' + uniqueCI(tails).join('/'));
                 matches.forEach(idx => used.add(idx));
             } else {
                 out.push(list[i]);
@@ -2570,14 +2760,14 @@ function groupFlaws(flaws) {
         for (let j = i + 1; j < result.length; j++) {
             if (handled.has(j)) continue;
             const [p2, s2, x2] = splitFlaw(result[j]);
-            if (p1 === p2 && s1 === s2) {
+            if (p1.toLowerCase() === p2.toLowerCase() && s1.toLowerCase() === s2.toLowerCase()) {
                 matches.push(j);
             }
         }
 
         if (matches.length > 1) {
             const suffixes = matches.map(idx => splitFlaw(result[idx])[2]);
-            const uniqueSuffixes = [...new Set(suffixes)];
+            const uniqueSuffixes = uniqueCI(suffixes);
             prefixGrouped.push(p1 + s1 + uniqueSuffixes.join('/'));
             matches.forEach(idx => handled.add(idx));
         } else {
@@ -2587,10 +2777,21 @@ function groupFlaws(flaws) {
     }
 
     // 2. Suffix Grouping
-    // Group by suffix
+    // Group by suffix. Suffixes that share a slash-set merge as well, so a
+    // suffix expanded by an earlier pass still groups with a plain suffix:
+    // "Box" + "Box/Sleeve" -> "Box/Sleeve".
     result = prefixGrouped;
     let suffixGrouped = [];
     handled = new Set();
+
+    const suffixParts = (x) => String(x || '').split('/').map(t => t.trim()).filter(Boolean);
+    const suffixRelated = (union, other) => {
+        const U = union.map(t => t.toLowerCase());
+        const O = other.map(t => t.toLowerCase());
+        if (!U.length || !O.length) return false;
+        return O.every(t => U.includes(t)) || U.every(t => O.includes(t));
+    };
+
     for (let i = 0; i < result.length; i++) {
         if (handled.has(i)) continue;
         const [p1, s1, x1] = splitFlaw(result[i]);
@@ -2599,16 +2800,40 @@ function groupFlaws(flaws) {
             continue;
         }
 
+        // Grow the suffix set until no further suffix is a subset/superset.
+        let union = suffixParts(x1);
         let matches = [i];
-        for (let j = i + 1; j < result.length; j++) {
-            if (handled.has(j)) continue;
-            const [p2, s2, x2] = splitFlaw(result[j]);
-            if (x1 === x2) {
+        let grew = true;
+        while (grew) {
+            grew = false;
+            for (let j = i + 1; j < result.length; j++) {
+                if (handled.has(j) || matches.includes(j)) continue;
+                const [p2, s2, x2] = splitFlaw(result[j]);
+                if (!x2) continue;
+                if (!suffixRelated(union, suffixParts(x2))) continue;
                 matches.push(j);
+                union = uniqueCI([...union, ...suffixParts(x2)]);
+                grew = true;
             }
         }
+        const mergedSuffix = union.join('/');
 
         if (matches.length > 1) {
+            // Share a common leading word across prefixes:
+            // "Promo Stamp" + "Promo Sticker" -> "Promo Stamp/Sticker"
+            const mergeSharedPrefix = (prefixes) => {
+                const uniq = uniqueCI(prefixes);
+                if (uniq.length < 2) return uniq.join('/');
+                const tokenLists = uniq.map(splitWords);
+                const minLen = Math.min(...tokenLists.map(t => t.length));
+                let k = 0;
+                while (k < minLen - 1 && tokenLists.every(t => t[k].toLowerCase() === tokenLists[0][k].toLowerCase())) k++;
+                if (k === 0) return uniq.join('/');
+                const common = tokenLists[0].slice(0, k).join(' ');
+                const tails = tokenLists.map(t => t.slice(k).join(' '));
+                return common + ' ' + tails.join('/');
+            };
+
             // Group by separator within this suffix group
             let sepMap = new Map(); // separator -> [prefixes]
             matches.forEach(idx => {
@@ -2620,20 +2845,20 @@ function groupFlaws(flaws) {
             let combinedParts = [];
             let spaceParts = [];
             for (let [sep, prefixes] of sepMap.entries()) {
-                const uniquePrefixes = [...new Set(prefixes)];
+                const uniquePrefixes = uniqueCI(prefixes);
                 if (sep === ' ') {
                     // Location prefixes (Corner / Edge) share the flaw word:
                     // "Corner creasing" + "Edge creasing" -> "Corner/Edge creasing"
-                    spaceParts.push(uniquePrefixes.join('/') + ' ' + x1);
+                    spaceParts.push(mergeSharedPrefix(uniquePrefixes) + ' ' + mergedSuffix);
                 } else {
-                    combinedParts.push(uniquePrefixes.join('/') + sep.trimEnd());
+                    combinedParts.push(mergeSharedPrefix(uniquePrefixes) + sep.trimEnd());
                 }
             }
             // Join parts with / and append the suffix
             if (spaceParts.length) {
                 suffixGrouped.push(spaceParts.join(' / '));
             } else {
-                suffixGrouped.push(combinedParts.join('/') + ' ' + x1);
+                suffixGrouped.push(combinedParts.join('/') + ' ' + mergedSuffix);
             }
             matches.forEach(idx => handled.add(idx));
         } else {
@@ -2643,32 +2868,6 @@ function groupFlaws(flaws) {
     }
 
     return suffixGrouped;
-}
-
-function assembleWalmartDescription(inputs, country, fmtData) {
-    const parts = [
-        inputs.mediaCond,
-        fmtData.pkgFeature,
-        inputs.isOOP ? "Out-of-Print" : "",
-        fmtData.edition,
-        inputs.year,
-        country, // Keep country
-        fmtData.finalFormatString,
-        fmtData.mediaconditionPhrase || '', // Include media condition phrase
-        fmtData.mediaDesc, // Include media description
-        inputs.sleeveCond, // Include sleeve condition
-        fmtData.sleevePkg,
-        // fmtData.sleeveTypeLabel, // Excluded for Walmart
-        // fmtData.sleeveDesc // Excluded for Walmart
-    ];
-
-    let desc = parts.filter(p => p && p.toString().trim() !== "").join(' ');
-
-    if (inputs.trackTime) desc += " with " + inputs.trackTime + " Tracks";
-
-    if (inputs.label) desc += " - " + inputs.label;
-
-    return desc;
 }
 
 function inferSkuCode(rawLine, mediaFormat, sleevePkg) {
@@ -2817,33 +3016,6 @@ function handleOutput(sku, desc, isOOP, flag) {
     const finalDesc = document.getElementById('outputDesc').value;
     copyText = `${finalSku}\n${finalDesc}`;
 
-    // Update Walmart Context immediately so the sheet can pull it
-    try {
-        // Rebuild the entire context from the current state of the main app
-        // to ensure all data is fresh when the Walmart sheet pulls it.
-        const scratchpadEl = document.getElementById('manualInputBox');
-        const hiddenScrapeEl = document.getElementById('scraperResultText');
-        const rawText = (scratchpadEl && scratchpadEl.value) ? scratchpadEl.value : (hiddenScrapeEl ? hiddenScrapeEl.textContent : '');
-
-        const context = {
-            sku: finalSku,
-            builderDescription: document.getElementById('mediaDescriptionText')?.value || '',
-            generatedDescription: lockDesc ? finalDesc : (walmartFilteredDesc || finalDesc), // Use the fresh filtered description unless locked
-            label: document.getElementById('recordLabel')?.value || '',
-            raw_text: rawText,
-            discogsUrl: document.getElementById('discogsUrlInput')?.value || ''
-        };
-        localStorage.setItem('wysiwyg_walmart_context', JSON.stringify(context));
-
-        // Push context to server cache immediately so the Walmart tool can "re-pull" it
-        fetch('/api/walmart/cache-context', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(context)
-        }).catch(err => console.error("Failed to push Walmart context to server:", err));
-
-    } catch (e) { console.error("Failed to auto-update walmart context", e); }
-
     const btn = document.getElementById('generateBtn');
     const originalText = btn.innerText;
     btn.innerText = "✅ Generated!";
@@ -2912,7 +3084,7 @@ function closeShutdownModal() {
 function confirmShutdown() {
     fetch('/shutdown', { method: 'POST' }).then(() => {
         // Try to close the tab. This only works for tabs opened by script
-        // (e.g. the Walmart/UberPaste popups). For a user-opened tab the browser
+        // (e.g. the UberPaste popup). For a user-opened tab the browser
         // blocks it, so we blank the page instead of leaving "System Offline" up.
         window.close();
         setTimeout(() => {
@@ -2956,15 +3128,6 @@ function copyField(id, btn) {
             btn.innerText = originalText;
             btn.style.backgroundColor = "var(--secondary-color)";
         }, 1500);
-    });
-}
-
-function pasteToManualInput() {
-    navigator.clipboard.readText().then(text => {
-        document.getElementById('manualInputBox').value = text;
-    }).catch(err => {
-        console.error('Failed to read clipboard contents: ', err);
-        customAlert("Could not paste from clipboard. Please paste manually.");
     });
 }
 
@@ -3023,26 +3186,10 @@ function copyLivePreview() {
     }).catch(err => customAlert("Copy failed: " + err));
 }
 
-function copyScratchpad(btn) {
-    const el = document.getElementById('manualInputBox');
-    el.select();
-    navigator.clipboard.writeText(el.value).then(() => {
-        const originalText = btn.innerText;
-        const originalColor = btn.style.backgroundColor;
-        btn.innerText = "Copied!";
-        btn.style.backgroundColor = "#28a745";
-        setTimeout(() => {
-            btn.innerText = originalText;
-            btn.style.backgroundColor = originalColor;
-        }, 1500);
-    }).catch(err => customAlert("Copy failed: " + err));
-}
-
 function resetScraperTab() {
     customConfirm("Clear all scraper fields?", () => {
         document.querySelector('input[name="url"]').value = "";
         document.getElementById('scraperOutput').innerHTML = "";
-        document.getElementById('manualInputBox').value = "";
         document.getElementById('htmlOutputBox').value = "";
         document.getElementById('htmlPreview').innerHTML = "";
     });
@@ -3052,7 +3199,7 @@ function updateCounterUIDeprecated() {}
 
 // --- Custom Options Logic ---
 
-let customOptionsData = { cassette: [], cd: [], lp: [], media: [], mediaCondition: [] };
+let customOptionsData = { cassette: [], cd: [], lp: [], media: [], mediaCondition: [], boxSleeve: [] };
 let editingCustomOptionIndex = -1;
 let editingCustomOption = null;
 let customOptionCopyDraft = false;
@@ -3124,6 +3271,7 @@ async function loadCustomOptions() {
             if (!customOptionsData.lp) customOptionsData.lp = [];
             if (!customOptionsData.media) customOptionsData.media = [];
             if (!customOptionsData.mediaCondition) customOptionsData.mediaCondition = [];
+            if (!customOptionsData.boxSleeve) customOptionsData.boxSleeve = [];
             sortCustomOptionsData();
         }
     } catch (e) {
@@ -3159,7 +3307,8 @@ function renderCustomOptionsSelect() {
     const configs = [
         { id: 'customOptions', key: 'cassette' },
         { id: 'cdOptions', key: 'cd' },
-        { id: 'lpOptions', key: 'lp' }
+        { id: 'lpOptions', key: 'lp' },
+        { id: 'boxSleeveOptions', key: 'boxSleeve' }
     ];
 
     configs.forEach(config => {
@@ -3192,6 +3341,24 @@ function renderCustomOptionsSelect() {
     renderConditionMultiselects();
 }
 
+// A box set gets the Box Sleeve condition list instead of LP / CD / Cassette.
+// Sleeve Packaging is a multiselect, so any selected value that reads "Box Set"
+// (or "Boxset") switches the sleeve conditions over.
+function isBoxSetSelected() {
+    const sel = document.getElementById('sleevePackaging');
+    if (!sel) return false;
+    return Array.from(sel.selectedOptions).some(o => /box\s*set/i.test(o.value || ''));
+}
+
+function effectiveSleeveType() {
+    return isBoxSetSelected() ? 'boxSleeve' : currentConditionMediaType;
+}
+
+// The box list reads "BOXSET" (one word) wherever a type name is shown.
+function sleeveConditionLabel(type) {
+    return (type === 'boxSleeve') ? 'BOXSET' : String(type || '').toUpperCase();
+}
+
 function renderConditionMultiselects() {
     const mediaSelect = document.getElementById('mediaConditionOptions');
     const sleeveSelect = document.getElementById('sleeveConditionOptions');
@@ -3202,20 +3369,29 @@ function renderConditionMultiselects() {
     // Update current media type from dropdown
     currentConditionMediaType = mediaTypeSelect.value;
     
-    // Get the media condition data (defects like scratched, warped, etc.) filtered by current media type
-    const mediaConditionData = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === currentConditionMediaType);
+    // A box set has its own sleeve condition list, so that is the one shown.
+    const visibleSleeveType = effectiveSleeveType();
     
-    // Get the sleeve condition data from the original condition arrays (lp, cd, cassette) filtered by media type
-    const sleeveData = customOptionsData[currentConditionMediaType] || [];
+    // Every media type is present in the list so the All Types picker can toggle
+    // any column; only the current type's entries are shown.
+    const mediaConditionData = (customOptionsData.mediaCondition || [])
+        .map(opt => ({ opt, type: opt.media_type || currentConditionMediaType }));
+    // Box Sleeve is a fourth sleeve column: it is offered in Sleeve (All Types)
+    // and never in the normal per-type multiselect, but its options live in the
+    // same list so the picker can toggle them like any other type.
+    const sleeveData = ['lp', 'cd', 'cassette', 'boxSleeve']
+        .flatMap(type => (customOptionsData[type] || []).map(opt => ({ opt, type })));
     
     // Helper to render a multiselect
-    const renderSelect = (select, selectedKeys, data) => {
+    const renderSelect = (select, selectedKeys, data, visibleType) => {
         select.innerHTML = '';
-        data.forEach((opt) => {
+        data.forEach(({ opt, type }) => {
             const option = document.createElement('option');
             const val = JSON.stringify(opt);
             option.value = val;
             option.text = (opt.favorite ? '⭐ ' : '') + opt.title;
+            option.dataset.mediaType = type;
+            option.hidden = type !== visibleType;
             if (selectedKeys.includes(opt.title + '|||' + opt.text)) {
                 option.selected = true;
             }
@@ -3237,8 +3413,8 @@ function renderConditionMultiselects() {
         } catch (e) { return ''; }
     });
     
-    renderSelect(mediaSelect, mediaSelectedKeys, mediaConditionData);
-    renderSelect(sleeveSelect, sleeveSelectedKeys, sleeveData);
+    renderSelect(mediaSelect, mediaSelectedKeys, mediaConditionData, currentConditionMediaType);
+    renderSelect(sleeveSelect, sleeveSelectedKeys, sleeveData, visibleSleeveType);
     
     // Sync to hidden legacy multiselects
     syncConditionMultiselectsToLegacy();
@@ -3246,25 +3422,33 @@ function renderConditionMultiselects() {
 
 function syncConditionMultiselectsToLegacy() {
     const sleeveSelect = document.getElementById('sleeveConditionOptions');
-    const legacySelect = document.getElementById(currentConditionMediaType === 'lp' ? 'lpOptions' : 
-                                               currentConditionMediaType === 'cd' ? 'cdOptions' : 'customOptions');
-    
-    if (!sleeveSelect || !legacySelect) return;
-    
-    // Only sync Sleeve Condition selections to legacy (Media Condition uses different data)
-    const sleeveSelectedKeys = Array.from(sleeveSelect.selectedOptions).map(o => {
+    if (!sleeveSelect) return;
+
+    const legacyByType = {
+        lp: document.getElementById('lpOptions'),
+        cd: document.getElementById('cdOptions'),
+        cassette: document.getElementById('customOptions'),
+        boxSleeve: document.getElementById('boxSleeveOptions')
+    };
+
+    // Selections may come from any media type, so distribute them per type.
+    const selectedByType = { lp: [], cd: [], cassette: [], boxSleeve: [] };
+    Array.from(sleeveSelect.selectedOptions).forEach(o => {
         try {
             const d = JSON.parse(o.value);
-            return d.title + '|||' + d.text;
-        } catch (e) { return ''; }
-    });
-    
-    // Update legacy multiselect
-    Array.from(legacySelect.options).forEach(opt => {
-        try {
-            const d = JSON.parse(opt.value);
-            opt.selected = sleeveSelectedKeys.includes(d.title + '|||' + d.text);
+            const type = o.dataset.mediaType || currentConditionMediaType;
+            if (selectedByType[type]) selectedByType[type].push(d.title + '|||' + d.text);
         } catch (e) {}
+    });
+
+    Object.entries(legacyByType).forEach(([type, legacySelect]) => {
+        if (!legacySelect) return;
+        Array.from(legacySelect.options).forEach(opt => {
+            try {
+                const d = JSON.parse(opt.value);
+                opt.selected = selectedByType[type].includes(d.title + '|||' + d.text);
+            } catch (e) {}
+        });
     });
 }
 
@@ -3289,12 +3473,26 @@ function renderCustomOptionsModalList() {
     const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
     const conditionMediaTypeSelect = document.getElementById('conditionMediaType');
     if (modalMediaTypeSelect && conditionMediaTypeSelect && !modalMediaTypeSelect.dataset.userChanged) {
-        modalMediaTypeSelect.value = conditionMediaTypeSelect.value;
+        // Box Set shows sleeve conditions only, so follow that in the editor too.
+        modalMediaTypeSelect.value = effectiveSleeveType();
     }
 
     // Get data based on category
     let currentData;
     const selectedMediaType = modalMediaTypeSelect?.value || currentConditionMediaType;
+
+    // Box Set has no media conditions, so that category is not offered while it
+    // is selected - the list is always the Box Sleeve one.
+    const modalCategorySelect = document.getElementById('modalCategorySelect');
+    const isBoxType = selectedMediaType === 'boxSleeve';
+    if (modalCategorySelect) {
+        const mediaCatOption = Array.from(modalCategorySelect.options).find(o => o.value === 'mediaCondition');
+        if (mediaCatOption) mediaCatOption.hidden = isBoxType;
+        if (isBoxType) {
+            currentModalCategory = 'sleeveCondition';
+            modalCategorySelect.value = 'sleeveCondition';
+        }
+    }
     const newOptionMediaTypeSelect = document.getElementById('newOptionMediaType');
     if (newOptionMediaTypeSelect) newOptionMediaTypeSelect.value = selectedMediaType;
     
@@ -3344,7 +3542,8 @@ function renderCustomOptionsModalList() {
         }
         // For sleeveCondition, show which media type it belongs to
         if (currentModalCategory === 'sleeveCondition') {
-            mediaTypeDisplay = `<br><span style="color:#0066cc; font-size:10px;">[${selectedMediaType.toUpperCase()}]</span>`;
+            const typeLabel = sleeveConditionLabel(selectedMediaType);
+            mediaTypeDisplay = `<br><span style="color:#0066cc; font-size:10px;">[${typeLabel}]</span>`;
         }
         textCol.innerHTML = `<strong>${opt.title}</strong><br><span style="color:#666;">${opt.text}</span>${mediaTypeDisplay}`;
 
@@ -3378,7 +3577,7 @@ function getConditionPickerConfigs() {
     if (conditionPickerViewMode === 'dual') {
         return [
             { id: 'mediaConditionOptions', key: 'mediaCondition', mediaType: mediaType, label: mediaType.toUpperCase() + ' MEDIA CONDITION', useMediaCondition: true },
-            { id: 'sleeveConditionOptions', key: mediaType, label: mediaType.toUpperCase() + ' SLEEVE CONDITION' }
+            { id: 'sleeveConditionOptions', key: mediaType, label: sleeveConditionLabel(mediaType) + ' SLEEVE CONDITION' }
         ];
     } else {
         // Single column mode - only Media Condition; always show the active media format
@@ -3783,8 +3982,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Media type dropdown for condition multiselects
     document.getElementById('conditionMediaType')?.addEventListener('change', (e) => {
         currentConditionMediaType = e.target.value;
-        const allSelect = document.getElementById('allTypesMediaType');
-        if (allSelect) allSelect.value = e.target.value;
         // Update modal category to match
         currentModalCategory = currentConditionMediaType;
         const modalCatSelect = document.getElementById('modalCategorySelect');
@@ -3817,6 +4014,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('editCustomOptionsBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
         cancelEditCustomOption();
+        // Follow the main form's current type again (Box Set included) instead of
+        // whatever was picked in this modal last time.
+        const modalTypeSel = document.getElementById('modalMediaTypeSelect');
+        if (modalTypeSel) delete modalTypeSel.dataset.userChanged;
         window.resetCustomOptionsModalPlacement?.();
         document.getElementById('customOptionsModal').style.display = 'block';
         resetCustomOptionsSearchAndFocus();
@@ -3975,14 +4176,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('allTypesMediaType')?.addEventListener('change', (e) => {
-        setConditionMediaTypeEverywhere(e.target.value);
-        if (conditionPickerRedraw) conditionPickerRedraw();
-    });
-
     document.getElementById('unfavoriteAllBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
         unfavoriteAllCurrentType();
+    });
+
+    // Sleeve Packaging drives which sleeve condition list is shown: "Box Set"
+    // swaps in the Box Sleeve conditions, anything else restores LP/CD/Cassette.
+    document.getElementById('sleevePackaging')?.addEventListener('change', () => {
+        renderConditionMultiselects();
     });
 
     // Handle dual column mode toggle in modal
@@ -4065,7 +4267,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (btn.dataset.condition === 'media') {
                 openConditionPickerForMedia(mediaType);
             } else {
-                openConditionPickerForSleeve(mediaType);
+                // A box set shows its own sleeve condition list.
+                openConditionPickerForSleeve(effectiveSleeveType());
             }
         });
     });
@@ -4079,10 +4282,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('closeListPickerBtn')?.addEventListener('click', () => {
         document.getElementById('listPickerModal').style.display = 'none';
+        renderConditionMultiselects();      // packaging may have just changed
     });
 
     document.getElementById('doneListPickerBtn')?.addEventListener('click', () => {
         document.getElementById('listPickerModal').style.display = 'none';
+        renderConditionMultiselects();      // packaging may have just changed
     });
 
     document.getElementById('clearListPickerBtn')?.addEventListener('click', (e) => {
@@ -4094,6 +4299,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         renderListPicker();
+        renderConditionMultiselects();      // clearing Box Set restores the media-type list
     });
 
     // Context Menu for Favoriting
@@ -4162,7 +4368,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     targetArray = customOptionsData[targetId] || [];
                 } else {
                     // Fallback: search all arrays
-                    targetArray = [...customOptionsData.lp, ...customOptionsData.cd, ...customOptionsData.cassette, ...customOptionsData.mediaCondition];
+                    targetArray = [...customOptionsData.lp, ...customOptionsData.cd, ...customOptionsData.cassette,
+                                   ...(customOptionsData.boxSleeve || []), ...customOptionsData.mediaCondition];
                 }
                 
                 const [title, text] = optionKey.split('|||');
@@ -4190,9 +4397,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetId === 'lpOptions') key = 'lp';
             else if (targetId === 'cdOptions') key = 'cd';
             else if (targetId === 'mediaConditionOptions') key = 'mediaCondition';
-            else if (targetId === 'sleeveConditionOptions') key = currentConditionMediaType;
+            else if (targetId === 'sleeveConditionOptions') key = effectiveSleeveType();
             else key = 'cassette';
-            
+
             const selectedOptions = Array.from(select.selectedOptions);
 
             if (selectedOptions.length === 0) return;
@@ -4200,7 +4407,10 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedOptions.forEach(opt => {
                 try {
                     const data = JSON.parse(opt.value);
-                    const item = (customOptionsData[key] || []).find(i => i.title === data.title && i.text === data.text &&
+                    // Use the row's own type when it has one, so favouriting works
+                    // for whichever sleeve list is showing (including Box Set).
+                    const type = opt.dataset.mediaType || key;
+                    const item = (customOptionsData[type] || []).find(i => i.title === data.title && i.text === data.text &&
                         (!data.media_type || i.media_type === data.media_type));
                     if (item) {
                         item.favorite = !item.favorite;
@@ -4237,7 +4447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const menu = document.getElementById('customContextMenu');
             const targetId = menu.dataset.targetId;
             if (targetId === 'sleeveConditionOptions') {
-                openConditionPickerForSleeve(currentConditionMediaType);
+                openConditionPickerForSleeve(effectiveSleeveType());
             }
             menu.style.display = 'none';
         };
@@ -4296,7 +4506,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modalCatSelect = document.getElementById('modalCategorySelect');
                 if (modalCatSelect) modalCatSelect.value = 'sleeveCondition';
                 const modalMediaTypeSelect = document.getElementById('modalMediaTypeSelect');
-                if (modalMediaTypeSelect) modalMediaTypeSelect.value = currentConditionMediaType;
+                if (modalMediaTypeSelect) {
+                    // Box Set opens the Box Sleeve list; otherwise the current type.
+                    modalMediaTypeSelect.value = effectiveSleeveType();
+                    modalMediaTypeSelect.dataset.userChanged = 'true';
+                }
             }
             resetCustomOptionsSearchAndFocus();
             menu.style.display = 'none';
@@ -4371,12 +4585,8 @@ function openMediaConditionThreeColumnModal(preserveSearch) {
 
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
-            const typeSelect = document.getElementById('allTypesMediaType');
-            const activeType = typeSelect ? typeSelect.value : currentConditionMediaType;
             headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; text-align: center; flex-shrink: 0;' +
-                (config.key === activeType
-                    ? ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;'
-                    : ' color: var(--text-color, #444);');
+                ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;';
             column.appendChild(headerEl);
 
         const list = document.createElement('div');
@@ -4456,9 +4666,10 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
     const legacySelects = {
         lp: document.getElementById('lpOptions'),
         cd: document.getElementById('cdOptions'),
-        cassette: document.getElementById('customOptions')
+        cassette: document.getElementById('customOptions'),
+        boxSleeve: document.getElementById('boxSleeveOptions')
     };
-    const selectedByMediaType = { lp: [], cd: [], cassette: [] };
+    const selectedByMediaType = { lp: [], cd: [], cassette: [], boxSleeve: [] };
     Object.entries(legacySelects).forEach(([mediaType, select]) => {
         if (select) {
             Array.from(select.selectedOptions).forEach(o => {
@@ -4473,7 +4684,8 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
     const mediaTypes = [
         { key: 'lp', label: 'LP SLEEVE CONDITION' },
         { key: 'cd', label: 'CD SLEEVE CONDITION' },
-        { key: 'cassette', label: 'CASSETTE SLEEVE CONDITION' }
+        { key: 'cassette', label: 'CASSETTE SLEEVE CONDITION' },
+        { key: 'boxSleeve', label: 'BOXSET SLEEVE CONDITION' }
     ];
     
     mediaTypes.forEach(config => {
@@ -4486,12 +4698,8 @@ function openSleeveConditionThreeColumnModal(preserveSearch) {
 
         const headerEl = document.createElement('div');
         headerEl.textContent = config.label + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
-        const sleeveTypeSelect = document.getElementById('allTypesMediaType');
-        const sleeveActiveType = sleeveTypeSelect ? sleeveTypeSelect.value : currentConditionMediaType;
         headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; text-align: center; flex-shrink: 0;' +
-            (config.key === sleeveActiveType
-                ? ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;'
-                : ' color: var(--text-color, #444);');
+            ' background: var(--wysiwyg-blue, #0000ff); color: #fff; border-radius: 4px; padding: 3px 0;';
         column.appendChild(headerEl);
 
         const list = document.createElement('div');
@@ -4566,12 +4774,14 @@ function toggleMediaConditionOption(opt) {
     const key = conditionOptionKey(opt);
     const option = Array.from(select.options).find(o => {
         try {
-            return conditionOptionKey(JSON.parse(o.value)) === key;
+            const d = JSON.parse(o.value);
+            if (conditionOptionKey(d) !== key) return false;
+            return !opt.media_type || d.media_type === opt.media_type;
         } catch (e) {
             return false;
         }
     });
-    
+
     if (option) {
         option.selected = !option.selected;
     }
@@ -4584,7 +4794,9 @@ function toggleSleeveConditionOption(mediaType, opt) {
     const key = conditionOptionKey(opt);
     const option = Array.from(select.options).find(o => {
         try {
-            return conditionOptionKey(JSON.parse(o.value)) === key;
+            const d = JSON.parse(o.value);
+            if (conditionOptionKey(d) !== key) return false;
+            return !o.dataset.mediaType || o.dataset.mediaType === mediaType;
         } catch (e) {
             return false;
         }
@@ -4768,7 +4980,7 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
     column.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
 
     const headerEl = document.createElement('div');
-    headerEl.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
+    headerEl.textContent = sleeveConditionLabel(mediaType) + ' SLEEVE CONDITION' + (selectedKeys.length ? ` (${selectedKeys.length})` : '');
     headerEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
     column.appendChild(headerEl);
 
@@ -4808,7 +5020,7 @@ function openConditionPickerForSleeve(mediaType, preserveSearch) {
     container.appendChild(column);
     list.scrollTop = scrollPositions.current || 0;
 
-    header.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION';
+    header.textContent = sleeveConditionLabel(mediaType) + ' SLEEVE CONDITION';
     modal.style.display = 'block';
     window.currentThreeColumnMode = null;
     setAllTypesControlsVisible(false);
@@ -4834,8 +5046,6 @@ function setAllTypesControlsVisible(visible) {
     const el = document.getElementById('allTypesControls');
     if (el) el.style.display = visible ? 'flex' : 'none';
     if (visible) {
-        const sel = document.getElementById('allTypesMediaType');
-        if (sel) sel.value = currentConditionMediaType;
         const viewSel = document.getElementById('allTypesView');
         if (viewSel) viewSel.value = (window.currentThreeColumnMode === 'sleeveCondition') ? 'sleeve' : 'media';
     }
@@ -4845,20 +5055,18 @@ function setConditionMediaTypeEverywhere(type) {
     currentConditionMediaType = type;
     const mainSelect = document.getElementById('conditionMediaType');
     if (mainSelect) mainSelect.value = type;
-    const allSelect = document.getElementById('allTypesMediaType');
-    if (allSelect) allSelect.value = type;
     renderConditionMultiselects();
 }
 
 function unfavoriteAllCurrentType() {
-    const select = document.getElementById('allTypesMediaType');
-    const type = select ? select.value : currentConditionMediaType;
     const isSleeve = window.currentThreeColumnMode === 'sleeveCondition';
-    const list = isSleeve ? (customOptionsData[type] || []) : (customOptionsData.mediaCondition || []);
+    // All three columns are active in the All Types views, so this clears every type.
+    const list = isSleeve
+        ? ['lp', 'cd', 'cassette', 'boxSleeve'].flatMap(k => customOptionsData[k] || [])
+        : (customOptionsData.mediaCondition || []);
     let changed = false;
     list.forEach(item => {
-        const matchesType = isSleeve ? true : (item.media_type === type);
-        if (matchesType && item.favorite) {
+        if (item.favorite) {
             item.favorite = false;
             changed = true;
         }
@@ -4886,6 +5094,12 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     setDualColumnToggle(true, true);
     const query = conditionPickerQuery();
 
+    // The media column follows the Media Type dropdown; the sleeve column follows
+    // that same type unless Box Set is selected, which has its own sleeve list.
+    const mediaTypeSelect = document.getElementById('conditionMediaType');
+    if (mediaTypeSelect && mediaTypeSelect.value) mediaType = mediaTypeSelect.value;
+    const sleeveType = effectiveSleeveType();
+
     // Media Condition column
     const mediaItems = (customOptionsData.mediaCondition || []).filter(opt => opt.media_type === mediaType);
     const mediaFiltered = mediaItems.filter(opt => conditionPickerMatch(opt, query));
@@ -4898,7 +5112,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     }) : [];
 
     // Sleeve Condition column
-    const sleeveItems = customOptionsData[mediaType] || [];
+    const sleeveItems = customOptionsData[sleeveType] || [];
     const sleeveFiltered = sleeveItems.filter(opt => conditionPickerMatch(opt, query));
     const sleeveSelect = document.getElementById('sleeveConditionOptions');
     const sleeveSelectedKeys = sleeveSelect ? Array.from(sleeveSelect.selectedOptions).map(o => {
@@ -4971,7 +5185,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     sleeveColumn.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column;';
     
     const sleeveHeaderEl = document.createElement('div');
-    sleeveHeaderEl.textContent = mediaType.toUpperCase() + ' SLEEVE CONDITION' + (sleeveSelectedKeys.length ? ` (${sleeveSelectedKeys.length})` : '');
+    sleeveHeaderEl.textContent = sleeveConditionLabel(sleeveType) + ' SLEEVE CONDITION' + (sleeveSelectedKeys.length ? ` (${sleeveSelectedKeys.length})` : '');
     sleeveHeaderEl.style.cssText = 'font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--text-color, #444); text-align: center; flex-shrink: 0;';
     sleeveColumn.appendChild(sleeveHeaderEl);
     
@@ -4993,11 +5207,11 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
             `<div style="min-width: 0;"><strong>${opt.title}</strong><br>` +
             `<span style="color: ${isSelected ? '#444' : 'var(--text-muted, #666)'}; font-weight: normal;">${opt.text || ''}</span></div>`;
         row.onclick = () => {
-            toggleSleeveConditionOption(mediaType, opt);
+            toggleSleeveConditionOption(sleeveType, opt);
             openDualColumnConditionPicker(mediaType, true);
         };
         row.addEventListener('contextmenu', (e) => {
-            openFavoriteContextMenuAt(e, 'sleeveConditionOptions', conditionOptionKey(opt), mediaType);
+            openFavoriteContextMenuAt(e, 'sleeveConditionOptions', conditionOptionKey(opt), sleeveType);
         });
         sleeveList.appendChild(row);
     });

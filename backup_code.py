@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Code-only backup for WysiWYG-Browser.
 
-Zips the listed top-level files + the Adds / WysiScan / WalmartSheet
+Zips the listed top-level files + the Adds / WysiScan
 folders (source/code only) into backups/WYSIWYG_backup_YYYY-MM-DD_HHMMSS.zip,
 preserving the directory structure. Locked files (e.g. a debug.log held
 by a running process) are skipped instead of aborting the whole backup.
@@ -15,11 +15,11 @@ TOP_FILES = [
     "index.html", "app.js", "styles.css", "main.py",
     "conditions.json", "data.json", "version.json", "media_formats.json",
     "allpass.json", "discogs_lists.json", "cost_calc.json",
-    "walmart_context_cache.json", "requirements.txt",
+    "requirements.txt",
     "requirements-current.txt", "WYSIWYG.spec", "INSTALL_WYSIWYG.spec",
     "!build.bat", "AGENTS.md", "CLAUDE.md", "GEMINI.md", "README.md",
 ]
-FOLDERS = ["Adds", "WysiScan", "WalmartSheet"]
+FOLDERS = ["Adds", "WysiScan"]
 INCLUDE = ("*.py", "*.spec", "*.html", "*.js", "*.css", "*.json",
            "*.txt", "*.md", "*.bat", "*.csv")
 

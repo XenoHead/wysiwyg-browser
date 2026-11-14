@@ -628,10 +628,15 @@ def view_history():
 def create_alert_icon(path):
     """Generates a simple red dot icon if the file is missing."""
     if not os.path.exists(path):
-        img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        draw.ellipse((2, 2, 30, 30), fill='red', outline='white')
-        img.save(path)
+        try:
+            img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.ellipse((2, 2, 30, 30), fill='red', outline='white')
+            img.save(path)
+        except Exception:
+            # Frozen builds read it from _MEIPASS (read-only); the fallback icon
+            # is cosmetic, so never let this abort startup.
+            pass
 
 def load_global_groups():
     path = os.path.join(SHARED_PATH, "global_groups.json")
@@ -951,7 +956,9 @@ def main():
     # into bytes objects at startup and pass the data directly to the Image elements.
     # This avoids passing file paths that can become invalid or inaccessible.
     window_icon_path = resource_path("fyrlogo.png")
-    alert_icon_path = os.path.join(script_dir, "fyrlogo_alert.png")
+    # Also load the alert icon from the bundle (both images are baked into the
+    # exe via --add-data) so the install folder only ever needs Wysichat.exe.
+    alert_icon_path = resource_path("fyrlogo_alert.png")
     create_alert_icon(alert_icon_path)
 
     tray_icon_bytes = None
@@ -1067,7 +1074,7 @@ def main():
     # --- TRAY REPLACEMENT (Floating Window) ---
     def create_tray_window():
         loc = sg.user_settings_get_entry('-TRAY-LOC-', (None, None))
-        menu = ['', ['Restore', 'Run Wysiwyg', 'Wysiscanner', 'Update Apps', 'Exit']]
+        menu = ['', ['Restore', 'Run Wysiwyg', 'WysiScan', 'Update Apps', 'Exit']]
         
         # Use Magenta as transparency key to hide the window background
         bg_col = '#ff00ff'
@@ -1250,7 +1257,7 @@ def main():
             break
         if tray_event == 'Run Wysiwyg':
             launch_wysiwyg()
-        if tray_event == 'Wysiscanner':
+        if tray_event == 'WysiScan':
             launch_wysiscan()
 
 

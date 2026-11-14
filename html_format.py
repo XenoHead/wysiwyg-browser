@@ -31,6 +31,10 @@ def format_discogs_to_html(raw_text):
         
         clean_line = line.replace('*', '')
         clean_line = re.sub(r'\s*\(\d+\)', '', clean_line)
+        # "Track Count: 4" is scraper bookkeeping (it feeds the description text),
+        # never part of the HTML listing.
+        if re.match(r'^track\s*count\s*:', clean_line, re.IGNORECASE):
+            continue
         if ":" in clean_line:
             key, val = clean_line.split(":", 1)
             clean_line = f"<b>{key}:</b>&nbsp;{val.strip()}"
@@ -41,7 +45,9 @@ def format_discogs_to_html(raw_text):
 
     # --- Tracklist Body ---
     track_data = lines[tracklist_start_index:]
-    if track_data and track_data[0].lower() == "tracklist":
+    # main.py emits the header as "Tracklist:" (with colon) - accept both forms so
+    # it never leaks into the body as a stray line.
+    if track_data and track_data[0].lower().startswith("tracklist"):
         track_data = track_data[1:]
 
     formatted_tracks = []

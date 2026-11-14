@@ -66,6 +66,7 @@
         <button id="saveBtn" onclick="saveData()">💾 Save All Changes</button>
         <button id="uploadBtn" onclick="uploadMenus()" style="margin-left: 15px;">⬆️ Upload Menus</button>
         <button id="openConditionsBtn" onclick="openConditions()" style="margin-left: 15px; background: #28a745; color: white; border: none; padding: 15px 40px; border-radius: 5px; font-size: 18px; cursor: pointer; font-weight: bold;">⚙️ Conditions</button>
+        <button id="openColoursBtn" onclick="openColours()" style="margin-left: 15px; background: #6f42c1; color: white; border: none; padding: 15px 40px; border-radius: 5px; font-size: 18px; cursor: pointer; font-weight: bold;">🎨 Colours</button>
         <button id="exitBtn" onclick="window.close()" style="margin-left: 15px;">❌ Exit Editor</button>
     </div>
 
@@ -90,6 +91,32 @@
         </div>
     </div>
 
+
+    <!-- Colours Modal (colour / text-mod map) -->
+    <div id="coloursModal" class="modal" style="z-index: 3000;">
+        <div class="modal-content" style="width: 98vw; height: 98vh; margin: 1vh auto; padding: 0; display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; max-width: none;">
+            <div style="background: #6f42c1; color: #fff; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--wysiwyg-yellow);">
+                <h2 style="margin: 0; background: none; border: none; color: inherit; font-size: 20px;">Manage Colours &amp; Text Mods</h2>
+                <span class="close-btn" onclick="closeColoursModal()" style="color: white; top: 12px; font-size: 30px;">&times;</span>
+            </div>
+
+            <div style="padding: 12px 25px 0; display: flex; align-items: center; gap: 8px;">
+                <input id="colourSearchInput" type="text" placeholder="🔍 Search colours and text mods..."
+                    oninput="onColourSearchInput(this.value)"
+                    style="flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--input-bg); color: var(--input-text); box-sizing: border-box;">
+                <button id="colourSearchClear" onclick="clearColourSearch()" title="Clear search"
+                    style="flex-shrink: 0; padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: #6c757d; color: #fff; font-weight: bold; cursor: pointer;">✕</button>
+            </div>
+
+            <div id="coloursEditorContainer" style="flex: 1; overflow-y: auto; padding: 25px; background: var(--bg-content);"></div>
+
+            <div style="padding: 20px 25px; background: var(--save-bar-bg); border-top: 2px solid #6f42c1; display: flex; justify-content: flex-end; gap: 15px;">
+                <button onclick="saveColourMap()" style="background: #007bff; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">Save</button>
+                <button onclick="syncColourMap()" style="background: #28a745; color: white; border: none; padding: 12px 40px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">⬆️ Upload To Server</button>
+                <button onclick="closeColoursModal()" style="background: #6c757d; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Requests Viewer Modal -->
     <div id="requestsModal" class="modal">
@@ -391,9 +418,234 @@
             } catch(e) { alert("Error: " + e); }
         }
 
+        // --- Colours & Text Mods (colourmap.json) ------------------------------
+        let colourMap = { colour: [], textmod: [] };
+        let colourSearchTerm = '';
+
+        function onColourSearchInput(value) {
+            colourSearchTerm = String(value || '').trim();
+            renderColoursEditor();
+        }
+
+        function clearColourSearch() {
+            colourSearchTerm = '';
+            const input = document.getElementById('colourSearchInput');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+            renderColoursEditor();
+        }
+
+        function colourEntryText(entry) {
+            if (typeof entry === 'string') return entry;
+            if (entry && typeof entry === 'object') return entry.title || entry.name || entry.text || '';
+            return String(entry || '');
+        }
+
+        function colourMapPayload() {
+            const clean = (arr) => (arr || [])
+                .map(colourEntryText)
+                .map(v => String(v).trim())
+                .filter(v => v.length > 0);
+            return { colour: clean(colourMap.colour), textmod: clean(colourMap.textmod) };
+        }
+
+        async function openColours() {
+            try {
+                const resp = await fetch('/api/colourmap?t=' + Date.now(), { cache: 'no-store' });
+                const data = await resp.json();
+                colourSearchTerm = '';
+                const searchInput = document.getElementById('colourSearchInput');
+                if (searchInput) searchInput.value = '';
+                colourMap = {
+                    colour: Array.isArray(data.colour) ? data.colour
+                        : (Array.isArray(data.Colour) ? data.Colour : []),
+                    // "textmod" is the current key; "texture" was the first name.
+                    textmod: Array.isArray(data.textmod) ? data.textmod
+                        : (Array.isArray(data.texture) ? data.texture
+                        : (Array.isArray(data.Texture) ? data.Texture : []))
+                };
+                renderColoursEditor();
+                document.getElementById('coloursModal').style.display = 'block';
+            } catch (e) {
+                alert('Error loading the colour map: ' + e);
+            }
+        }
+
+        function closeColoursModal() {
+            document.getElementById('coloursModal').style.display = 'none';
+        }
+
+        // Each list is shown in this many side-by-side stacks so a long list fits
+        // without scrolling. Entries run alphabetically down one stack, then the
+        // next one across.
+        const COLOUR_STACKS = 3;
+
+        function renderColoursEditor() {
+            const container = document.getElementById('coloursEditorContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const columns = [
+                { key: 'colour', label: 'Colour', example: 'Black' },
+                { key: 'textmod', label: 'TextMod', example: 'Splatter' }
+            ];
+
+            const flexBox = document.createElement('div');
+            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;';
+
+            columns.forEach(col => {
+                if (!Array.isArray(colourMap[col.key])) colourMap[col.key] = [];
+
+                const section = document.createElement('div');
+                section.style.cssText = 'flex: 1; min-width: 420px; background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid #eee;';
+
+                const title = document.createElement('h4');
+                title.innerText = col.label;
+                title.style.cssText = 'border-bottom: 2px solid #6f42c1; padding-bottom: 8px; margin-bottom: 15px; color: #6f42c1; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px;';
+                section.appendChild(title);
+
+                const addBtn = document.createElement('button');
+                addBtn.innerText = '+ Add New ' + col.label;
+                addBtn.style.cssText = 'width: 100%; margin-bottom: 15px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;';
+                addBtn.onclick = () => {
+                    // New entries go to the top of the list, and any active search
+                    // is cleared so the new row is actually visible.
+                    colourMap[col.key].unshift('');
+                    colourSearchTerm = '';
+                    const searchInput = document.getElementById('colourSearchInput');
+                    if (searchInput) searchInput.value = '';
+                    renderColoursEditor();
+                };
+                section.appendChild(addBtn);
+
+                if (colourMap[col.key].length === 0) {
+                    const empty = document.createElement('div');
+                    empty.innerText = 'No entries yet - use the button above.';
+                    empty.style.cssText = 'font-size: 12px; color: #888; text-align: center; padding: 10px;';
+                    section.appendChild(empty);
+                    flexBox.appendChild(section);
+                    return;
+                }
+
+                // Keep the real array index with each entry so editing/deleting
+                // still hits the right item while the search filters the view.
+                const term = colourSearchTerm.toLowerCase();
+                const visible = colourMap[col.key]
+                    .map((entry, index) => ({ entry, index }))
+                    .filter(({ entry }) => !term || colourEntryText(entry).toLowerCase().includes(term));
+
+                if (visible.length === 0) {
+                    const none = document.createElement('div');
+                    none.innerText = 'No matches for "' + colourSearchTerm + '".';
+                    none.style.cssText = 'font-size: 12px; color: #888; text-align: center; padding: 10px;';
+                    section.appendChild(none);
+                    flexBox.appendChild(section);
+                    return;
+                }
+
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+
+                // Split into equal stacks; the last one takes the remainder.
+                const perStack = Math.ceil(visible.length / COLOUR_STACKS);
+
+                for (let stack = 0; stack < COLOUR_STACKS; stack++) {
+                    const start = stack * perStack;
+                    const chunk = visible.slice(start, start + perStack);
+                    if (chunk.length === 0) continue;
+
+                    const stackEl = document.createElement('div');
+                    stackEl.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;';
+
+                    chunk.forEach(({ entry, index }) => {
+
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display: flex; gap: 4px; align-items: center;';
+
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = colourEntryText(entry);
+                        input.placeholder = 'e.g. ' + col.example;
+                        input.style.cssText = 'flex: 1; min-width: 0; padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: var(--input-bg); color: var(--input-text);';
+                        input.oninput = (e) => {
+                            colourMap[col.key][index] = e.target.value;
+                        };
+
+                        const delBtn = document.createElement('button');
+                        delBtn.innerText = '🗑️';
+                        delBtn.title = 'Delete';
+                        delBtn.style.cssText = 'flex-shrink: 0; background: #dc3545; color: white; border: none; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; line-height: 1;';
+                        delBtn.onclick = () => {
+                            colourMap[col.key].splice(index, 1);
+                            renderColoursEditor();
+                        };
+
+                        row.appendChild(input);
+                        row.appendChild(delBtn);
+                        stackEl.appendChild(row);
+                    });
+
+                    grid.appendChild(stackEl);
+                }
+
+                section.appendChild(grid);
+                flexBox.appendChild(section);
+            });
+
+            container.appendChild(flexBox);
+        }
+
+        async function saveColourMap() {
+            // Saving tidies the lists: alphabetical, then repaint.
+            const sortList = (arr) => (arr || []).slice().sort((a, b) =>
+                colourEntryText(a).toLowerCase().localeCompare(colourEntryText(b).toLowerCase()));
+            colourMap.colour = sortList(colourMap.colour);
+            colourMap.textmod = sortList(colourMap.textmod);
+
+            const payload = colourMapPayload();
+            try {
+                const resp = await fetch('/api/save-colourmap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    colourMap = { colour: payload.colour, textmod: payload.textmod };
+                    renderColoursEditor();
+                    showToast('Colour map saved.');
+                } else {
+                    alert('Save failed: ' + res.message);
+                }
+            } catch (e) {
+                alert('Error saving the colour map: ' + e);
+            }
+        }
+
+        async function syncColourMap() {
+            if (!confirm('This will overwrite colourmap.json on the network server (\\\\192.168.0.108). Proceed?')) return;
+            const payload = colourMapPayload();
+            try {
+                const resp = await fetch('/api/admin/sync-colourmap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    showToast('Colour map uploaded to server.');
+                } else {
+                    alert('Upload failed: ' + res.message);
+                }
+            } catch (e) {
+                alert('Error uploading the colour map: ' + e);
+            }
+        }
+
         // --- Conditions Management Logic ---
-        let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: [] };
-        let conditionsDirty = false;
+        let localConditions = { cassette: [], cd: [], lp: [], mediaCondition: [], boxSleeve: [] };        let conditionsDirty = false;
         let conditionsView = 'sleeve';
         let conditionsSearchTerm = '';
         let conditionsSearchInput = null;
@@ -406,6 +658,7 @@
                 localConditions = await resp.json();
                 // Ensure mediaCondition is a flat array
                 if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
+                if (!Array.isArray(localConditions.boxSleeve)) localConditions.boxSleeve = [];
                 conditionsDirty = false;
                 conditionsSearchTerm = '';
                 renderConditionsEditor();
@@ -425,6 +678,7 @@
                 const resp = await fetch('/api/conditions?t=' + Date.now(), { cache: 'no-store' });
                 localConditions = await resp.json();
                 if (!Array.isArray(localConditions.mediaCondition)) localConditions.mediaCondition = [];
+                if (!Array.isArray(localConditions.boxSleeve)) localConditions.boxSleeve = [];
                 renderConditionsEditor();
             } catch (e) {
                 console.error('Could not refresh conditions:', e);
@@ -574,11 +828,12 @@
             const categories = [
                 { key: 'lp', label: 'LP Sleeve Conditions' },
                 { key: 'cd', label: 'CD Sleeve Conditions' },
-                { key: 'cassette', label: 'Cassette Sleeve Conditions' }
+                { key: 'cassette', label: 'Cassette Sleeve Conditions' },
+                { key: 'boxSleeve', label: 'Box Sleeve Conditions' }
             ];
 
             const flexBox = document.createElement('div');
-            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start;';
+            flexBox.style.cssText = 'display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;';
 
             categories.forEach(cat => {
                 const itemEntries = (localConditions[cat.key] || [])
@@ -704,7 +959,7 @@
         }
 
         async function saveConditions() {
-            ['cassette', 'cd', 'lp'].forEach(cat => {
+            ['cassette', 'cd', 'lp', 'boxSleeve'].forEach(cat => {
                 if (Array.isArray(localConditions[cat])) {
                     localConditions[cat].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
                 }
@@ -736,8 +991,10 @@
             if (!confirm("This will overwrite the Conditions.json file on the network server (\\\\192.168.0.108). Proceed?")) return;
             
             // Sort before saving
-            ['cassette', 'cd', 'lp'].forEach(cat => {
-                localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+            ['cassette', 'cd', 'lp', 'boxSleeve'].forEach(cat => {
+                if (Array.isArray(localConditions[cat])) {
+                    localConditions[cat].sort((a, b) => a.title.localeCompare(b.title));
+                }
             });
             ['lp', 'cd', 'cassette'].forEach(cat => {
                 (localConditions.mediaCondition[cat] || []).sort((a, b) => a.title.localeCompare(b.title));

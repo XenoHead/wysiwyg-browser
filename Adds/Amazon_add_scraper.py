@@ -33,6 +33,38 @@ def clean_name(name):
     cleaned = cleaned.replace(' -  - ', ' - ').strip()
     return cleaned.strip()
 
+
+def split_cat_numbers(cat_str):
+    """Split a catalog-number string into individual catalog numbers.
+
+    A catalog number is often several space-separated words ("ART CD 002",
+    "2530 123"), so blindly splitting on whitespace truncates it to the trailing
+    digits. A token only starts a *new* number when it carries its own prefix or
+    separator ("542-4", "C108068", "WARPCD123") while the current number already
+    holds digits -- that keeps "314-526 542-4" as two numbers but leaves
+    "2530 123" as one.
+    """
+    def _has_digit(s):
+        return bool(re.search(r'\d', s))
+
+    def _self_contained(s):
+        return bool(re.search(r'[A-Za-z]', s)) or bool(re.search(r'\d[\-\u2013\u2014]\d', s))
+
+    groups, current = [], []
+    for token in (cat_str or "").split():
+        if current:
+            starts_new_number = (_has_digit(token) and _self_contained(token)
+                                 and any(_has_digit(t) for t in current))
+            starts_new_prefix = (not _has_digit(token)) and _has_digit(current[-1])
+            if starts_new_number or starts_new_prefix:
+                groups.append(" ".join(current))
+                current = [token]
+                continue
+        current.append(token)
+    if current:
+        groups.append(" ".join(current))
+    return groups
+
 # --- VERSION 3.0 LABEL LOGIC: ISOLATED FOR HTML ONLY ---
 def process_labels_3_0(label_info_list):
     """
@@ -167,7 +199,15 @@ def generate_html_block(raw_discogs_data, stored_data, artist_name):
                     if any(x in clean_line.lower() for x in ['cassette', 'vinyl', 'lp']): 
                         is_tape_or_vinyl = True
                 metadata_lines.append(clean_line)
-        elif re.match(r'([A-Z]\d+|\d+\.)', line):
+        elif line.strip().lower().startswith('track count'):
+            # Bookkeeping from the scraper, never part of the HTML description.
+            continue
+        elif line.strip().lower().startswith('tracklist'):
+            # Header line: the tracks start on the next line.
+            tracklist_start_index = i + 1
+            break
+        elif re.match(r'^([A-Z]\d+|\d+\.|\d+\s)', line):
+            # A1 / 1. / 1 Embrace The Darkness (CD positions have no dot)
             tracklist_start_index = i
             break
     metadata_block = "<br>".join(metadata_lines).replace('Not On Label', '').strip()
@@ -421,27 +461,24 @@ def process_discogs_raw_data(raw_discogs_data):
         
         # After separating lbl_name and cat_str for this pair, collect catalog numbers
         if cat_str:
-            for cn in cat_str.split():
-                cn = cn.strip(',;:')
-                if cn and re.search(r'\d', cn) and cn not in all_cat_numbers:
+            for cn in split_cat_numbers(cat_str):
+                if cn and cn not in all_cat_numbers:
                     all_cat_numbers.append(cn)
 
-        # Build the label name (strip catalog-number tokens from the pair)
-        lbl_tokens_clean = [t for t in pair.split() if not (cat_pattern.match(t.rstrip(',;:')) and re.search(r'\d', t.rstrip(',;:')))]
-        lbl_name_final = ' '.join(lbl_tokens_clean).strip()
-        lbl_name_final = re.sub(r'^Label:\s*', '', lbl_name_final).strip()
+        # Build the label name. Use the name split off above: re-deriving it by
+        # stripping digit tokens from the pair used to eat the alphabetic part of
+        # a catalog number and leave fragments like "Odium Records – ART CD".
+        lbl_name_final = re.sub(r'^Label:\s*', '', (lbl_name or '').strip()).strip()
 
         if lbl_name_final:
             if lbl_name_final not in brand_names_only:
                 brand_names_only.append(clean_name(lbl_name_final))
             if cat_str:
-                for cn in cat_str.split():
-                    cn_clean = cn.strip(',;:')
-                    if cn_clean:
-                        if cn_clean not in cat_group_map:
-                            cat_group_map[cn_clean] = []
-                        if lbl_name_final not in cat_group_map[cn_clean]:
-                            cat_group_map[cn_clean].append(lbl_name_final)
+                for cn_clean in split_cat_numbers(cat_str):
+                    if cn_clean not in cat_group_map:
+                        cat_group_map[cn_clean] = []
+                    if lbl_name_final not in cat_group_map[cn_clean]:
+                        cat_group_map[cn_clean].append(lbl_name_final)
                 label_info_list.append({'name': lbl_name_final, 'cat': cat_str})
             else:
                 label_info_list.append({'name': lbl_name_final, 'cat': ''})

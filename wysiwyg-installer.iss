@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.15.3.18"
+#define MyAppVersion "1.19.8.3"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -33,7 +33,7 @@ Name: "startupicon"; Description: "Run at Windows Startup"; GroupDescription: "A
 
 [Files]
 ; Main application; user data files are installed separately below.
-Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json,clipboard_history.json,Uberpaste\.venv\*,Uberpaste\dist\*,Uberpaste\build\*,Uberpaste\__pycache__\*,.venv\*,__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json,Conditions - Copy.json,mainconditions.json,clipboard_history.json,Uberpaste\.venv\*,Uberpaste\dist\*,Uberpaste\build\*,Uberpaste\__pycache__\*,.venv\*,__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Root Configuration & Assets (data/media/conditions ship with the build so
 ; every install gets the latest versions; clipboard history is never touched)
@@ -46,24 +46,45 @@ Source: "fyrlogo.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "fyrlogo.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "dist\WYSIWYG\Conditions.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "colourmap.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "changelog.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "styles.css"; DestDir: "{app}"; Flags: ignoreversion
 Source: "style_guide.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "walmart.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.js"; DestDir: "{app}"; Flags: ignoreversion
-Source: ".env"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
-Source: "keys.txt"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
+Source: "keys.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Users\Scott\FYR_LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
-; Chrome extension (unpacked; loaded manually from {app}\ChromeExt on each
-; machine). ignoreversion overwrites on upgrade so the self-reload hook in
-; background.js picks up new files when the app version changes.
+; Chrome extension (unpacked). On the SERVER this folder is the single deployed
+; copy: the installer below shares C:\FYRTOOLS read-only, and client machines
+; load the extension straight from the share
+;   \\<server>\FYRTOOLS\WYSIWYG\ChromeExt
+; so replacing these files here (bump ChromeExt\version.json + manifest.json) is
+; all a release needs -- background.js compares the version Chrome loaded against
+; version.json on disk and calls chrome.runtime.reload() by itself.
+; The local copy is still installed so a client can fall back to it if the share
+; is unreachable. ignoreversion overwrites on upgrade.
 Source: "ChromeExt\*"; DestDir: "{app}\ChromeExt"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Standalone single-file scanner. WYSIWYG never launches this exe - it runs the
+; embedded Python scanner (WysiScan\scanner_server.py inside the bundle) - but
+; external tools (e.g. WysiChat) start it from C:\FYRTOOLS\WysiScan.
+Source: "WysiScan\dist\WysiScan.exe"; DestDir: "C:\FYRTOOLS\WysiScan"; Flags: ignoreversion
+
+; WysiChat (built by the root !build.bat from WysiChat\, PyInstaller onefile).
+; Installs into C:\FYRTOOLS\WysiChat - the same folder the standalone WysiChat
+; installer uses (it spells it C:\FYRtOOLS; Windows paths are case-insensitive).
+; ONLY the exe is shipped: both images are baked into it via --add-data and are
+; read from the PyInstaller bundle at runtime, and user_prefs_<alias>.json /
+; chat_history_<alias>.db live next to the exe. So an install/upgrade replaces
+; the exe and nothing else, and an uninstall removes only the exe - chat
+; history, preferences and logs are never touched.
+Source: "WysiChat\dist\Wysichat.exe"; DestDir: "C:\FYRTOOLS\WysiChat"; Flags: ignoreversion
 
 ; Subfolders
 ; NOTE: The compiled EXE is a PyInstaller onedir build that bundles Uberpaste,
-; WysiScan and WalmartSheet internally (via --add-data / sys._MEIPASS). At runtime
+; WysiScan and Adds internally (via --add-data / sys._MEIPASS). At runtime
 ; main.py and scanner_server.py read those assets from the bundle, not from on-disk
 ; folders, and the scanner self-creates its writable data dirs (WysiScan\scans,
 ; WysiScan\temp, config.json) next to the EXE on first launch. So we deliberately do
@@ -74,6 +95,8 @@ Source: "ChromeExt\*"; DestDir: "{app}\ChromeExt"; Flags: ignoreversion recurses
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
+; WysiChat sits in its own folder (like WysiScan), so it gets its own entry.
+Name: "{autoprograms}\WysiChat"; Filename: "C:\FYRTOOLS\WysiChat\Wysichat.exe"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
@@ -93,7 +116,7 @@ begin
     '@echo off' + #13#10 +
     'taskkill /F /T /IM WYSIWYG.exe >nul 2>&1' + #13#10 +
     'taskkill /F /T /IM WysiScan.exe >nul 2>&1' + #13#10 +
-    'taskkill /F /T /IM XDevHubX.exe >nul 2>&1' + #13#10 +
+    'taskkill /F /T /IM Wysichat.exe >nul 2>&1' + #13#10 +
     'timeout /t 3 /nobreak >nul' + #13#10 +
     'taskkill /F /T /IM WYSIWYG.exe >nul 2>&1' + #13#10 +
     'timeout /t 2 /nobreak >nul' + #13#10;
@@ -138,6 +161,9 @@ begin
     AddDefenderExclusion(ExpandConstant('{autodesktop}'));
     AddDefenderExclusion(ExpandConstant('{userdesktop}'));
     AddDefenderExclusion(ExpandConstant('{tmp}'));
+    // Standalone scanner and WysiChat live outside {app}
+    AddDefenderExclusion('C:\FYRTOOLS\WysiScan');
+    AddDefenderExclusion('C:\FYRTOOLS\WysiChat');
   end;
 end;
 
@@ -150,7 +176,7 @@ begin
     // Terminate processes before deleting files so they are not locked
     Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WYSIWYG.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM WysiScan.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM XDevHubX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM Wysichat.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Remove the Microsoft Defender exclusions we added at install time.
     RemoveDefenderExclusion(ExpandConstant('{app}'));
     RemoveDefenderExclusion(ExpandConstant('{userstartup}'));
@@ -159,6 +185,8 @@ begin
     RemoveDefenderExclusion(ExpandConstant('{autodesktop}'));
     RemoveDefenderExclusion(ExpandConstant('{userdesktop}'));
     RemoveDefenderExclusion(ExpandConstant('{tmp}'));
+    RemoveDefenderExclusion('C:\FYRTOOLS\WysiScan');
+    RemoveDefenderExclusion('C:\FYRTOOLS\WysiChat');
     Sleep(1500); // Give the OS time to release file handles
   end;
 end;

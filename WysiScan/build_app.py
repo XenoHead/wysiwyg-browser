@@ -47,7 +47,6 @@ PyInstaller.__main__.run([
     '--hidden-import=uvicorn.lifespan',
     '--hidden-import=uvicorn.lifespan.on',
     '--hidden-import=win32timezone',
-    '--hidden-import=pytesseract',
     '--hidden-import=PIL',
     '--hidden-import=PIL.Image',
     '--hidden-import=gemini_pool',

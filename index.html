@@ -183,6 +183,7 @@
                     <option value="lp">LP</option>
                     <option value="cd">CD</option>
                     <option value="cassette">Cassette</option>
+                    <option value="boxSleeve">Box Set</option>
                 </select>
             </div>
 
@@ -216,6 +217,7 @@
                     <option value="lp">LP</option>
                     <option value="cd">CD</option>
                     <option value="cassette">Cassette</option>
+                    <option value="boxSleeve">Box Set</option>
                 </select>
             </div>
 
@@ -258,12 +260,6 @@
                         style="width: 120px; height: 22px; font-size: 10px; padding: 0 4px;">
                         <option value="media">Media (All Types)</option>
                         <option value="sleeve">Sleeve (All Types)</option>
-                    </select>
-                    <label style="font-size: 11px; font-weight: 600; white-space: nowrap;">Media Type:</label>
-                    <select id="allTypesMediaType" style="width: 70px; height: 22px; font-size: 10px; padding: 0 4px;">
-                        <option value="lp">LP</option>
-                        <option value="cd">CD</option>
-                        <option value="cassette">CASS</option>
                     </select>
                     <button id="unfavoriteAllBtn" class="nav-btn" style="padding: 5px 10px;">☆ Unfavorite All</button>
                 </div>
@@ -554,6 +550,8 @@
             <select id="lpOptions" multiple style="display:none;"></select>
             <select id="cdOptions" multiple style="display:none;"></select>
             <select id="customOptions" multiple style="display:none;"></select>
+            <!-- Box Sleeve only appears in Sleeve (All Types), never per type -->
+            <select id="boxSleeveOptions" multiple style="display:none;"></select>
 
             <div class="action-buttons">
                 <button id="generateBtn" class="btn-search" style="flex: 2; font-size: 14px;">Generate</button>
@@ -591,7 +589,7 @@
                         <!-- Buttons Row -->
                         <div class="details-button-row">
                             <button id="htmlGenBtn" hx-post="/format-html" hx-swap="none"
-                                hx-vals='js:{"raw_text": document.getElementById("manualInputBox")?.value || document.getElementById("scraperResultText")?.textContent || ""}'
+                                hx-vals='js:{"raw_text": document.getElementById("scraperResultText")?.textContent || ""}'
                                 hx-on:htmx:after-request="if(event.detail.successful) { var r = event.detail.xhr.responseText; document.getElementById('htmlOutputBox').value = r; document.getElementById('htmlPreview').innerHTML = r; }"
                                 class="details-button" style="background:#6f42c1;">
                                 ✨ Generate HTML Description
@@ -603,7 +601,7 @@
 
                         <!-- Main Content Grid -->
                         <div class="details-grid">
-                            <!-- Left Column: HTML Code & Manual Input -->
+                            <!-- Left Column: HTML Code (fills the column, same height as Live Preview) -->
                             <div class="details-column">
                                 <div class="details-box">
                                     <div class="details-box-header">
@@ -612,22 +610,6 @@
                                             style="background:#28a745;">📋 Copy Code</button>
                                     </div>
                                     <textarea id="htmlOutputBox" class="details-box-textarea"></textarea>
-                                </div>
-
-                                <div class="details-box">
-                                    <div class="details-box-header">
-                                        <label class="details-box-label" style="font-size: 12px;">MANUAL INPUT /
-                                            SCRATCHPAD</label>
-                                        <div class="scratchpad-header-buttons">
-                                            <button id="copyScratchpadBtn" type="button" class="scratchpad-button"
-                                                style="background:#17a2b8;">Copy All</button>
-                                            <button id="selectAllScratchpadBtn" type="button"
-                                                class="scratchpad-button">Select All</button>
-                                            <button id="pasteToScratchpadBtn" type="button" class="scratchpad-button"
-                                                style="background:#6c757d;">📋 Paste</button>
-                                        </div>
-                                    </div>
-                                    <textarea id="manualInputBox" class="scratchpad-textarea"></textarea>
                                 </div>
                             </div>
 
@@ -709,7 +691,6 @@
         <div class="drawer-actions">
             <button id="runUberPasteBtn" class="drawer-btn"><span class="drawer-ico">📋</span> UberPaste</button>
             <button id="runWysiScanBtn" class="drawer-btn"><span class="drawer-ico">🔍</span> WysiScan</button>
-            <button id="runWalmartSheetBtn" class="drawer-btn"><span class="drawer-ico">🛒</span> Walmart Sheet</button>
             <div class="drawer-submenu" id="addsSubmenu">
                 <button id="addsToggleBtn" class="drawer-btn drawer-submenu-toggle"><span class="drawer-ico drawer-ico-sm">➕</span> Adds</button>
                 <div class="drawer-submenu-items" id="addsSubmenuItems" style="display:none;">

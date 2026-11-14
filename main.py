@@ -47,7 +47,6 @@ from fastapi import FastAPI, Form, Body, Request, Response, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from html_format import format_discogs_to_html
-from WalmartSheet.walmart import router as walmart_router
 
 # --- Adds feature (Amazon Adds scraper) ---
 _ADDS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Adds")
@@ -163,10 +162,6 @@ def mount_static_dir(app_instance, folder_name, mount_path, name):
 
 mount_static_dir(app, "Uberpaste", "/UberPaste", "uberpaste_static")
 mount_static_dir(app, "WysiScan", "/WysiScan", "wysiscan_static")
-mount_static_dir(app, "WalmartSheet", "/WalmartSheet", "walmartsheet_static")
-
-# Include Walmart Router
-app.include_router(walmart_router)
 
 def get_local_path(filename):
     if getattr(sys, 'frozen', False):
@@ -235,7 +230,6 @@ DISCOGS_TOKEN = os.environ.get("DISCOGS_TOKEN", "")
 HEADERS = {"User-Agent": f"WYSIWYG/{get_current_version_str()}", "Authorization": f"Discogs token={DISCOGS_TOKEN}"}
 CHANGELOG_FILE = "changelog.txt"
 HISTORY_FILE = "wysiwyg_history.json"
-WALMART_CONTEXT_CACHE_FILE = "walmart_context_cache.json"
 LAST_HEARTBEAT = time.time()
 PAGE_HIDDEN = False
 ACTIVE_TABS = {}  # tab_id -> {"last": epoch, "hidden": bool}
@@ -264,6 +258,12 @@ _SERVER_PATHS_CACHE = None
 def get_server_conditions_path(lowercase=False):
     _, server_dir = resolve_server_paths()
     return os.path.join(server_dir, "conditions.json" if lowercase else "Conditions.json")
+
+def get_server_colourmap_path():
+    _, server_dir = resolve_server_paths()
+    return os.path.join(server_dir, "colourmap.json")
+
+DEFAULT_COLOURMAP = {"colour": [], "texture": []}
 
 def get_reports_path():
     # reports.txt lives one level above FYRTools on the same share.
@@ -529,7 +529,6 @@ async def run_installer_endpoint():
                         f'timeout /t 1 /nobreak >nul\n'
                         f'taskkill /F /IM WYSIWYG.exe\n'
                         f'taskkill /F /IM WysiScan.exe\n'
-                        f'taskkill /F /IM XDevHubX.exe\n'
                         f'timeout /t 1 /nobreak >nul\n'
                         f'start "" "{installer_path}"\n'
                         f'exit\n')
@@ -896,8 +895,6 @@ async def serve_admin():
         return HTMLResponse(f"<h1>Error: admin.html not found</h1><p>Expected location: {path}</p>", status_code=404)
     return FileResponse(path)
 
-# Walmart routes moved to WalmartSheet/walmart.py
-
 @app.post("/api/scrape-json")
 async def scrape_discogs_json(data: dict = Body(...)):
     url = data.get("url")
@@ -955,8 +952,6 @@ async def scrape_discogs_json(data: dict = Body(...)):
             logging.error(f"Scrape JSON Error: {e}", exc_info=True)
             return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
-
-# Walmart Logic Moved to WalmartSheet/walmart.py
 
 @app.get("/search")
 async def serve_search():
@@ -1143,6 +1138,40 @@ async def sync_conditions(data: dict = Body(...)):
         with open(server_path, "w") as f:
             json.dump(data, f, indent=4)
         return {"status": "success", "message": "Master file updated on server."}
+    except Exception as e:
+        return {"status": "error", "message": f"Server update failed: {e}"}
+
+
+# --- Colour / texture map (editor.html > Colours) -----------------------------
+@app.get("/api/colourmap")
+async def get_colourmap(master: bool = False):
+    no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+    path = get_server_colourmap_path() if master else get_local_path("colourmap.json")
+    if os.path.exists(path):
+        return FileResponse(path, headers=no_cache)
+    return JSONResponse(content=DEFAULT_COLOURMAP, headers=no_cache)
+
+
+@app.post("/api/save-colourmap")
+async def save_colourmap(data: dict = Body(...)):
+    path = get_local_path("colourmap.json")
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/admin/sync-colourmap")
+async def sync_colourmap(data: dict = Body(...)):
+    # Like conditions: this screen writes the master copy on the share only.
+    server_path = get_server_colourmap_path()
+    try:
+        backup_pre_overwrite(server_path, "colourmap")
+        with open(server_path, "w") as f:
+            json.dump(data, f, indent=4)
+        return {"status": "success", "message": "Colour map updated on server."}
     except Exception as e:
         return {"status": "error", "message": f"Server update failed: {e}"}
 
@@ -1993,11 +2022,6 @@ async def scrape_discogs(url: str = Form(...)):
                         if (typeof parsePastedData === 'function') {{
                             parsePastedData(rawText);
                         }}
-                        // Populate details tab scratchpad
-                        const manualInput = document.getElementById('manualInputBox');
-                        if (manualInput) {{
-                            manualInput.value = rawText;
-                        }}
                     }}
 
                     // Also refresh the history list automatically
@@ -2087,6 +2111,126 @@ def _discogs_release_to_raw_text(release: dict) -> str:
 async def serve_adds_amazon():
     """Serves the Amazon Adds tab page."""
     return FileResponse(resource_path("Adds/amazon_add_page.html"))
+
+
+# --- Adds > native "always on top" pin --------------------------------------
+# The Adds page runs in an ordinary browser window, and a web page has no way to
+# make its own OS window stay on top of other applications. So the 📌 button
+# asks the local app to do it natively: we find the window by its caption (the
+# page title) and flip SetWindowPos(HWND_TOPMOST).
+_GWL_EXSTYLE = -20
+_WS_EX_TOPMOST = 0x00000008
+_SWP_NOSIZE = 0x0001
+_SWP_NOMOVE = 0x0002
+_SWP_NOACTIVATE = 0x0010
+
+_USER32 = None
+
+
+def _user32():
+    """user32 with explicit argtypes so 64-bit HWND values survive the call."""
+    import ctypes
+    from ctypes import wintypes
+    global _USER32
+    if _USER32 is None:
+        u = ctypes.WinDLL("user32", use_last_error=True)
+        u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+        u.GetWindowTextLengthW.restype = ctypes.c_int
+        u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        u.GetWindowTextW.restype = ctypes.c_int
+        u.IsWindowVisible.argtypes = [wintypes.HWND]
+        u.IsWindowVisible.restype = wintypes.BOOL
+        u.GetForegroundWindow.restype = wintypes.HWND
+        u.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+        u.GetWindowLongW.restype = ctypes.c_long
+        u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                   ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+        u.SetWindowPos.restype = wintypes.BOOL
+        _USER32 = u
+    return _USER32
+
+
+def _win_pseudo_hwnd(value):
+    """HWND_TOPMOST/-NOTOPMOST arrive as -1/-2; ctypes needs the unsigned form."""
+    import ctypes
+    return ctypes.c_void_p(value & (2 ** (8 * ctypes.sizeof(ctypes.c_void_p)) - 1))
+
+
+def _win_find_by_title(title):
+    """Visible top-level window whose caption is `title` (or starts with it, so a
+    Chrome profile suffix such as 'Title - Work' still matches). The foreground
+    window wins if several match."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = _user32()
+    exact, prefix = [], []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def _enum_proc(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            caption = buf.value
+            if caption == title:
+                exact.append(hwnd)
+            elif caption.startswith(title):
+                prefix.append(hwnd)
+        return True
+
+    user32.EnumWindows(_enum_proc, 0)
+    candidates = exact or prefix
+    if not candidates:
+        return None
+    foreground = user32.GetForegroundWindow()
+    return foreground if foreground in candidates else candidates[0]
+
+
+def _win_is_topmost(hwnd):
+    return bool(_user32().GetWindowLongW(hwnd, _GWL_EXSTYLE) & _WS_EX_TOPMOST)
+
+
+def _win_set_topmost(hwnd, on):
+    import ctypes
+    user32 = _user32()
+    ok = user32.SetWindowPos(hwnd, _win_pseudo_hwnd(-1 if on else -2), 0, 0, 0, 0,
+                             _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE)
+    if not ok:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+@app.get("/api/window-pin")
+async def window_pin_state(title: str = ""):
+    """Reports whether the window with this caption is currently always-on-top."""
+    if os.name != "nt":
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Windows only."})
+    title = (title or "").strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "title is required."})
+    hwnd = _win_find_by_title(title)
+    if not hwnd:
+        return {"status": "success", "found": False, "topmost": None}
+    return {"status": "success", "found": True, "topmost": _win_is_topmost(hwnd)}
+
+
+@app.post("/api/window-pin")
+async def window_pin_set(data: dict = Body(...)):
+    """Turns always-on-top on/off for the window with the given caption."""
+    if os.name != "nt":
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Windows only."})
+    title = (data.get("title") or "").strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "title is required."})
+    hwnd = _win_find_by_title(title)
+    if not hwnd:
+        return {"status": "error", "message": f"Window not found: {title}"}
+    try:
+        _win_set_topmost(hwnd, bool(data.get("topmost")))
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    return {"status": "success", "found": True, "topmost": _win_is_topmost(hwnd)}
 
 
 @app.get("/adds/discogs")
@@ -2346,6 +2490,7 @@ async def adds_amazon_scrape(data: dict = Body(...)):
     async with httpx.AsyncClient() as client:
         listing_price = None
         listing_location = None
+        listing_comments = None
         if not release_id:
             ml = re.search(r'(?:sell|shop)/item/(\d+)', url)
             if ml:
@@ -2783,6 +2928,13 @@ if __name__ == "__main__":
 
     # --- PYSIDE6 GUI STARTUP (opt-in) ---
     if USE_WINDOW:
+        # The process is already DPI-aware (python.exe manifest), so Qt's own
+        # SetProcessDpiAwarenessContext() and monitor-interface probes fail with
+        # harmless errors. Silence that platform-plugin noise only.
+        os.environ.setdefault(
+            "QT_LOGGING_RULES",
+            "qt.qpa.window.warning=false;qt.qpa.screen.warning=false",
+        )
         from PySide6.QtCore import QUrl, QTimer, QSettings, Qt
         from PySide6.QtGui import QIcon, QFontDatabase
         from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QFormLayout,
@@ -2949,8 +3101,6 @@ if __name__ == "__main__":
         tools_menu = menu_bar.addMenu("&Tools")
         wysiscan_action = tools_menu.addAction("&Wysiscan")
         wysiscan_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWysiScanBtn')?.click();"))
-        walmart_action = tools_menu.addAction("&Walmart")
-        walmart_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('runWalmartSheetBtn')?.click();"))
         price_calc_action = tools_menu.addAction("&Price Calc")
         price_calc_action.triggered.connect(lambda: main_view.page().runJavaScript("document.getElementById('openCalcBtn')?.click();"))
         uberpaste_action = tools_menu.addAction("&UberPaste")
@@ -2979,8 +3129,7 @@ if __name__ == "__main__":
             (function() {
                 return {
                     wysiscan: !!document.getElementById('runWysiScanBtn')?.disabled,
-                    uberpaste: !!document.getElementById('runUberPasteBtn')?.disabled,
-                    walmart: !!document.getElementById('runWalmartSheetBtn')?.disabled
+                    uberpaste: !!document.getElementById('runUberPasteBtn')?.disabled
                 };
             })()
             """
@@ -2988,7 +3137,6 @@ if __name__ == "__main__":
                 if res:
                     wysiscan_action.setDisabled(res.get("wysiscan", False))
                     uberpaste_action.setDisabled(res.get("uberpaste", False))
-                    walmart_action.setDisabled(res.get("walmart", False))
             main_view.page().runJavaScript(js, on_result)
         
         menu_timer = QTimer(main_window)

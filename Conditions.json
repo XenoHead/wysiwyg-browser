@@ -47,12 +47,28 @@
             "text": "Corner-wear"
         },
         {
+            "title": "Corner-Wear (Heavy)",
+            "text": "heavy Corner-wear",
+            "media_type": "lp"
+        },
+        {
             "title": "Corner-Wear (Light)",
             "text": "light Corner-wear"
         },
         {
-            "title": "Creasing (Edge)",
-            "text": "Edge creasing"
+            "title": "Corner-Wear (Moderate)",
+            "text": "moderate Corner-wear",
+            "media_type": "lp"
+        },
+        {
+            "title": "Corner-Wear (Substantial)",
+            "text": "substantial Corner-wear",
+            "media_type": "lp"
+        },
+        {
+            "title": "Creasing (Light)",
+            "text": "light creasing",
+            "media_type": "lp"
         },
         {
             "title": "Cut-Mark (Sleeve)",
@@ -79,11 +95,31 @@
             "text": "drill-hole through Sleeve"
         },
         {
+            "title": "Edge Creasing",
+            "text": "Edge creasing",
+            "media_type": "lp"
+        },
+        {
+            "title": "Edge Creasing (Light)",
+            "text": "light Edge creasing",
+            "media_type": "lp"
+        },
+        {
+            "title": "Edge Indentations",
+            "text": "Edge indentations",
+            "media_type": "lp"
+        },
+        {
+            "title": "Edge Indentations (Light)",
+            "text": "light Edge indentations",
+            "media_type": "lp"
+        },
+        {
             "title": "Edge-Wear",
             "text": "Edge-wear"
         },
         {
-            "title": "Edge-Wear (light)",
+            "title": "Edge-Wear (Light)",
             "text": "light Edge-Wear"
         },
         {
@@ -127,16 +163,24 @@
             "text": "shelf-wear"
         },
         {
-            "title": "Shelf-Wear (Box)",
-            "text": "shelf-wear to Box"
-        },
-        {
             "title": "Shelf-Wear (Light)",
             "text": "light shelf-wear"
         },
         {
+            "title": "Shelf-Wear (Moderate)",
+            "text": "moderate shelf-wear"
+        },
+        {
             "title": "Shelf-Wear (Overall)",
             "text": "overall shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear Box",
+            "text": "shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Light)",
+            "text": "light shelf-wear to Box"
         },
         {
             "title": "Spindle-wear",
@@ -149,6 +193,16 @@
         {
             "title": "Spine Creasing (Light)",
             "text": "light Spine creasing"
+        },
+        {
+            "title": "Spine Indentations",
+            "text": "Spine indentations",
+            "media_type": "lp"
+        },
+        {
+            "title": "Spine Indentations (Light)",
+            "text": "light Spine indentations",
+            "media_type": "lp"
         },
         {
             "title": "Sticker Residue",
@@ -265,15 +319,19 @@
             "text": "light Corner-wear"
         },
         {
-            "title": "Cracking (Jewel Case)",
+            "title": "Cracking",
             "text": "Jewel Case cracking"
         },
         {
-            "title": "Cracking (Light Jewel Case)",
+            "title": "Cracking (Light)",
             "text": "light Jewel Case cracking"
         },
         {
-            "title": "Cracking (Substantial Jewel Case)",
+            "title": "Cracking (Moderate)",
+            "text": "moderate Jewel Case cracking"
+        },
+        {
+            "title": "Cracking (Substantial)",
             "text": "substantial Jewel Case Cracking"
         },
         {
@@ -287,6 +345,11 @@
         {
             "title": "Creasing (Spine Light)",
             "text": "light Spine-creasing"
+        },
+        {
+            "title": "Creasing (Spine)",
+            "text": "Spine-creasing",
+            "media_type": "cd"
         },
         {
             "title": "Cut-Mark (Art)",
@@ -338,7 +401,13 @@
         },
         {
             "title": "Edge Whitening (Digipak)",
-            "text": "Edge whitening"
+            "text": "Edge whitening to Digipak",
+            "media_type": "cd"
+        },
+        {
+            "title": "Edge Whitening O-Card",
+            "text": "Edge-whitening to O-Card",
+            "media_type": "cd"
         },
         {
             "title": "Edge-Wear",
@@ -361,6 +430,11 @@
             "text": "hole-punch through Inlay"
         },
         {
+            "title": "Indentations (Light)",
+            "text": "light indentations",
+            "media_type": "cd"
+        },
+        {
             "title": "Promo Stamp (Art)",
             "text": "Promo Stamp on Artwork"
         },
@@ -381,10 +455,6 @@
             "text": "shelf-wear"
         },
         {
-            "title": "Shelf-Wear (Box)",
-            "text": "shelf-wear to Box"
-        },
-        {
             "title": "Shelf-Wear (Light)",
             "text": "light shelf-wear"
         },
@@ -393,12 +463,35 @@
             "text": "overall shelf-wear"
         },
         {
+            "title": "Shelf-Wear Box",
+            "text": "shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Light)",
+            "text": "light shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear O-Card",
+            "text": "shelf-wear to O-Card",
+            "media_type": "cd"
+        },
+        {
             "title": "Sticker-Mark",
             "text": "sticker-mark"
         },
         {
             "title": "Sticker-Mark (Light)",
             "text": "light sticker-mark"
+        },
+        {
+            "title": "Tab-Dimpling Artwork",
+            "text": "tab-dimpling to Artwork",
+            "media_type": "cd"
+        },
+        {
+            "title": "Tab-Dimpling Booklet",
+            "text": "tab-dimpling to Booklet",
+            "media_type": "cd"
         },
         {
             "title": "Tab-Marks (Booklet)",
@@ -511,12 +604,16 @@
             "text": "Corner bending to Jcard"
         },
         {
-            "title": "Cracking (Jewel Case)",
+            "title": "Cracking",
             "text": "Jewel Case cracking"
         },
         {
-            "title": "Cracking (Light Jewel Case)",
+            "title": "Cracking (Light)",
             "text": "light Jewel Case cracking"
+        },
+        {
+            "title": "Cracking (Moderate)",
+            "text": "moderate Jewel Case cracking"
         },
         {
             "title": "Cracking (Substantial Jewel Case)",
@@ -643,7 +740,7 @@
             "text": "tearing to Jcard"
         },
         {
-            "title": "Tearing Jcard (Light))",
+            "title": "Tearing Jcard (Light)",
             "text": "light tearing to Jcard"
         },
         {
@@ -679,21 +776,6 @@
     ],
     "mediaCondition": [
         {
-            "title": "CD Face (Scratched)",
-            "text": "scratched CD Face",
-            "media_type": "cd"
-        },
-        {
-            "title": "CD Face (Wear)",
-            "text": "wear to CD Face",
-            "media_type": "cd"
-        },
-        {
-            "title": "CD Face (Writing)",
-            "text": "writing on CD Face",
-            "media_type": "cd"
-        },
-        {
             "title": "Cloudiness (Disc)",
             "text": "cloudiness to Disc",
             "media_type": "cd"
@@ -722,6 +804,21 @@
             "title": "Dimpling",
             "text": "dimpling to Disc",
             "media_type": "lp"
+        },
+        {
+            "title": "Disc Face (Scratched)",
+            "text": "scratched Disc Face",
+            "media_type": "cd"
+        },
+        {
+            "title": "Disc Face (Wear)",
+            "text": "wear to Disc Face",
+            "media_type": "cd"
+        },
+        {
+            "title": "Disc Face (Writing)",
+            "text": "writing on Disc Face",
+            "media_type": "cd"
         },
         {
             "title": "Discoloration (Shell)",
@@ -760,7 +857,7 @@
         },
         {
             "title": "Label (Discoloration)",
-            "text": "label discoloration",
+            "text": "Label discoloration",
             "media_type": "lp"
         },
         {
@@ -792,6 +889,16 @@
             "title": "Label (Writing)",
             "text": "writing on Label",
             "media_type": "cassette"
+        },
+        {
+            "title": "Label Tearing",
+            "text": "Label tearing",
+            "media_type": "lp"
+        },
+        {
+            "title": "Label Tearing (Light)",
+            "text": "light Label tearing",
+            "media_type": "lp"
         },
         {
             "title": "Missing (Shell Screws)",
@@ -944,6 +1051,21 @@
             "media_type": "lp"
         },
         {
+            "title": "Surface-Wear",
+            "text": "surface-wear to Disc",
+            "media_type": "cd"
+        },
+        {
+            "title": "Surface-Wear (Light)",
+            "text": "light surface-wear to Disc",
+            "media_type": "cd"
+        },
+        {
+            "title": "Surface-Wear (Moderate)",
+            "text": "moderate surface-wear to Disc",
+            "media_type": "cd"
+        },
+        {
             "title": "Warping",
             "text": "warping to Disc",
             "media_type": "lp"
@@ -967,6 +1089,12 @@
             "title": "Writing (Shell)",
             "text": "writing on Shell",
             "media_type": "cassette"
+        }
+    ],
+    "boxSleeve": [
+        {
+            "title": "aaaaaa",
+            "text": "aaaaaaaa"
         }
     ]
 }

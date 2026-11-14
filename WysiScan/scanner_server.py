@@ -25,10 +25,6 @@ from datetime import datetime
 import httpx
 import re
 from PIL import Image
-try:
-    import pytesseract
-except ImportError:
-    pytesseract = None
 
 def _scanner_cfg_keys():
     """Pull any gemini/google API keys from the scanner's local config so the
@@ -39,9 +35,6 @@ def _scanner_cfg_keys():
         return [ck] if ck else []
     except Exception:
         return []
-
-if sys.platform == "win32":
-    import winreg
 
 # Determine paths for frozen (exe) vs script execution
 if getattr(sys, 'frozen', False):
@@ -159,51 +152,6 @@ def _load_main_env_file():
 
 
 _load_main_env_file()
-
-if pytesseract:
-    # Attempt to locate Tesseract binary if not in PATH
-    if shutil.which("tesseract") is None:
-        tesseract_path = None
-        
-        # 1. Check Windows Registry (Windows only)
-        if sys.platform == "win32":
-            try:
-                # Try HKLM first (common for all users)
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Tesseract-OCR", 0, winreg.KEY_READ)
-                install_path, _ = winreg.QueryValueEx(key, "InstallPath")
-                winreg.CloseKey(key)
-                tesseract_path = os.path.join(install_path, "tesseract.exe")
-            except FileNotFoundError:
-                try:
-                    # Fallback to HKCU (current user only install)
-                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Tesseract-OCR", 0, winreg.KEY_READ)
-                    install_path, _ = winreg.QueryValueEx(key, "InstallPath")
-                    winreg.CloseKey(key)
-                    tesseract_path = os.path.join(install_path, "tesseract.exe")
-                except FileNotFoundError:
-                    tesseract_path = None # Not found in registry
-
-        if tesseract_path and os.path.exists(tesseract_path):
-             pytesseract.pytesseract.tesseract_cmd = tesseract_path
-             logging.info(f"Found Tesseract via registry: {tesseract_path}")
-        else:
-            # 2. Check hardcoded paths as a fallback
-            possible_paths = [
-                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-                os.path.join(APP_DIR, "Tesseract-OCR", "tesseract.exe"),
-                os.path.join(APP_DIR, "tesseract.exe")
-            ]
-            
-            # Check Local AppData (common for single-user installs)
-            if os.environ.get('LOCALAPPDATA'):
-                possible_paths.insert(2, os.path.join(os.environ['LOCALAPPDATA'], "Tesseract-OCR", "tesseract.exe"))
-
-            for p in possible_paths:
-                if os.path.exists(p):
-                    pytesseract.pytesseract.tesseract_cmd = p
-                    logging.info(f"Found Tesseract via fallback path: {p}")
-                    break
 
 SCAN_DIR = os.path.join(APP_DIR, "scans")
 if not os.path.exists(SCAN_DIR):
@@ -552,6 +500,8 @@ async def save_prompt(data: dict = Body(default={})):
 def run_cli_prompt(data: dict = Body(default={})):
     prompt = data.get('prompt', '')
     files = data.get('files', [])
+    # "Re-Run" sends force=True so a cached result cannot mask a new request.
+    force = bool(data.get('force', False))
 
     if not prompt:
         return {'status': 'error', 'message': 'No prompt provided.'}
@@ -560,9 +510,10 @@ def run_cli_prompt(data: dict = Body(default={})):
 
     # If we already extracted these exact images, return the cached result
     # instead of re-running the (slow/costly) AI call.
-    cached = get_cli_cache_entry(files)
-    if cached is not None:
-        return {'status': 'success', 'output': cached, 'cached': True}
+    if not force:
+        cached = get_cli_cache_entry(files)
+        if cached is not None:
+            return {'status': 'success', 'output': cached, 'cached': True}
 
     # Determine model from default_prompt.json if available
     model_name = "gemini-3.6-flash"
@@ -940,52 +891,23 @@ async def get_favicon_ico():
 async def get_favicon_png():
     return FileResponse(os.path.join(ASSET_DIR, "WysiScan.png"))
 
-def orient_cd_by_matrix_text(image_path):
-    """
-    Uses Tesseract's OSD to detect text orientation in the center of a CD
-    and rotates the image accordingly. This is for correcting 90/180/270 degree rotations.
-    """
-    if not pytesseract:
-        logging.warning("Pytesseract not available, skipping CD matrix orientation.")
-        return False
-    try:
-        img = cv2.imread(image_path)
-        if img is None:
-            logging.error(f"Could not read image for OSD: {image_path}")
-            return False
+JPEG_SAVE_PARAMS = [cv2.IMWRITE_JPEG_QUALITY, 97]
+# OpenCV's default save subsamples colour 4:2:0, which smears red/blue detail:
+# measured 28 dB PSNR on a real scan versus 42 dB at the same quality in 4:4:4.
+# Scans get re-encoded by every step (crop, straighten, adjust, tilt), so the
+# default is worth overriding everywhere.
+_444 = getattr(cv2, "IMWRITE_JPEG_SAMPLING_FACTOR_444", None)
+if _444 is not None:
+    JPEG_SAVE_PARAMS += [cv2.IMWRITE_JPEG_SAMPLING_FACTOR, _444]
 
-        # Isolate a central region where the matrix text is expected to be
-        h, w = img.shape[:2]
-        center_x, center_y = w // 2, h // 2
-        # Use a 50% ROI to ensure we capture the matrix text
-        roi_w, roi_h = int(w * 0.5), int(h * 0.5)
-        x1, y1 = max(0, center_x - roi_w // 2), max(0, center_y - roi_h // 2)
-        x2, y2 = min(w, x1 + roi_w), min(h, y1 + roi_h)
-        roi = img[y1:y2, x1:x2]
-        
-        if roi.size == 0:
-            logging.warning(f"CD matrix ROI is empty for OSD on {os.path.basename(image_path)}.")
-            return False
 
-        # Use Tesseract's Orientation and Script Detection (OSD)
-        # --psm 0 is for Orientation and script detection (OSD) only.
-        osd = pytesseract.image_to_osd(roi, config='--psm 0', output_type=pytesseract.Output.DICT)
-        
-        rotation = osd.get('rotate', 0)
-        confidence = osd.get('orientation_conf', 0)
-        
-        logging.info(f"CD OSD for {os.path.basename(image_path)}: Angle={rotation}, Confidence={confidence:.2f}")
+def _imwrite_image(path, img):
+    """Save a scan without the colour smearing OpenCV's defaults cause."""
+    if os.path.splitext(path)[1].lower() in (".jpg", ".jpeg"):
+        cv2.imwrite(path, img, JPEG_SAVE_PARAMS)
+    else:
+        cv2.imwrite(path, img)
 
-        # Only rotate if confidence is high enough and rotation is non-zero
-        if confidence > 2.0 and rotation != 0: # Confidence threshold can be adjusted
-            create_backup(image_path) # Backup before modifying
-            rotated_img = cv2.rotate(img, {90: cv2.ROTATE_90_COUNTERCLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_CLOCKWISE}[rotation])
-            cv2.imwrite(image_path, rotated_img)
-            logging.info(f"Auto-rotated CD by {rotation} degrees based on matrix text.")
-            return True # Indicate that a rotation happened
-    except Exception as e:
-        logging.error(f"Failed to orient CD by matrix text for {os.path.basename(image_path)}: {e}")
-    return False
 
 def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
     print(f"Auto-cropping: {image_path}")
@@ -1157,7 +1079,7 @@ def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
         filename = f"crop_{os.path.basename(image_path)}"
         save_path = os.path.join(os.path.dirname(image_path), filename)
         
-    cv2.imwrite(save_path, cropped)
+    _imwrite_image(save_path, cropped)
     
     return save_path
 
@@ -1605,18 +1527,33 @@ def trigger_scan(data: dict = Body(...)):
             pythoncom.CoUninitialize()
         
         if scan_success and final_path and os.path.exists(final_path):
-            # For CDs, first try to orient by matrix text
-            if media_type == 'cd':
-                if pytesseract: # Only attempt if Tesseract is available
-                    orient_cd_by_matrix_text(final_path)
-                else:
-                    logging.warning("Tesseract not available, skipping CD matrix orientation.")
-            else: # For non-CD media types, perform auto-deskew
+            # "CD/45 Front" (tape in config) straightens its text first; other
+            # non-CD media get the plain auto-deskew. CDs are not deskewed.
+            straighten_note = ""
+            if media_type == 'tape':
+                # Never let the straighten step take a scan down with it.
+                try:
+                    ok_s, msg_s = straighten_front_image(final_path, padding=crop_padding)
+                    if ok_s and msg_s and msg_s != "Already upright.":
+                        straighten_note = msg_s
+                except Exception as e:
+                    logging.error(f"CD/45 Front: straighten raised ({e}) - scan continues")
+            elif media_type != 'cd':
                 perform_auto_deskew(final_path, padding=crop_padding)
             # The original temp_path is intentionally NOT deskewed to preserve the raw scan.
 
             # Process Auto-Crop
             cropped_path = auto_crop_image(final_path, output_path=final_path, padding=int(crop_padding), media_type=media_type)
+
+            # The user's Default slider preset is applied to every finished scan.
+            # A brand-new scan: any colour history left from an earlier file at
+            # this path is meaningless, and the Default preset is about to add
+            # a fresh one.
+            _forget_adjustments(cropped_path)
+            _plain_forget(cropped_path)
+            _forget_adjustments(temp_path)
+            _plain_forget(temp_path)
+            apply_default_adjustments(cropped_path)
             
             original_deleted = False
             if auto_delete_original:
@@ -1639,6 +1576,8 @@ def trigger_scan(data: dict = Body(...)):
             if not original_deleted:
                 response["original"] = f"/view-image?path={urllib.parse.quote(temp_path)}"
                 response["original_path"] = temp_path
+            if straighten_note:
+                response["message"] = straighten_note
             
             return response
             
@@ -1729,19 +1668,29 @@ def import_file(data: dict = Body(...)):
         # Copy the raw import to the final path so processing only affects the destination file
         shutil.copy2(temp_path, final_path)
 
-        # For CDs, first try to orient by matrix text
-        if media_type == 'cd':
-            if pytesseract: # Only attempt if Tesseract is available
-                orient_cd_by_matrix_text(final_path)
-            else:
-                logging.warning("Tesseract not available, skipping CD matrix orientation.")
-        else: # For non-CD media types, perform auto-deskew
+        # "CD/45 Front" (tape in config) straightens its text first; other non-CD
+        # media get the plain auto-deskew. CDs are not deskewed.
+        if media_type == 'tape':
+            try:
+                straighten_front_image(final_path, padding=crop_padding)
+            except Exception as e:
+                logging.error(f"CD/45 Front: straighten raised ({e}) - import continues")
+        elif media_type != 'cd':
             perform_auto_deskew(final_path, padding=crop_padding)
         # The original temp_path is intentionally NOT deskewed to preserve the raw scan.
 
         # Process Auto-Crop
         cropped_path = auto_crop_image(final_path, output_path=final_path, padding=int(crop_padding), media_type=media_type)
-        
+
+        # A newly imported file carries no colour history of its own.
+        _forget_adjustments(cropped_path)
+        _plain_forget(cropped_path)
+        _forget_adjustments(temp_path)
+        _plain_forget(temp_path)
+
+        # The user's Default slider preset is applied to every finished scan.
+        apply_default_adjustments(cropped_path)
+
         original_deleted = False
         if auto_delete_original:
             if os.path.exists(temp_path):
@@ -1787,7 +1736,13 @@ def recrop(data: dict = Body(...)):
         create_backup(cropped_path)
         # Re-run the auto-crop with the new padding, overwriting the old cropped file
         new_cropped_path = auto_crop_image(original_path, output_path=cropped_path, padding=int(padding), media_type=media_type)
-        
+        _plain_forget(cropped_path)
+
+        # Re-cropping rebuilds the file from the original, so the colour history
+        # and the Default preset start over.
+        _forget_adjustments(new_cropped_path)
+        apply_default_adjustments(new_cropped_path)
+
         if new_cropped_path == cropped_path:
              return {"status": "success", "message": "Image recropped successfully."}
         else:
@@ -1818,7 +1773,8 @@ def rotate_image(data: dict = Body(...)):
             rotated_img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) # Full counter rotation
 
         # Overwrite the existing file
-        cv2.imwrite(path, rotated_img)
+        _geometry_changed(path)
+        _imwrite_image(path, rotated_img)
         
        # Add a cache-busting query parameter to the URL for the client
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
@@ -1826,6 +1782,288 @@ def rotate_image(data: dict = Body(...)):
         return {"status": "success", "message": "Image rotated", "new_url": new_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# --- Manual image adjustments -------------------------------------------------
+# Brightness / contrast / saturation / hue / tint. The scanner UI previews these
+# with CSS filters (instant) and only bakes them on "Apply". Every value applied
+# is remembered per file so "Remove All" can take just the colour back off again
+# without touching rotation, tilt or crop.
+
+
+# Slider presets live in config.json under "adjust_presets". "default" is baked
+# into every finished scan; the two customs are loaded on demand and only baked
+# when Apply is pressed. Both save themselves as the sliders move.
+ADJUST_KEYS = ("brightness", "contrast", "saturation", "hue", "tint")
+ADJUST_PRESETS = ("default", "custom1", "custom2")
+
+
+def _adjust_presets():
+    """Every preset slot, always fully populated so the page never sees gaps."""
+    stored = (load_config() or {}).get("adjust_presets") or {}
+    presets = {}
+    for name in ADJUST_PRESETS:
+        slot = stored.get(name) or {}
+        presets[name] = {k: float(slot.get(k) or 0) for k in ADJUST_KEYS}
+    return presets
+
+
+def save_adjust_preset(name, values):
+    if name not in ADJUST_PRESETS:
+        name = "default"
+    presets = _adjust_presets()
+    presets[name] = {k: float(values.get(k) or 0) for k in ADJUST_KEYS}
+    save_config_setting("adjust_presets", presets)
+    return presets
+
+
+def _unadjust_image(img, brightness=0.0, contrast=0.0, saturation=0.0, hue=0.0, tint=0.0):
+    """Take back exactly what _adjusted_image() did, in reverse order.
+
+    Only colour is touched, so rotation, tilt and crop survive - which is what
+    "Remove All" has to do. Pixels that were clipped to black/white when the
+    adjustment was applied cannot come back; everything else is recovered.
+    """
+    out = img.astype(np.float32)
+
+    # Tint was applied last on the way in, so undo it first.
+    if tint:
+        shift = tint * 1.28
+        out[..., 2] = np.clip(out[..., 2] - shift, 0, 255)   # R
+        out[..., 1] = np.clip(out[..., 1] + shift, 0, 255)   # G
+        out[..., 0] = np.clip(out[..., 0] - shift, 0, 255)   # B
+
+    if saturation or hue:
+        hsv = cv2.cvtColor(np.clip(out, 0, 255).astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
+        if hue:
+            hsv[..., 0] = (hsv[..., 0] - hue / 2.0) % 180.0
+        if saturation:
+            hsv[..., 1] = np.clip(hsv[..., 1] / max(1e-6, 1.0 + saturation / 100.0), 0, 255)
+        out = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2BGR).astype(np.float32)
+
+    if brightness:
+        out -= brightness * 1.28
+    if contrast:
+        out = (out - 128.0) / max(1e-6, 1.0 + contrast / 100.0) + 128.0
+
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+# Colour baked into each file, oldest first, so "Remove All" can take it back
+# off without a full restore (which would also throw away tilt and rotation).
+_ADJUST_HISTORY = {}      # abspath -> [values dict, ...]
+
+# The colour-free pixels, frozen just before the first adjustment lands. This is
+# what "Remove All" restores: undoing the maths cannot bring back highlights that
+# were clipped, so the real pre-colour image is kept instead.
+_PLAIN_STATE = {}         # abspath -> {"generation": int, "angle": float}
+_PLAIN_GENERATION = {}    # abspath -> int, bumped by every geometry edit
+
+
+def _plain_path(image_path):
+    safe = re.sub(r'[^A-Za-z0-9_.-]', '_', os.path.abspath(image_path))
+    return os.path.join(TEMP_DIR, f"{safe}.plain")
+
+
+def _geometry_changed(path):
+    """Note that the pixels were moved/cropped - the colour-free copy is stale."""
+    key = os.path.abspath(path)
+    _PLAIN_GENERATION[key] = _PLAIN_GENERATION.get(key, 0) + 1
+
+
+def _plain_snapshot(path):
+    """Freeze the un-coloured pixels before an adjustment is written."""
+    try:
+        plain = _plain_path(path)
+        if os.path.exists(plain):
+            return
+        shutil.copy2(path, plain)
+        key = os.path.abspath(path)
+        _PLAIN_STATE[key] = {
+            "generation": _PLAIN_GENERATION.get(key, 0),
+            "angle": float((_TILT_STATE.get(key) or {}).get("angle", 0.0)),
+        }
+    except Exception as e:
+        logging.error(f"Could not keep the colour-free copy: {e}")
+
+
+def _plain_forget(path):
+    key = os.path.abspath(path)
+    _PLAIN_STATE.pop(key, None)
+    plain = _plain_path(path)
+    if os.path.exists(plain):
+        try:
+            os.remove(plain)
+        except OSError:
+            pass
+
+
+def _remember_adjustment(path, values):
+    _ADJUST_HISTORY.setdefault(os.path.abspath(path), []).append(dict(values))
+
+
+def _forget_adjustments(path):
+    """Drop the colour history - the pixels no longer contain those values."""
+    _ADJUST_HISTORY.pop(os.path.abspath(path), None)
+
+
+def apply_default_adjustments(path):
+    """Bake the Default preset into a finished scan. Never raises.
+
+    This is what stops a dark scanner needing the same sliders every time: the
+    values are applied once per scan, after cropping.
+    """
+    try:
+        preset = _adjust_presets()["default"]
+        if not any(abs(v) > 0.01 for v in preset.values()):
+            return False
+        img = cv2.imread(path)
+        if img is None:
+            return False
+        create_backup(path)
+        _plain_snapshot(path)
+        _imwrite_image(path, _adjusted_image(img, **preset))
+        _remember_adjustment(path, preset)
+        active = ", ".join(f"{k}={v:g}" for k, v in preset.items() if v)
+        logging.info(f"Image Adjust: applied the Default preset ({active}) to {os.path.basename(path)}")
+        return True
+    except Exception as e:
+        logging.error(f"Default image adjustments failed ({e}) - scan continues")
+        return False
+
+
+def _adjusted_image(img, brightness=0.0, contrast=0.0, saturation=0.0, hue=0.0, tint=0.0):
+    out = img.astype(np.float32)
+
+    # Contrast around mid-grey, then brightness as a percentage of full scale.
+    if contrast:
+        out = (out - 128.0) * (1.0 + contrast / 100.0) + 128.0
+    if brightness:
+        out += brightness * 1.28
+    out = np.clip(out, 0, 255)
+
+    # Saturation + hue in HSV (OpenCV hue runs 0-179 for 0-360 degrees).
+    if saturation or hue:
+        hsv = cv2.cvtColor(out.astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
+        if hue:
+            hsv[..., 0] = (hsv[..., 0] + hue / 2.0) % 180.0
+        if saturation:
+            hsv[..., 1] = np.clip(hsv[..., 1] * (1.0 + saturation / 100.0), 0, 255)
+        out = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2BGR).astype(np.float32)
+
+    # Tint: positive values push magenta (R+B up, G down), negative push green.
+    if tint:
+        shift = tint * 1.28
+        out[..., 2] = np.clip(out[..., 2] + shift, 0, 255)  # R
+        out[..., 1] = np.clip(out[..., 1] - shift, 0, 255)  # G
+        out[..., 0] = np.clip(out[..., 0] + shift, 0, 255)  # B
+
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+@app.post("/adjust-preset")
+def adjust_preset_save(data: dict = Body(...)):
+    """Remember a slider preset. Values save themselves from the page, so there
+    is no separate Save step and no confirmation needed."""
+    name = data.get("preset") or "default"
+    values = data.get("values") or {}
+    try:
+        presets = save_adjust_preset(name, values)
+        return {"status": "success", "presets": presets}
+    except Exception as e:
+        logging.error(f"adjust-preset failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/adjust-image")
+def adjust_image(data: dict = Body(...)):
+    path = data.get("path")
+    if not path or not os.path.exists(path):
+        return {"status": "error", "message": "File not found"}
+
+    values = {k: float(data.get(k) or 0) for k in
+              ("brightness", "contrast", "saturation", "hue", "tint")}
+    if not any(values.values()):
+        return {"status": "error", "message": "No adjustment values supplied."}
+
+    try:
+        img = cv2.imread(path)
+        if img is None:
+            return {"status": "error", "message": "Could not read image file"}
+
+        create_backup(path)
+        _plain_snapshot(path)
+        _imwrite_image(path, _adjusted_image(img, **values))
+        _remember_adjustment(path, values)
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
+        return {"status": "success", "message": "Image adjusted", "new_url": new_url}
+    except Exception as e:
+        logging.error(f"adjust-image failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/adjust-image-reset")
+def adjust_image_reset(data: dict = Body(...)):
+    """Put the colour-free picture back, keeping rotation/tilt/crop.
+
+    Preferred path: restore the snapshot taken just before the first adjustment.
+    That is the real un-edited image - no clipped highlights, no rounding.
+    Fallback: undo the recorded maths (used when the pixels were edited in a way
+    the snapshot cannot follow, e.g. a 90 deg turn after the colour went on).
+    """
+    path = data.get("path")
+    if not path or not os.path.exists(path):
+        return {"status": "error", "message": "File not found"}
+
+    key = os.path.abspath(path)
+    plain = _plain_path(path)
+    snapshot = _PLAIN_STATE.get(key)
+
+    try:
+        if snapshot and os.path.exists(plain) and snapshot["generation"] == _PLAIN_GENERATION.get(key, 0):
+            # Geometry is unchanged since the snapshot, except possibly a tilt:
+            # rotations about the centre add up, so replay the difference.
+            tilt = _TILT_STATE.get(key) or {}
+            media_type = tilt.get("media_type", "auto")
+            angle_now = float(tilt.get("angle", 0.0))
+            delta = angle_now - float(snapshot.get("angle", 0.0))
+
+            create_backup(path)
+            _replace_file_atomically(plain, path)
+            if abs(delta) > 0.05:
+                # Replay the tilt that was applied after the snapshot. When the
+                # colour went on before any tilt, the stored crop window can be
+                # reused, which reproduces the exact framing of the tilted scan.
+                reuse = tilt.get("crop_rect") if abs(float(snapshot.get("angle", 0.0))) < 0.05 else None
+                _rotate_file_by(path, path, delta, padding=5, media_type=media_type,
+                                crop_rect=reuse)
+            _plain_forget(path)
+            _forget_adjustments(path)
+            logging.info(f"Remove All: restored the colour-free pixels of {os.path.basename(path)}"
+                         + (f" (tilt replayed {delta:+.1f} deg)" if abs(delta) > 0.05 else ""))
+            new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
+            return {"status": "success", "message": "Colour adjustments removed", "new_url": new_url}
+
+        # Fallback: no usable snapshot - undo the maths instead.
+        history = _ADJUST_HISTORY.get(key) or []
+        if not history:
+            return {"status": "error",
+                    "message": "No colour adjustments to remove for this image."}
+        img = cv2.imread(path)
+        if img is None:
+            return {"status": "error", "message": "Could not read image file"}
+        create_backup(path)
+        for values in reversed(history):
+            img = _unadjust_image(img, **values)
+        _imwrite_image(path, img)
+        _forget_adjustments(path)
+        _plain_forget(path)
+        logging.info(f"Remove All: undid {len(history)} adjustment(s) on {os.path.basename(path)}")
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
+        return {"status": "success", "message": "Colour adjustments removed", "new_url": new_url}
+    except Exception as e:
+        logging.error(f"adjust-image-reset failed: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 def get_image_background_color(img):
     """Samples the 4 corners of the image to determine the most common background color.
@@ -1869,9 +2107,10 @@ def rotate_image_fine(data: dict = Body(...)):
         bg_color = get_image_background_color(img)
         rotated_img = cv2.warpAffine(img, rotation_matrix, (w, h), borderValue=bg_color)
 
-        cv2.imwrite(path, rotated_img)
+        _imwrite_image(path, rotated_img)
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
 
+        _geometry_changed(path)
         return {"status": "success", "message": f"Image rotated {angle} degrees", "new_url": new_url}
 
     except Exception as e:
@@ -1916,20 +2155,573 @@ def deskew_image(data: dict = Body(...)):
         rotated_img = cv2.warpAffine(img, M, (newW, newH), borderValue=bg_color)
 
         if skip_crop:
-            cv2.imwrite(path, rotated_img)
+            _imwrite_image(path, rotated_img)
         else:
             # Save rotated image to a temporary path and then re-crop it
             temp_rotated_path = os.path.join(TEMP_DIR, f"rotated_{os.path.basename(path)}")
-            cv2.imwrite(temp_rotated_path, rotated_img)
+            _imwrite_image(temp_rotated_path, rotated_img)
 
             # Now, auto-crop this rotated image to remove the excess borders, overwriting the original file
             auto_crop_image(image_path=temp_rotated_path, output_path=path, padding=int(padding))
             os.remove(temp_rotated_path)
 
+        _geometry_changed(path)
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": "Image deskewed", "new_url": new_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# --- Tilt: ABSOLUTE and immediate ------------------------------------------
+# Clicking < / > / << / >> sets a single angle measured from the untouched scan
+# (1 deg, 2 deg, 3 deg ...) instead of stacking another relative rotation on an
+# already-rotated file. A "tilt base" copy of the pixels is kept per file, so
+# repeated clicks never compound JPEG loss or drift off the original.
+_TILT_STATE = {}          # abspath -> {"written_mtime": float, "angle": float}
+_TILT_LOCK = threading.Lock()   # one tilt at a time: never two writers on one file
+
+
+def _tilt_base_path(image_path):
+    safe = re.sub(r'[^A-Za-z0-9_.-]', '_', os.path.abspath(image_path))
+    return os.path.join(TEMP_DIR, f"{safe}.tiltbase")
+
+
+def _tilt_base_is_current(image_path):
+    """True while our base still matches what we last wrote to the file."""
+    state = _TILT_STATE.get(os.path.abspath(image_path))
+    if not state or not os.path.exists(_tilt_base_path(image_path)):
+        return False
+    try:
+        return abs(os.path.getmtime(image_path) - state["written_mtime"]) < 1e-6
+    except OSError:
+        return False
+
+
+def _replace_file_atomically(source_path, dest_path):
+    """Swap a finished file into place in one step.
+
+    The browser re-fetches the image after every tilt, so a half-written file
+    must never be visible: readers see either the old picture or the new one.
+    """
+    temp_path = f"{dest_path}.{time.time_ns()}.tmp"
+    try:
+        shutil.copy2(source_path, temp_path)
+        os.replace(temp_path, dest_path)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+def _disc_crop(img, padding=5):
+    """Square crop around the disc, so the padding is identical at every angle.
+
+    The disc is found by fitting a circle to everything that differs from the
+    background, which is reliable here because the rotation always adds a
+    background margin. Returns (crop, (x, y, side)) or (None, None).
+    """
+    h, w = img.shape[:2]
+    border = np.concatenate([img[0, :].reshape(-1, 3), img[-1, :].reshape(-1, 3),
+                             img[:, 0].reshape(-1, 3), img[:, -1].reshape(-1, 3)])
+    bg = np.median(border, axis=0)
+    diff = np.abs(img.astype(np.int16) - bg.astype(np.int16)).max(axis=2)
+    mask = (diff > 16).astype(np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,
+                            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None, None
+    (cx, cy), radius = cv2.minEnclosingCircle(max(contours, key=cv2.contourArea))
+    if radius < 0.15 * min(h, w) or radius > 1.1 * max(h, w):
+        return None, None
+    side = int(2 * radius + 2 * padding)
+    if side < 0.25 * min(h, w) or side > max(h, w):
+        return None, None
+    x0 = int(round(cx - side / 2.0))
+    y0 = int(round(cy - side / 2.0))
+    x0 = max(0, min(w - side, x0))
+    y0 = max(0, min(h - side, y0))
+    return img[y0:y0 + side, x0:x0 + side], (x0, y0, side)
+
+
+def _rotate_file_by(src_path, dst_path, angle, padding=5, media_type="auto", crop_rect=None):
+    """Rotate `src_path` by `angle` degrees, re-crop it, and write over `dst_path`.
+
+    Reads the untouched base and writes the destination, so there is never an
+    intermediate copy of the scan on disk.
+
+    The rotated picture gets a small background margin and is then cropped from
+    itself - never from the original bed scan - so the padding is correct after
+    every rotation. Discs (tape/cd) use a circle fit so the square crop is the
+    same at every angle; other artwork goes through the normal auto-crop.
+
+    `crop_rect` (x, y, w, h) replays a crop that was measured earlier, which is
+    what makes "Remove All" put the tilt back with exactly the same framing.
+    Returns the crop rectangle used, when one can be measured.
+    """
+    img = cv2.imread(src_path)
+    if img is None:
+        raise ValueError("Could not read image file")
+    (h, w) = img.shape[:2]
+    center = (w / 2.0, h / 2.0)
+    M = cv2.getRotationMatrix2D(center, float(angle), 1.0)
+    cos, sin = np.abs(M[0, 0]), np.abs(M[0, 1])
+    newW, newH = int((h * sin) + (w * cos)), int((h * cos) + (w * sin))
+    M[0, 2] += (newW / 2) - center[0]
+    M[1, 2] += (newH / 2) - center[1]
+    bg = get_image_background_color(img)
+    rotated = cv2.warpAffine(img, M, (newW, newH), borderValue=bg)
+
+    # A background margin, so the object never touches the edge and can be found.
+    pad_x = max(4, int(newW * 0.04))
+    pad_y = max(4, int(newH * 0.04))
+    rotated = cv2.copyMakeBorder(rotated, pad_y, pad_y, pad_x, pad_x,
+                                 cv2.BORDER_CONSTANT, value=bg)
+
+    used_rect = None
+    cropped = None
+    if media_type in ("tape", "cd"):
+        if crop_rect:
+            x0, y0, side = int(crop_rect[0]), int(crop_rect[1]), int(crop_rect[2])
+            x0 = max(0, min(rotated.shape[1] - side, x0))
+            y0 = max(0, min(rotated.shape[0] - side, y0))
+            cropped = rotated[y0:y0 + side, x0:x0 + side]
+            used_rect = (x0, y0, side)
+        else:
+            cropped, used_rect = _disc_crop(rotated, padding=int(padding))
+
+    staged_path = f"{dst_path}.{time.time_ns()}.rot.jpg"
+    cropped_path = f"{dst_path}.{time.time_ns()}.crop.jpg"
+    try:
+        if cropped is not None:
+            _imwrite_image(staged_path, cropped)
+            os.replace(staged_path, dst_path)
+        else:
+            # No disc found (or rectangular artwork): let the normal auto-crop
+            # work on the rotated picture itself.
+            _imwrite_image(staged_path, rotated)
+            auto_crop_image(staged_path, output_path=cropped_path,
+                            padding=int(padding), media_type=media_type)
+            os.replace(cropped_path, dst_path)
+    finally:
+        for leftover in (staged_path, cropped_path):
+            if os.path.exists(leftover):
+                try:
+                    os.remove(leftover)
+                except OSError:
+                    pass
+    return used_rect
+
+
+@app.post("/tilt-image")
+def tilt_image(data: dict = Body(...)):
+    """Set the absolute tilt of a file, always starting from the tilting base."""
+    path = data.get("path")
+    angle = float(data.get("angle") or 0.0)
+    padding = data.get("padding", 5)
+    skip_crop = data.get("skip_crop", False)
+    media_type = data.get("media_type", "auto")
+
+    if not path or not os.path.exists(path):
+        return {"status": "error", "message": "File not found"}
+
+    key = os.path.abspath(path)
+    base = _tilt_base_path(path)
+
+    try:
+        # Serialised: the page can send follow-up requests in quick succession,
+        # and two writers on one file is what corrupted the heap.
+        with _TILT_LOCK:
+            if abs(angle) < 0.05:
+                # Back to zero: put the base back and forget the session.
+                if _tilt_base_is_current(path):
+                    _replace_file_atomically(base, path)
+                    os.remove(base)
+                    _TILT_STATE.pop(key, None)
+            else:
+                if not _tilt_base_is_current(path):
+                    # First click, or something else edited the file since the
+                    # last tilt - freeze what is on disk now, and keep one
+                    # backup so a single Undo returns the pre-tilt scan.
+                    create_backup(path)
+                    shutil.copy2(path, base)
+                    _TILT_STATE[key] = {"written_mtime": os.path.getmtime(path), "angle": 0.0}
+                rect = _rotate_file_by(base, path, angle, padding=padding, media_type=media_type)
+                _TILT_STATE[key]["written_mtime"] = os.path.getmtime(path)
+                _TILT_STATE[key]["angle"] = angle
+                _TILT_STATE[key]["media_type"] = media_type
+                _TILT_STATE[key]["crop_rect"] = rect
+
+        new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
+        logging.info(f"Tilt: {os.path.basename(path)} set to {angle:+.1f} deg")
+        return {"status": "success", "angle": angle, "new_url": new_url}
+    except Exception as e:
+        logging.error(f"tilt-image failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# --- CD/45 Front: make the printed text upright and level ---------------------
+# Split in two stages for good reasons:
+#   1. ORIENTATION (0/90/180/270) comes from one tiny Gemini call - no local
+#      heuristic can reliably tell an upright image from an upside-down one.
+#   2. LEVELLING (skew) is local: rotate candidate angles and keep the one whose
+#      horizontal ink projection has the sharpest text lines. No network, exact.
+def _front_small(gray, max_side=800):
+    """Downscale for the orientation/skew maths - details do not matter there."""
+    h, w = gray.shape[:2]
+    scale = min(1.0, float(max_side) / float(max(h, w) or 1))
+    if scale < 1.0:
+        gray = cv2.resize(gray, (max(1, int(w * scale)), max(1, int(h * scale))),
+                          interpolation=cv2.INTER_AREA)
+    return gray
+
+
+def _text_line_score(gray):
+    """High score => ink is organised in horizontal text rows. None if not text."""
+    if gray is None or gray.size == 0:
+        return None
+    _, binimg = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    ink = float(binimg.mean()) / 255.0
+    if ink < 0.01 or ink > 0.55:            # blank page or a photo, not text
+        return None
+    rows = binimg.sum(axis=1, dtype=np.float64)
+    if rows.mean() <= 0:
+        return None
+    return float(rows.var() / (rows.mean() ** 2))
+
+
+def _rotate_with_background(img, angle):
+    """Rotate by `angle` degrees (OpenCV convention: positive = counter-clockwise),
+    filling the corners with the image's own background colour."""
+    (h, w) = img.shape[:2]
+    center = (w / 2.0, h / 2.0)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    cos, sin = abs(M[0, 0]), abs(M[0, 1])
+    new_w, new_h = int(h * sin + w * cos), int(h * cos + w * sin)
+    M[0, 2] += new_w / 2.0 - center[0]
+    M[1, 2] += new_h / 2.0 - center[1]
+    return cv2.warpAffine(img, M, (new_w, new_h), borderValue=get_image_background_color(img))
+
+
+def _orientation_cache_key(image_path):
+    try:
+        st = os.stat(image_path)
+        return (os.path.abspath(image_path), int(st.st_mtime), st.st_size)
+    except OSError:
+        return None
+
+
+# Answer per file (path + mtime + size) so a re-scan or retry is instant.
+_AI_ORIENT_CACHE = {}
+
+
+def _ai_upright_degrees(image_path, budget_seconds=25.0):
+    """Clockwise degrees (0/90/180/270) that make the text upright, or None.
+
+    gemini_pool fails over across keys/models, and `timeout` is per attempt, so a
+    bad pool can take a minute. The scan is waiting on this: run it in a worker
+    thread and stop waiting after `budget_seconds` (the worker finishes harmlessly
+    in the background). Answers are cached per file.
+    """
+    key = _orientation_cache_key(image_path)
+    if key is not None and key in _AI_ORIENT_CACHE:
+        cached = _AI_ORIENT_CACHE[key]
+        logging.info(f"CD/45 Front: orientation {cached} from cache")
+        return cached
+
+    try:
+        import concurrent.futures as _cf
+        pool = _cf.ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(_ai_upright_degrees_call, image_path)
+        try:
+            degrees = future.result(timeout=budget_seconds)
+        except _cf.TimeoutError:
+            logging.warning(f"CD/45 Front: AI orientation took longer than {budget_seconds:.0f}s - skipping it")
+            return None
+        finally:
+            pool.shutdown(wait=False)
+    except Exception as e:
+        logging.warning(f"CD/45 Front: AI orientation failed ({e})")
+        return None
+
+    if key is not None:
+        _AI_ORIENT_CACHE[key] = degrees
+    return degrees
+
+
+def _ai_upright_degrees_call(image_path):
+    """The actual Gemini request; see _ai_upright_degrees for the wrapper."""
+    temp_preview = None
+    try:
+        # The scanner process does NOT inherit the app's sys.path (it is spawned
+        # separately), so gemini_pool has to be made importable here - same
+        # bootstrap the other AI endpoints use.
+        import sys as _sys
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in _sys.path:
+            _sys.path.insert(0, _root)
+        import gemini_pool
+    except Exception as e:
+        logging.warning(f"CD/45 Front: gemini_pool unavailable ({e})")
+        return None
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return None
+        small = _front_small(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), max_side=900)
+        temp_preview = os.path.join(TEMP_DIR, f"orient_{time.time_ns()}.jpg")
+        cv2.imwrite(temp_preview, cv2.cvtColor(small, cv2.COLOR_GRAY2BGR))
+
+        prompt = (
+            "This is a scan of record/CD artwork. Which rotation makes the printed words "
+            "read normally (left to right - not sideways and not upside down)?\n"
+            "Reply with ONLY one number: 0, 90, 180 or 270, meaning the clockwise "
+            "rotation to apply."
+        )
+        started = time.time()
+        logging.info(f"CD/45 Front: asking AI for orientation ({small.shape[1]}x{small.shape[0]} preview)")
+        # Bounded: the scan is waiting on this, so never let it run for a minute.
+        text, info = gemini_pool.gemini_generate(
+            prompt_text=prompt, image_paths=[temp_preview], timeout=6,
+            extra_config_keys=_scanner_cfg_keys())
+        logging.info(f"CD/45 Front: AI replied in {time.time() - started:.1f}s")
+        if not text:
+            logging.info(f"CD/45 Front: no orientation from AI ({info.get('error', '')})")
+            return None
+        m = re.search(r'\b(0|90|180|270)\b', text)
+        if not m:
+            logging.info(f"CD/45 Front: unparseable orientation reply: {text[:60]!r}")
+            return None
+        degrees = int(m.group(1))
+        logging.info(f"CD/45 Front: AI orientation = {degrees}deg clockwise")
+        return degrees
+    except Exception as e:
+        logging.warning(f"CD/45 Front: AI orientation failed ({e})")
+        return None
+    finally:
+        if temp_preview and os.path.exists(temp_preview):
+            try:
+                os.remove(temp_preview)
+            except Exception:
+                pass
+
+
+def _word_like_blobs(gray):
+    """Word-sized, elongated ink blobs - each one's long axis is its text angle.
+
+    A label line becomes a run of word blobs that all share an angle, which is
+    what makes this rotation-invariant: no sweep is needed, so a disc label at
+    33 deg is measured as easily as one at 3 deg.
+    """
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, binimg = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    ink = float(binimg.mean()) / 255.0
+    if not (0.005 <= ink <= 0.55):        # blank page, or a photo, not text
+        return []
+    binimg = cv2.morphologyEx(binimg, cv2.MORPH_CLOSE,
+                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+    contours, _ = cv2.findContours(binimg, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    h, w = gray.shape[:2]
+    area = float(h * w)
+    blobs = []
+    for c in contours:
+        if not (40 <= cv2.contourArea(c) <= 0.02 * area):
+            continue
+        (cx, cy), (rw, rh), deg = cv2.minAreaRect(c)
+        long_side, short_side = max(rw, rh), max(1.0, min(rw, rh))
+        if long_side < 20 or long_side / short_side < 2.2:
+            continue
+        # A word is mostly gaps between glyphs (fill ~0.5); a solid shape - a
+        # printed block, a photo highlight - fills its rectangle. Without this
+        # an abstract cover can "agree" on an angle and get rotated for nothing.
+        if not (0.12 <= cv2.contourArea(c) / max(1.0, rw * rh) <= 0.70):
+            continue
+        box = cv2.boxPoints(((cx, cy), (rw, rh), deg))
+        edges = [(np.linalg.norm(box[(i + 1) % 4] - box[i]), box[(i + 1) % 4] - box[i])
+                 for i in range(4)]
+        v = max(edges, key=lambda t: t[0])[1]
+        angle = float(np.degrees(np.arctan2(v[1], v[0]))) % 180.0
+        if angle > 90:
+            angle -= 180.0
+        blobs.append({"angle": angle, "contour": c})
+    return blobs
+
+
+def _text_axis_consensus(blobs, tolerance=3.0):
+    """The angle most word blobs agree on, or None if there is no majority.
+
+    Radial/curved label text points every which way, and photo texture produces
+    scattered blobs, so both fail the majority test and are left alone.
+    """
+    if len(blobs) < 4:
+        return None
+    angles = np.array([b["angle"] for b in blobs])
+    best = None
+    for probe in angles:
+        delta = np.abs((angles - probe + 90.0) % 180.0 - 90.0)
+        members = np.nonzero(delta <= tolerance)[0]
+        fraction = len(members) / len(angles)
+        if best is None or (len(members), fraction) > (best["count"], best["fraction"]):
+            best = {"count": len(members), "fraction": fraction,
+                    "median": float(np.median(angles[members])), "members": members}
+    if best is None or best["fraction"] < 0.6:
+        return None
+    return best
+
+
+def _mask_row_sharpness(mask, angle):
+    """How sharply the mask's ink collapses into rows when rotated by `angle`."""
+    pad = 60
+    padded = cv2.copyMakeBorder(mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    h, w = padded.shape[:2]
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), float(angle), 1.0)
+    rotated = cv2.warpAffine(padded, M, (w, h), borderValue=0)
+    return float(rotated.sum(axis=1, dtype=np.float64).var())
+
+
+def _detect_skew_from_words(gray):
+    """Angle (OpenCV convention) that levels the text, found from word blobs.
+
+    Returns None when the evidence is not convincing, so the caller can fall
+    back to the narrow projection sweep.
+    """
+    blobs = _word_like_blobs(gray)
+    consensus = _text_axis_consensus(blobs)
+    if consensus is None:
+        return None
+    if consensus["count"] < 3:
+        return None
+
+    # Refine on the agreeing blobs only: artwork and label screens cannot drag
+    # the angle, which is what made a whole-image sweep unreliable at wide angles.
+    mask = np.zeros(gray.shape[:2], np.uint8)
+    for i in consensus["members"]:
+        cv2.drawContours(mask, [blobs[i]["contour"]], -1, 255, -1)
+    coarse = consensus["median"]
+    candidates = [coarse + i * 0.25 for i in range(-8, 9)]      # +-2 deg
+    return max(candidates, key=lambda a: _mask_row_sharpness(mask, a))
+
+
+def _detect_skew_from_projection(gray, search=10.0):
+    """Narrow row-projection sweep - the original method, kept as a fallback."""
+    def best_over(angles):
+        best_angle, best_score = 0.0, None
+        for a in angles:
+            probe = _rotate_with_background(gray, a) if a else gray
+            score = _text_line_score(probe)
+            if score is not None and (best_score is None or score > best_score):
+                best_angle, best_score = a, score
+        return best_angle, best_score
+
+    # 1 deg sweep, then 0.25 deg around the winner.
+    coarse, coarse_score = best_over([i * 1.0 for i in range(int(-search), int(search) + 1)])
+    if coarse_score is None:
+        return 0.0                        # nothing text-like to level
+    fine, fine_score = best_over([coarse + i * 0.25 for i in range(-4, 5)])
+    if fine_score is None:
+        fine, fine_score = coarse, coarse_score
+
+    # A winner pressed against the end of the search range means the score is
+    # being driven by the artwork's geometry, not by text rows - refuse it.
+    if abs(fine) >= search - 0.5:
+        logging.info(f"CD/45 Front: skew hit the search edge ({fine:.1f} deg) - ignoring it.")
+        return 0.0
+
+    # Only straighten when the winning angle beats "leave it as is" clearly.
+    upright_score = _text_line_score(gray)
+    if upright_score is None or fine_score < upright_score * 1.10:
+        return 0.0
+
+    # Ignore sub-half-degree noise - a tiny warp still costs a JPEG re-encode.
+    return 0.0 if abs(fine) < 0.5 else fine
+
+
+def _detect_text_skew(img, base_cv_angle=0.0, orientation_known=False):
+    """Angle (OpenCV convention) that levels the text; 0.0 when unsure.
+
+    Word-blob consensus first (works at any label angle), narrow projection
+    sweep as the fallback.
+
+    `orientation_known` says the AI decided which way up the artwork is. Without
+    that, a line of text cannot be told from the same line upside down, so only
+    a small lean is corrected. With it, the AI owns the 90 deg turns and this
+    only removes the lean - beyond 45 deg the perpendicular reading is just as
+    likely, so that is still refused. Ambiguous means leave it alone.
+    """
+    gray = _front_small(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), max_side=1400)
+    if base_cv_angle:
+        gray = _rotate_with_background(gray, base_cv_angle)
+    limit = 45.0 if orientation_known else 15.0
+
+    # Word blobs need enough pixels per letter: a full bed at 800px has none,
+    # so measure at the larger size too. If the two disagree the geometry is
+    # ambiguous, and leaving the scan alone beats guessing.
+    answers = {}
+    for max_side in (1400, 800):
+        probe = _front_small(gray, max_side) if max(gray.shape[:2]) > max_side else gray
+        found = _detect_skew_from_words(probe)
+        if found is not None:
+            answers[max_side] = found
+    if len(answers) == 2 and abs(answers[1400] - answers[800]) > 3.0:
+        logging.info(f"CD/45 Front: word angles disagree ({answers[1400]:.1f} vs "
+                     f"{answers[800]:.1f} deg) - leaving as is.")
+        return 0.0
+    angle = answers.get(1400, answers.get(800))
+
+    if angle is not None:
+        if abs(angle) > limit:
+            logging.info(f"CD/45 Front: word angle {angle:.1f} deg is ambiguous - leaving as is.")
+            return 0.0
+        return 0.0 if abs(angle) < 0.5 else angle
+
+    return _detect_skew_from_projection(_front_small(gray, 800))
+
+
+def straighten_front_image(path, padding=5):
+    """Straighten a CD/45 front scan so its text is upright and level.
+
+    Returns (bool, message). Backs the file up first, like every other edit, so
+    Undo still works. Never raises: a failure here must not break the scan.
+    """
+    if not path or not os.path.exists(path):
+        return False, "File not found"
+    try:
+        img = cv2.imread(path)
+        if img is None:
+            return False, "Could not read image"
+        logging.info(f"CD/45 Front: straightening {os.path.basename(path)} ({img.shape[1]}x{img.shape[0]})")
+
+        try:
+            degrees_cw = _ai_upright_degrees(path)
+        except Exception as e:
+            logging.warning(f"CD/45 Front: orientation step failed ({e}) - continuing without it")
+            degrees_cw = None
+
+        base = -float(degrees_cw or 0)     # OpenCV rotates counter-clockwise
+        try:
+            skew = _detect_text_skew(img, base_cv_angle=base,
+                                     orientation_known=degrees_cw is not None)
+        except Exception as e:
+            logging.warning(f"CD/45 Front: levelling step failed ({e}) - continuing without it")
+            skew = 0.0
+        total = base + skew
+
+        if abs(total) < 0.5:
+            logging.info("CD/45 Front: text already upright and level.")
+            return True, "Already upright."
+
+        create_backup(path)
+        _imwrite_image(path, _rotate_with_background(img, total))
+        message = f"Straightened {abs(degrees_cw or 0)}deg"
+        if abs(skew) >= 0.5:
+            message += f" + levelled {abs(skew):.1f}deg"
+        logging.info(f"CD/45 Front: {message} (total {total:.2f})")
+        return True, message
+    except Exception as e:
+        logging.error(f"CD/45 Front straighten failed: {e}")
+        return False, str(e)
+
 
 def perform_auto_deskew(path, padding=5):
     """
@@ -1993,7 +2785,7 @@ def perform_auto_deskew(path, padding=5):
         rotated_img = cv2.warpAffine(img, M, (newW, newH), borderValue=bg_color)
 
         # Overwrite the file at 'path' with the rotated (but not yet cropped) version.
-        cv2.imwrite(path, rotated_img)
+        _imwrite_image(path, rotated_img)
         
         return True, f"Auto-aligned ({angle:.2f}°)"
 
@@ -2010,6 +2802,7 @@ def auto_deskew(data: dict = Body(...)):
 
     success, message = perform_auto_deskew(path, padding)
     
+    _geometry_changed(path)
     if success or message == "Already aligned.":
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": message, "new_url": new_url}
@@ -2047,7 +2840,8 @@ def manual_crop(data: dict = Body(...)):
         h = min(h_img - y, h)
 
         cropped_img = img[y:y+h, x:x+w]
-        cv2.imwrite(path, cropped_img) # Overwrite the existing file
+        _geometry_changed(path)
+        _imwrite_image(path, cropped_img) # Overwrite the existing file
         return {"status": "success", "message": "Image cropped successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2092,7 +2886,7 @@ def manual_crop_as_new(data: dict = Body(...)):
         w, h = min(w_img - x, w), min(h_img - y, h)
 
         cropped_img = img[y:y+h, x:x+w]
-        cv2.imwrite(new_filepath, cropped_img)
+        _imwrite_image(new_filepath, cropped_img)
 
         return { "status": "success", "message": "New cropped image created.", "cropped_path": new_filepath, "cropped_url": f"/view-image?path={urllib.parse.quote(new_filepath)}" }
     except Exception as e: 
@@ -2124,7 +2918,8 @@ def manual_crop_replace(data: dict = Body(...)):
         w, h = min(w_img - x, w), min(h_img - y, h)
 
         cropped_img = img[y:y+h, x:x+w]
-        cv2.imwrite(target_path, cropped_img)
+        _geometry_changed(target_path)
+        _imwrite_image(target_path, cropped_img)
 
         return {"status": "success", "message": "Image cropped and replaced successfully"}
     except Exception as e:
@@ -2188,6 +2983,8 @@ def revert_crop(data: dict = Body(...)):
     try:
         create_backup(cropped_path)
         shutil.copy(original_path, cropped_path)
+        _plain_forget(cropped_path)
+        _forget_adjustments(cropped_path)
         return {"status": "success", "message": "Crop reverted to original."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2280,7 +3077,7 @@ def manage_files(data: dict = Body(...)):
                     interpolation = cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
                     img = cv2.resize(img, (new_w, new_h), interpolation=interpolation)
 
-                cv2.imwrite(dest_path, img)
+                _imwrite_image(dest_path, img)
 
                 if os.path.abspath(file_path) != os.path.abspath(dest_path):
                     os.remove(file_path)
@@ -2294,6 +3091,8 @@ def manage_files(data: dict = Body(...)):
             try:
                 if os.path.exists(file_path):
                     os.remove(file_path)
+                    _forget_adjustments(file_path)
+                    _plain_forget(file_path)
                     success_count += 1
             except Exception as e:
                 errors.append(f"Failed to delete {os.path.basename(file_path)}: {str(e)}")
@@ -2514,224 +3313,6 @@ def get_group_images(group_name: str, path: str = None):
     
     return {"images": images}
 
-def preprocess_image_for_ocr(image_path):
-    """
-    Preprocesses an image for Tesseract OCR:
-    1. Grayscale
-    2. Upscale if small (Tesseract needs ~30px height for chars)
-    3. Denoising (instead of harsh thresholding)
-    """
-    try:
-        img = cv2.imread(image_path)
-        if img is None:
-            return Image.open(image_path)
-
-        # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Upscale if the image is small (common with crops)
-        h, w = gray.shape
-        if h < 1000: 
-            scale = 2
-            gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-
-        # Denoise to remove grain/noise which causes gibberish
-        denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-
-        return Image.fromarray(denoised)
-    except Exception as e:
-        logging.error(f"Preprocessing failed: {e}")
-        return Image.open(image_path)
-
-def parse_tracklist_from_text(text_lines):
-    """
-    Applies heuristics to find a tracklist in raw OCR text.
-    """
-    tracklist = []
-    # This pattern looks for things like: A1, A-1, 1, B 2, etc. at the start of a line.
-    track_pattern = re.compile(r'^\s*([A-Z][-\s]?\d{1,2}|\d{1,2})\s+.*', re.IGNORECASE)
-
-    # Pass 1: Find a "Tracklist" header and then parse subsequent lines.
-    tracklist_start_index = -1
-    for i, line in enumerate(text_lines):
-        if 'tracklist' in line.lower() or 'tracks' in line.lower():
-            tracklist_start_index = i
-            break
-    
-    if tracklist_start_index != -1:
-        for line in text_lines[tracklist_start_index+1:]:
-            line = line.strip()
-            if track_pattern.match(line):
-                tracklist.append(line)
-            # If we hit a blank line after finding some tracks, assume the list is over.
-            elif tracklist and not line:
-                break
-        if tracklist:
-            return tracklist
-
-    # Pass 2 (Fallback): If no header was found, just grab all lines that look like tracks.
-    for line in text_lines:
-        line = line.strip()
-        if track_pattern.match(line):
-            tracklist.append(line)
-            
-    return tracklist
-
-def parse_artist_title_from_text(text):
-    """
-    Applies heuristics to guess the Artist and Title from raw OCR text.
-    """
-    lines = [line for line in text.split('\n') if line.strip()]
-    if not lines:
-        return None, None
-
-    # Heuristic 1: Look for "ARTIST - TITLE" on one of the first few lines
-    for line in lines[:3]:
-        if ' - ' in line:
-            parts = line.split(' - ', 1)
-            # Basic sanity check: not too long, not just numbers
-            if len(parts) == 2 and 1 < len(parts[0]) < 60 and 1 < len(parts[1]) < 80:
-                if re.search('[a-zA-Z]', parts[0]) and re.search('[a-zA-Z]', parts[1]):
-                    return parts[0].strip(), parts[1].strip()
-
-    # Heuristic 2: Assume first line is artist, second is title
-    if len(lines) >= 2:
-        artist = lines[0].strip()
-        title = lines[1].strip()
-        # Sanity checks to avoid grabbing junk
-        if 1 < len(artist) < 60 and 1 < len(title) < 80:
-             if re.search('[a-zA-Z]', artist) and not re.match(r'^[A-Z]?\d{1,2}\s+', title):
-                return artist, title
-
-    return None, None
-
-def analyze_cassette_shell(image_path, ocr_text):
-    """
-    Analyzes image and text to generate a cassette shell description.
-    """
-    try:
-        img = cv2.imread(image_path)
-        if img is None: return ""
-        
-        h, w = img.shape[:2]
-        aspect = w / h if h > 0 else 0
-        
-        # Basic check: Cassettes are usually rectangular (approx 1.6 ratio)
-        # Allow for some cropping variance.
-        is_likely_cassette = (1.3 < aspect < 1.9) or (0.5 < aspect < 0.8)
-        
-        # Check for cassette keywords in text to confirm intent
-        keywords = ["side 1", "side a", "side one", "dolby", "100", "50", "tape", "cassette"]
-        text_lower = ocr_text.lower()
-        has_keywords = any(k in text_lower for k in keywords)
-        
-        if not (is_likely_cassette or has_keywords):
-            return "" # Probably not a cassette, don't clutter output
-
-        # 1. Color Analysis (Sample edges to avoid label)
-        margin = int(min(h, w) * 0.1)
-        mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.rectangle(mask, (0,0), (w,h), 255, -1)
-        cv2.rectangle(mask, (margin, margin), (w-margin, h-margin), 0, -1)
-        mean_val = cv2.mean(img, mask=mask)[:3]
-        b, g, r = mean_val
-        brightness = (r + g + b) / 3
-        
-        shell_color = "Unknown"
-        shell_type = "Opaque / Solid"
-        
-        if brightness > 200: shell_color = "White"
-        elif brightness > 160 and r > b + 10: shell_color = "Off-White / Cream"
-        elif brightness < 60: shell_color = "Black"
-        elif 80 < brightness < 160 and abs(r-g) < 15 and abs(g-b) < 15:
-            shell_color = "Grey / Clear"
-            shell_type = "Clear / Transparent (Check Visual)"
-        else: shell_color = "Custom / Other"
-
-        # 2. Text Features
-        window_markers = [m for m in ["100", "50", "0"] if m in ocr_text]
-        window_desc = f"Clear Window With {'-'.join(window_markers)} Markers" if window_markers else "Clear Window (No Markers Detected)"
-
-        stamps = []
-        made_in = re.search(r'(Made\s+in\s+[A-Za-z\.\s]+)', ocr_text, re.IGNORECASE)
-        if made_in: stamps.append(made_in.group(1)[:25].strip().title())
-        stamps_str = ", ".join(stamps) if stamps else "None Detected"
-
-        # 3. Build Output Block
-        lines = ["\n--- Cassette Shell Analysis (Beta) ---"]
-        lines.append(f"Shell Type/Style: {shell_type}")
-        lines.append(f"Shell Texture: (Visual Inspection Required)") # Placeholder
-        lines.append(f"Timing Window: {window_desc}")
-        lines.append(f"Shell Color: {shell_color}")
-        lines.append(f"Ink Color: (Visual Inspection Required)") # Placeholder
-        lines.append(f"Binding: (Visual Inspection Required)") # Placeholder
-        lines.append(f"Stamps: {stamps_str}")
-        
-        return "\n".join(lines)
-    except Exception as e:
-        logging.error(f"Cassette analysis error: {e}")
-        return ""
-
-@app.post("/ocr-and-lookup")
-def ocr_and_lookup(data: dict = Body(...)):
-    if not pytesseract:
-        return {"status": "error", "message": "The 'pytesseract' library is missing from the application bundle."}
-
-    path = data.get("path")
-    if not path or not os.path.exists(path):
-        return {"status": "error", "message": "Image path is missing or invalid."}
-
-    # --- Tesseract Logic ---
-    logging.info("Using Tesseract OCR.")
-    try:
-        processed_img = preprocess_image_for_ocr(path)
-        raw_ocr_text = pytesseract.image_to_string(processed_img)
-        all_digits = re.sub(r'\D', '', raw_ocr_text)
-        barcode_match = re.search(r'(\d{10,13})', all_digits)
-
-        if barcode_match:
-            barcode = barcode_match.group(1)
-            try:
-                search_url = f"https://api.discogs.com/database/search?barcode={barcode}"
-                search_resp = httpx.get(search_url, headers=HEADERS, timeout=10)
-
-                if search_resp.status_code == 200:
-                    search_data = search_resp.json()
-                    if search_data.get("results"):
-                        release_url = search_data["results"][0].get("resource_url")
-                        if release_url:
-                            release_resp = httpx.get(release_url, headers=HEADERS, timeout=10)
-                            if release_resp.status_code == 200:
-                                release_data = release_resp.json()
-                                scraped_text = format_discogs_data(release_data)
-                                # Append cassette analysis if applicable
-                                cassette_info = analyze_cassette_shell(path, raw_ocr_text)
-                                if cassette_info: scraped_text += "\n" + cassette_info
-                                return {"status": "success", "scraped_text": scraped_text}
-            except Exception as e:
-                logging.error(f"Discogs API lookup failed for barcode {barcode}: {e}")
-
-        # Tesseract fallback text formatting
-        artist, title = parse_artist_title_from_text(raw_ocr_text)
-        tracklist = parse_tracklist_from_text(raw_ocr_text.split('\n'))
-        final_text = f"--- OCR Fallback (No Discogs Match Found) ---\nArtist: {artist or '(Could not parse)'}\nTitle: {title or '(Could not parse)'}\n\n--- Tracklist ---\n"
-        final_text += "\n".join(tracklist) if tracklist else "(Could not parse tracklist)"
-        cassette_info = analyze_cassette_shell(path, raw_ocr_text)
-        if cassette_info: final_text += "\n" + cassette_info
-        return {"status": "success", "scraped_text": final_text}
-            
-    except pytesseract.TesseractNotFoundError:
-        logging.error("TesseractNotFoundError caught. Tesseract is not installed or not in PATH.")
-        error_msg = (
-            "Tesseract OCR Not Found.\n\n"
-            "Please install Tesseract OCR and ensure it's added to your system's PATH during installation.\n\n"
-            "Alternatively, you can copy the 'Tesseract-OCR' folder from a working installation into the same directory as this application."
-        )
-        return {"status": "error", "message": error_msg}
-    except Exception as e:
-        logging.error(f"An unexpected error occurred during OCR: {e}", exc_info=True)
-        return {"status": "error", "message": f"An unexpected error occurred during OCR: {str(e)}"}
-
 @app.post("/undo-action")
 def undo_action(data: dict = Body(...)):
     path = data.get("path")
@@ -2751,7 +3332,9 @@ def undo_action(data: dict = Body(...)):
 
         # Restore the primary backup. The current version of the file is discarded.
         shutil.move(primary_backup_path, path)
+        _plain_forget(path)
         logging.info(f"Restored {path} from {primary_backup_path}")
+        _forget_adjustments(path)      # restored pixels: the colour history is stale
 
         # Now, shift the remaining backups up to fill the gap.
         # Now, shift the remaining backups down to fill the gap.
@@ -2787,6 +3370,8 @@ def redo_action(data: dict = Body(...)):
         # To redo, we must back up the current state (which is the result of an undo) back into history
         create_backup(path)
         shutil.move(redo_path, path)
+        _plain_forget(path)
+        _forget_adjustments(path)      # restored pixels: the colour history is stale
         
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": "Redo successful.", "new_url": new_url}
@@ -2806,6 +3391,125 @@ async def heartbeat(request: Request):
     except Exception:
         PAGE_HIDDEN = False
     return {"status": "ok"}
+
+
+# --- Native "always on top" pin ---------------------------------------------
+# The Extract Text panel lives in its own browser window, and a web page cannot
+# make its own OS window stay above other applications. So the pin button asks
+# this server to do it: find the window by its caption (the page title) and flip
+# SetWindowPos(HWND_TOPMOST). Same contract as the WYSIWYG app's /api/window-pin,
+# duplicated here because the scanner can also be built/run standalone.
+_GWL_EXSTYLE = -20
+_WS_EX_TOPMOST = 0x00000008
+_SWP_NOSIZE = 0x0001
+_SWP_NOMOVE = 0x0002
+_SWP_NOACTIVATE = 0x0010
+
+_USER32 = None
+
+
+def _user32():
+    """user32 with explicit argtypes so 64-bit HWND values survive the call."""
+    import ctypes
+    from ctypes import wintypes
+    global _USER32
+    if _USER32 is None:
+        u = ctypes.WinDLL("user32", use_last_error=True)
+        u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+        u.GetWindowTextLengthW.restype = ctypes.c_int
+        u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        u.GetWindowTextW.restype = ctypes.c_int
+        u.IsWindowVisible.argtypes = [wintypes.HWND]
+        u.IsWindowVisible.restype = wintypes.BOOL
+        u.GetForegroundWindow.restype = wintypes.HWND
+        u.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+        u.GetWindowLongW.restype = ctypes.c_long
+        u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                   ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+        u.SetWindowPos.restype = wintypes.BOOL
+        _USER32 = u
+    return _USER32
+
+
+def _win_pseudo_hwnd(value):
+    """HWND_TOPMOST/-NOTOPMOST arrive as -1/-2; ctypes needs the unsigned form."""
+    import ctypes
+    return ctypes.c_void_p(value & (2 ** (8 * ctypes.sizeof(ctypes.c_void_p)) - 1))
+
+
+def _win_find_by_title(title):
+    """Visible top-level window whose caption is `title` (or starts with it, so a
+    Chrome suffix such as ' - Google Chrome' still matches)."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = _user32()
+    exact, prefix = [], []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def _enum_proc(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            caption = buf.value
+            if caption == title:
+                exact.append(hwnd)
+            elif caption.startswith(title):
+                prefix.append(hwnd)
+        return True
+
+    user32.EnumWindows(_enum_proc, 0)
+    candidates = exact or prefix
+    if not candidates:
+        return None
+    foreground = user32.GetForegroundWindow()
+    return foreground if foreground in candidates else candidates[0]
+
+
+def _win_is_topmost(hwnd):
+    return bool(_user32().GetWindowLongW(hwnd, _GWL_EXSTYLE) & _WS_EX_TOPMOST)
+
+
+def _win_set_topmost(hwnd, on):
+    import ctypes
+    ok = _user32().SetWindowPos(hwnd, _win_pseudo_hwnd(-1 if on else -2), 0, 0, 0, 0,
+                                _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE)
+    if not ok:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+@app.get("/api/window-pin")
+async def window_pin_state(title: str = ""):
+    """Reports whether the window with this caption is currently always-on-top."""
+    if os.name != "nt":
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Windows only."})
+    title = (title or "").strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "title is required."})
+    hwnd = _win_find_by_title(title)
+    if not hwnd:
+        return {"status": "success", "found": False, "topmost": None}
+    return {"status": "success", "found": True, "topmost": _win_is_topmost(hwnd)}
+
+
+@app.post("/api/window-pin")
+async def window_pin_set(data: dict = Body(...)):
+    """Turns always-on-top on/off for the window with the given caption."""
+    if os.name != "nt":
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Windows only."})
+    title = (data.get("title") or "").strip()
+    if not title:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "title is required."})
+    hwnd = _win_find_by_title(title)
+    if not hwnd:
+        return {"status": "error", "message": f"Window not found: {title}"}
+    try:
+        _win_set_topmost(hwnd, bool(data.get("topmost")))
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    return {"status": "success", "found": True, "topmost": _win_is_topmost(hwnd)}
 
 @app.post("/exit")
 async def exit_app():

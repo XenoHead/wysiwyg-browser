@@ -1,23 +1,39 @@
 // The function that will be injected into the page
-// Self-update: the installer ships ChromeExt into C:\FYRTOOLS\WYSIWYG\ChromeExt
-// and overwrites these files on app upgrade. Because an unpacked extension only
-// reloads when Chrome re-reads the folder, we poll the running app for its
-// bundled extension version and call chrome.runtime.reload() when it changes.
-const APP_VERSION_URL = "http://127.0.0.1:8008/api/extension-version";
+// Self-update: the installer ships ChromeExt into C:\FYRTOOLS\WYSIWYG\ChromeExt.
+// Client machines load that folder straight off the LAN share
+// (\\<server>\FYRTOOLS\WYSIWYG\ChromeExt), so replacing the files on the server is
+// the only deployment step. Chrome keeps whatever it registered at load time,
+// though, so we compare the version Chrome actually loaded (the manifest held in
+// memory) against version.json as it exists on disk *right now*. Once the server
+// copy carries a newer version, each client reloads itself on the next poll --
+// no manual "Reload" click needed.
+//
+// Comparing against the app's /api/extension-version instead would be wrong here:
+// when both copies live on the share they always match (so it would never fire),
+// and a client running a stale local WYSIWYG.exe would reload forever.
 const RELOAD_CHECK_MINUTES = 5;
 
-function getInstalledVersion() {
-    return fetch(chrome.runtime.getURL("version.json"))
+function getLoadedVersion() {
+    try {
+        return chrome.runtime.getManifest().version;
+    } catch (e) {
+        return null;
+    }
+}
+
+function getOnDiskVersion() {
+    // cache: "no-store" so an SMB copy refreshed by the installer is seen at once.
+    return fetch(chrome.runtime.getURL("version.json"), { cache: "no-store" })
         .then(r => r.json())
         .then(j => j.version)
         .catch(() => null);
 }
 
 function checkForUpdate() {
-    Promise.all([getInstalledVersion(), fetch(APP_VERSION_URL).then(r => r.json()).then(j => j.version).catch(() => null)])
-        .then(([installed, shipped]) => {
-            if (installed && shipped && installed !== shipped) {
-                console.log(`WYSIWYG Extension: version ${installed} -> ${shipped}, reloading.`);
+    Promise.all([getLoadedVersion(), getOnDiskVersion()])
+        .then(([loaded, onDisk]) => {
+            if (loaded && onDisk && loaded !== onDisk) {
+                console.log(`WYSIWYG Extension: ${loaded} -> ${onDisk}, reloading.`);
                 chrome.runtime.reload();
             }
         })
@@ -77,35 +93,167 @@ function injectCopy(text, tabId) {
     }).catch((e) => console.warn("WYSIWYG Extension: clipboard inject failed:", e));
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+// --- Context menus ---------------------------------------------------------
+// The page-level entry is context aware: on a Discogs marketplace *listing*
+// page (/shop/item/<id>) it becomes "Send to Amazon Add" and hands the listing
+// URL to the Amazon Adds page. Everywhere else it stays the WYSIWYG scraper.
+const PAGE_MENU_ID = "sendToWysiwygPage";
+const PAGE_MENU_SCRAPER_TITLE = "Send Page to WYSIWYG Scraper";
+const PAGE_MENU_AMAZON_TITLE = "Send to Amazon Add";
+
+const DISCOGS_PAGE_PATTERNS = [
+    "*://*.discogs.com/release/*",
+    "*://*.discogs.com/sell/item/*",
+    "*://*.discogs.com/shop/item/*",
+    "*://*.discogs.com/master/*"
+];
+
+// The Adds page is served by the local app (not opened as a file:// path) so its
+// relative /api/adds/amazon-scrape call resolves against the running backend.
+const AMAZON_ADD_PAGE = "http://127.0.0.1:8008/adds/amazon";
+
+// Only real marketplace listing pages (/shop/item/<id>) switch the menu over.
+function isShopItemUrl(url) {
+    if (!url) return false;
+    try {
+        const u = new URL(url);
+        return /(^|\.)discogs\.com$/i.test(u.hostname) && /^\/shop\/item\/\d+/.test(u.pathname);
+    } catch (e) {
+        return false;
+    }
+}
+
+function createMenus() {
+    // A duplicate id (service worker restart / re-install) is harmless: the
+    // existing item is kept and only its title is refreshed by syncPageMenu().
     chrome.contextMenus.create({
         id: "sendToWysiwyg",
         title: "Send to WYSIWYG Scraper",
         contexts: ["link"],
-        targetUrlPatterns: [
-            "*://*.discogs.com/release/*",
-            "*://*.discogs.com/sell/item/*",
-            "*://*.discogs.com/shop/item/*",
-            "*://*.discogs.com/master/*"
-        ]
-    });
+        targetUrlPatterns: DISCOGS_PAGE_PATTERNS
+    }, () => { void chrome.runtime.lastError; });
 
     chrome.contextMenus.create({
-        id: "sendToWysiwygPage",
-        title: "Send Page to WYSIWYG Scraper",
+        id: PAGE_MENU_ID,
+        title: PAGE_MENU_SCRAPER_TITLE,
         contexts: ["page"],
-        documentUrlPatterns: [
-            "*://*.discogs.com/release/*",
-            "*://*.discogs.com/sell/item/*",
-            "*://*.discogs.com/shop/item/*",
-            "*://*.discogs.com/master/*"
-        ]
+        documentUrlPatterns: DISCOGS_PAGE_PATTERNS
+    }, () => { void chrome.runtime.lastError; });
+}
+
+function syncPageMenu(tab) {
+    const url = tab && (tab.url || tab.pendingUrl);
+    const title = isShopItemUrl(url) ? PAGE_MENU_AMAZON_TITLE : PAGE_MENU_SCRAPER_TITLE;
+    chrome.contextMenus.update(PAGE_MENU_ID, { title: title }, () => { void chrome.runtime.lastError; });
+}
+
+function syncPageMenuFromActiveTab() {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        if (tabs && tabs.length) syncPageMenu(tabs[0]);
+    });
+}
+
+// Make sure the menus exist, then retitle for whatever tab is showing.
+function ensureMenus() {
+    chrome.contextMenus.update(PAGE_MENU_ID, { title: PAGE_MENU_SCRAPER_TITLE }, () => {
+        if (chrome.runtime.lastError) createMenus();
+        syncPageMenuFromActiveTab();
+    });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+    createMenus();
+    syncPageMenuFromActiveTab();
+});
+chrome.runtime.onStartup.addListener(ensureMenus);
+ensureMenus();
+
+// Keep the menu in step with the tab the user is looking at.
+chrome.tabs.onActivated.addListener((activeInfo) => {
+    chrome.tabs.get(activeInfo.tabId, (tab) => {
+        if (chrome.runtime.lastError) return;
+        syncPageMenu(tab);
     });
 });
 
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.url || changeInfo.status === "complete") syncPageMenu(tab);
+});
+
+// Open the Amazon Adds page in its own popup window (same shape the app's
+// window.open() uses), pre-loaded with the listing URL. The page reads ?url=
+// on load and scrapes it automatically.
+//
+// Only an Adds page that is *already* in a popup window is reused. A copy that
+// is sitting in an ordinary tab is ignored -- reusing it would navigate that tab
+// and the page would come back as a tab, not a window.
+const AMAZON_ADD_TAB_RE = /^https?:\/\/(127\.0\.0\.1|localhost):8008\/adds\/amazon(\/|\?|$)/i;
+
+function findAmazonAddWindow(callback) {
+    chrome.windows.getAll({ populate: true }, (wins) => {
+        if (chrome.runtime.lastError || !wins) return callback(null, null);
+        for (const win of wins) {
+            if (win.type !== "popup") continue;
+            const tab = (win.tabs || []).find(t => AMAZON_ADD_TAB_RE.test(t.url || ""));
+            if (tab) return callback(win, tab);
+        }
+        callback(null, null);
+    });
+}
+
+function openAmazonAdd(discogsUrl, tab) {
+    const target = AMAZON_ADD_PAGE + "?url=" + encodeURIComponent(discogsUrl);
+    copyToClipboard(discogsUrl, tab && tab.id);
+
+    findAmazonAddWindow((win, existing) => {
+        if (win && existing) {
+            chrome.tabs.update(existing.id, { url: target, active: true });
+            chrome.windows.update(win.id, { focused: true });
+            return;
+        }
+        chrome.windows.create({
+            url: target,
+            type: "popup",
+            width: 820,
+            height: 860,
+            focused: true
+        });
+    });
+}
+
+// Find the tab where the main app page is running. Adds pages (/adds/...) share
+// the host, so prefer the main page rather than whatever 8008 tab comes first.
+function findAppTab(callback) {
+    chrome.tabs.query({ url: ["http://127.0.0.1:8008/*", "http://localhost:8008/*"] }, (tabs) => {
+        if (!tabs || !tabs.length) return callback(null);
+        const main = tabs.find(t =>
+            /^https?:\/\/(127\.0\.0\.1|localhost):8008\/(index\.html)?([?#]|$)/i.test(t.url || ""));
+        callback(main || tabs[0]);
+    });
+}
+
+// Bring the local app tab to the front. In desktop mode no such tab exists --
+// the app raises its own window from main.py's scrape bridge instead.
+function focusAppTab() {
+    findAppTab((target) => {
+        if (!target) return;
+        chrome.tabs.update(target.id, { active: true });
+        if (target.windowId != null) chrome.windows.update(target.windowId, { focused: true });
+    });
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     const isLinkScrape = info.menuItemId === "sendToWysiwyg" && info.linkUrl;
-    const isPageScrape = info.menuItemId === "sendToWysiwygPage";
+    const isPageScrape = info.menuItemId === PAGE_MENU_ID;
+
+    // Marketplace listing page: route to Adds > Amazon instead of the scraper.
+    if (isPageScrape) {
+        const pageUrl = info.pageUrl || (tab && (tab.url || tab.pendingUrl));
+        if (isShopItemUrl(pageUrl)) {
+            openAmazonAdd(pageUrl, tab);
+            return;
+        }
+    }
 
     if (isLinkScrape || isPageScrape) {
         const targetUrl = isPageScrape ? (info.pageUrl || tab.url) : info.linkUrl;
@@ -125,6 +273,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                 throw new Error("Local API request failed");
             }
             console.log("URL sent to WYSIWYG native desktop window successfully.");
+            // Hand focus to the app so the scrape result is on screen.
+            focusAppTab();
         })
         .catch(err => {
             console.log("Could not reach native app via API, falling back to tab injection:", err);
@@ -139,9 +289,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             };
 
             // Find the tab where the WYSIWYG tool is running
-            chrome.tabs.query({ url: ["http://127.0.0.1:8008/*", "http://localhost:8008/*"] }, (tabs) => {
-                if (tabs.length > 0) {
-                    const wysiwygTab = tabs[0];
+            findAppTab((wysiwygTab) => {
+                if (wysiwygTab) {
                     chrome.tabs.update(wysiwygTab.id, { active: true });
                     chrome.windows.update(wysiwygTab.windowId, { focused: true });
                     runScript(wysiwygTab.id);

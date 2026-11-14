@@ -35,7 +35,7 @@ LicenseFile=C:\Users\Scott\FYR_LICENSE.txt
 ;PrivilegesRequired=lowest
 OutputDir=C:\Git\WysiWyg-Browser\WysiChat\installer
 OutputBaseFilename=WysiChat_Installer
-SetupIconFile=C:\Git\WysiWyg-Browser\WysiChat\fyr-logo.ico
+SetupIconFile=C:\Git\WysiWyg-Browser\WysiChat\wysichat-logo.ico
 SolidCompression=yes
 WizardStyle=modern dynamic windows11
 

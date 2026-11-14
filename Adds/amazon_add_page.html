@@ -82,6 +82,10 @@
         color: var(--accent);
         text-transform: uppercase;
         letter-spacing: 0.03em;
+        /* Jump to section: scrollIntoView parks the title at y=0, which puts it
+           underneath the sticky #aapTopbar. Reserve that height so the title
+           lands just below the bar instead of hidden behind it. */
+        scroll-margin-top: 52px;
     }
     .field-row {
         display: flex;
@@ -221,6 +225,16 @@
         cursor: pointer;
         max-width: 280px;
     }
+    .aap-check {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
     body.dark #aapViewMode,
     body.dark #aapSectionNav {
         color: #000000;
@@ -242,18 +256,6 @@
         color: var(--btn-text);
         border-color: var(--accent);
     }
-    #aapWrap.pinned {
-        position: fixed !important;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 2147483647;
-        background: var(--bg);
-        padding: 18px;
-        overflow: auto;
-        max-height: 100vh;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-    }
 </style>
 </head>
 <body>
@@ -269,9 +271,13 @@
             Section:
             <select id="aapSectionNav">
                 <option value="">Jump to section…</option>
+                <option value="top">Top</option>
             </select>
         </label>
-        <button id="aapPinBtn" class="ghost" title="Keep this panel on top" onclick="toggleAapPin()">📌</button>
+        <label class="aap-check" for="aapHideEmpty" title="Hide fields that have no value or only a default placeholder">
+            <input type="checkbox" id="aapHideEmpty"> Hide Empty
+        </label>
+        <button id="aapPinBtn" class="ghost" title="Keep this window on top" onclick="toggleAapPin()">📍</button>
     </div>
     <h2>Adds &middot; Amazon</h2>
     <div class="sub">Paste a Discogs seller / release link (e.g. https://www.discogs.com/shop/item/4330873320). Data is pulled via the Discogs API and laid out using the Amazon Adds scraper.</div>
@@ -279,6 +285,7 @@
     <div class="row">
         <input type="text" id="urlInput" placeholder="Paste Discogs URL here..." autocomplete="off" spellcheck="false">
         <button class="scrape-btn" id="scrapeBtn">Scrape</button>
+        <button class="ghost" id="pullUrlBtn" title="Grab the URL currently in the WYSIWYG Discogs URL box">Pull from WYSIWYG</button>
         <button class="ghost" id="copyAllBtn">Copy All</button>
     </div>
     <div class="status" id="status"></div>
@@ -292,6 +299,7 @@
     const copyAllBtn = document.getElementById('copyAllBtn');
     const statusEl = document.getElementById('status');
     const results = document.getElementById('results');
+    const hideEmptyBox = document.getElementById('aapHideEmpty');
     let lastText = '';
 
     // Match the app's dark/light theme from localStorage if present.
@@ -456,7 +464,68 @@
             renderKeywordGroup(pendingKeywords.join(', '));
         }
         populateSectionNav();
+        applyHideEmpty();
     }
+
+    // --- Hide Empty ---------------------------------------------------------
+    // Values the scraper (or Amazon's own form) leaves behind when there is no
+    // real data. Kept in sync with the placeholders emitted by
+    // Adds/Amazon_add_scraper.py ("Check box: ...", "*(Not found)*", etc).
+    const EMPTY_VALUES = ['n/a', 'na', 'none', 'null', '*(not found)*', 'need-sku', '-', '—'];
+    // Fields that are only ever instructions for the Amazon form, so they are
+    // treated as empty regardless of the text they carry.
+    const EMPTY_LABELS = ['upload photos', 'merchant shipping group'];
+
+    function rowIsEmpty(row) {
+        const val = row.querySelector('.field-val');
+        if (!val) return false;
+        const lbl = row.querySelector('.field-label');
+        const label = (lbl ? lbl.textContent : '').trim().toLowerCase();
+        if (EMPTY_LABELS.includes(label)) return true;
+        const text = (val.value || '').trim();
+        if (!text) return true;
+        const low = text.toLowerCase();
+        if (EMPTY_VALUES.includes(low)) return true;
+        // Amazon's "no value" instruction: Check box: "This product does not have a Product ID"
+        if (low.includes('check box:')) return true;
+        return false;
+    }
+
+    // Show/hide existing rows in place - no re-render, so edits in the boxes are
+    // never lost. Section headings left with nothing visible are hidden too.
+    function applyHideEmpty() {
+        const on = !!(hideEmptyBox && hideEmptyBox.checked);
+        const children = Array.from(results.children);
+
+        children.forEach((el) => {
+            if (el.classList.contains('field-row')) {
+                el.style.display = (on && rowIsEmpty(el)) ? 'none' : '';
+            } else if (el.classList.contains('kw-group')) {
+                const hasValue = Array.from(el.querySelectorAll('.kw-val'))
+                    .some(t => (t.value || '').trim());
+                el.style.display = (on && !hasValue) ? 'none' : '';
+            }
+        });
+
+        let heading = null;
+        let visibleInSection = false;
+        const closeHeading = () => {
+            if (heading) heading.style.display = (on && !visibleInSection) ? 'none' : '';
+        };
+        for (const el of children) {
+            if (el.classList.contains('section-title')) {
+                closeHeading();
+                heading = el;
+                visibleInSection = false;
+            } else if (el.style.display !== 'none') {
+                visibleInSection = true;
+            }
+        }
+        closeHeading();
+    }
+
+    hideEmptyBox?.addEventListener('change', applyHideEmpty);
+    // Deliberately not re-applied on typing: a row must not vanish mid-edit.
 
     // Re-render the last scrape in the newly selected view (no re-scrape needed).
     function onAapViewChange() {
@@ -468,7 +537,7 @@
         const nav = document.getElementById('aapSectionNav');
         if (!nav) return;
         const titles = Array.from(results.querySelectorAll('.section-title'));
-        const opts = ['<option value="">Jump to section…</option>'];
+        const opts = ['<option value="">Jump to section…</option>', '<option value="top">Top</option>'];
         titles.forEach((t, i) => {
             const label = t.textContent || ('Section ' + (i + 1));
             opts.push('<option value="' + i + '">' + label + '</option>');
@@ -479,6 +548,13 @@
     // Scroll to the chosen section when the dropdown changes.
     function onAapSectionNav(idx) {
         if (idx === '' || idx == null) return;
+        const nav = document.getElementById('aapSectionNav');
+        if (idx === 'top') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            // Reset the dropdown so the same entry can be re-selected later.
+            if (nav) nav.value = '';
+            return;
+        }
         const titles = Array.from(results.querySelectorAll('.section-title'));
         const target = titles[parseInt(idx, 10)];
         if (target) {
@@ -490,7 +566,6 @@
             setTimeout(() => { target.style.background = old; }, 700);
         }
         // Reset the dropdown so the same section can be re-selected later.
-        const nav = document.getElementById('aapSectionNav');
         if (nav) nav.value = '';
     }
 
@@ -567,15 +642,19 @@
 
     copyAllBtn.addEventListener('click', async () => {
         const parts = [];
+        // Rows hidden by the "Hide Empty" filter are left out of the copy.
         results.querySelectorAll('.section-title').forEach((h) => {
+            if (h.style.display === 'none') return;
             parts.push(h.dataset.full || h.textContent);
         });
         results.querySelectorAll('.field-row').forEach((row) => {
+            if (row.style.display === 'none') return;
             const lbl = row.querySelector('.field-label');
             const val = row.querySelector('.field-val');
             if (lbl && val) parts.push(lbl.textContent + ' - ' + val.value);
         });
         results.querySelectorAll('.kw-group').forEach((grp) => {
+            if (grp.style.display === 'none') return;
             const label = grp.querySelector('.field-label');
             const vals = [];
             grp.querySelectorAll('.kw-line .kw-val').forEach((ta) => {
@@ -587,7 +666,12 @@
         const text = parts.join('\n');
         if (!text.trim()) { setStatus('Nothing to copy yet.', 'err'); return; }
         const ok = await copyText(text);
-        setStatus(ok ? 'Copied all (with your edits) to clipboard.' : 'Copy failed.', ok ? 'ok' : 'err');
+        if (ok) {
+            flashCopied(copyAllBtn);
+            setStatus('Copied all (with your edits) to clipboard.', 'ok');
+        } else {
+            setStatus('Copy failed.', 'err');
+        }
     });
 
     async function doScrape() {
@@ -626,6 +710,22 @@
 
     // (a) Auto-paste the clipboard on load.
     window.addEventListener('DOMContentLoaded', async () => {
+        // "Hide Empty" always starts off: the page opens showing every field.
+        // (Explicit reset because Chrome restores form state on some reloads.)
+        if (hideEmptyBox) {
+            hideEmptyBox.checked = false;
+            applyHideEmpty();
+        }
+        // Extension hand-off: the Chrome context menu ("Send to Amazon Add" on a
+        // /shop/item listing page) opens this page as ?url=<encoded URL>.
+        const handedOff = (new URLSearchParams(location.search).get('url') || '').trim();
+        if (handedOff) {
+            urlInput.value = handedOff;
+            // Drop the ?url= from the address bar so a reload doesn't re-scrape.
+            try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+            doScrape();
+            return;
+        }
         try {
             if (navigator.clipboard && navigator.clipboard.readText) {
                 const txt = (await navigator.clipboard.readText()).trim();
@@ -643,6 +743,20 @@
     // Manual scrape button
     scrapeBtn.addEventListener('click', doScrape);
 
+    // Pull the URL that is currently sitting in the main app's Discogs URL box.
+    // Both pages run on http://127.0.0.1:8008, so app.js can park it in
+    // localStorage ('wysiwyg_last_discogs_url') for us to read.
+    document.getElementById('pullUrlBtn').addEventListener('click', () => {
+        let url = '';
+        try { url = (localStorage.getItem('wysiwyg_last_discogs_url') || '').trim(); } catch (e) { }
+        if (!url) {
+            setStatus('No Discogs URL in WYSIWYG yet.', 'err');
+            return;
+        }
+        urlInput.value = url;
+        doScrape();
+    });
+
     // View dropdown (Full/Small): re-render the last scrape, no re-scrape.
     // Wired here (not via inline onchange) because these functions are scoped
     // to this IIFE.
@@ -659,26 +773,96 @@
 })();
 </script>
 <script>
-// Always-on-top pin for the Amazon Adds page (in-page; wraps content and
-// floats it above other in-page content). Global so the inline onclick works.
-function toggleAapPin() {
-    let wrap = document.getElementById('aapWrap');
-    if (!wrap) {
-        wrap = document.createElement('div');
-        wrap.id = 'aapWrap';
-        const topbar = document.getElementById('aapTopbar');
-        const toMove = [];
-        for (const child of Array.from(document.body.children)) {
-            if (child !== topbar) toMove.push(child);
-        }
-        for (const child of toMove) wrap.appendChild(child);
-        document.body.insertBefore(wrap, topbar.nextSibling);
-    }
-    const on = wrap.classList.toggle('pinned');
+// Always-on-top pin. A web page cannot make its own OS window stay above other
+// applications, so the local app does it natively: POST /api/window-pin finds
+// this window by its caption (document.title) and flips SetWindowPos(HWND_TOPMOST).
+// The button stays put and shows a pinned state, so clicking it again releases.
+function aapPaintPin(on) {
     const btn = document.getElementById('aapPinBtn');
-    btn.classList.toggle('pinned', on);
-    btn.title = on ? 'Unpin panel' : 'Keep this panel on top';
+    if (!btn) return;
+    btn.classList.toggle('pinned', !!on);
+    btn.textContent = on ? '📌' : '📍';
+    btn.title = on ? 'Pinned on top — click to release' : 'Keep this window on top';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
 }
+
+function aapPinStatus(msg, isErr) {
+    const el = document.getElementById('status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'status' + (isErr ? ' err' : '');
+}
+
+// Remember the chosen state so the next Adds window opens the same way. The OS
+// topmost flag dies with the window, so this preference is what restores it.
+const AAP_PIN_KEY = 'wysiwyg_adds_amazon_pin';
+
+function aapStoredPin() {
+    try {
+        const v = localStorage.getItem(AAP_PIN_KEY);
+        return v === null ? null : v === '1';
+    } catch (e) {
+        return null;
+    }
+}
+
+function aapStorePin(on) {
+    try { localStorage.setItem(AAP_PIN_KEY, on ? '1' : '0'); } catch (e) {}
+}
+
+async function aapPinState() {
+    try {
+        const r = await fetch('/api/window-pin?title=' + encodeURIComponent(document.title));
+        const d = await r.json();
+        return (d && d.found) ? !!d.topmost : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function aapApplyPin(want, quiet) {
+    const btn = document.getElementById('aapPinBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const r = await fetch('/api/window-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: document.title, topmost: want })
+        });
+        const d = await r.json();
+        if (d && d.status === 'success' && d.found) {
+            aapPaintPin(!!d.topmost);
+            aapStorePin(!!d.topmost);
+            if (!quiet) aapPinStatus(d.topmost ? 'Window pinned on top.' : 'Window no longer on top.', false);
+            return !!d.topmost;
+        }
+        aapPaintPin(await aapPinState());
+        aapPinStatus('Pin failed: ' + ((d && d.message) || 'window not found'), true);
+        return null;
+    } catch (e) {
+        aapPaintPin(await aapPinState());
+        aapPinStatus('Pin failed: ' + e, true);
+        return null;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function toggleAapPin() {
+    const btn = document.getElementById('aapPinBtn');
+    if (!btn) return;
+    await aapApplyPin(!btn.classList.contains('pinned'), false);
+}
+
+// On load: honour the remembered preference (re-applying it for this new window),
+// otherwise just show whatever the window is currently doing.
+document.addEventListener('DOMContentLoaded', async () => {
+    if (aapStoredPin() === true) {
+        await aapApplyPin(true, true);
+    } else {
+        aapPaintPin(await aapPinState());
+    }
+});
 </script>
 </body>
 </html>

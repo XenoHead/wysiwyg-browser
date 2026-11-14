@@ -21,11 +21,19 @@ trusting it to carry across a chat. Project-specific conventions stay here.
    growing region e.g. result box = `flex:1; overflow:auto`). Simply resizing the
    backdrop with a fixed-size inner block is NOT sufficient.
 
-**Reference implementation:** the Amazon Add modal — `aapWrap` in
-`Adds/amazon_add_page.html` (draggable, resizable, redraws). Match its behavior.
+**Reference implementation:** the WysiScan `ocr-modal` pattern in
+`WysiScan/scanner_test.html` (`.ocr-modal` = draggable header + `resize: both` +
+flex content). Match its behavior.
 
-Enforced for: Amazon Add modal, WysiScan `ocr-modal`s (cliModal / Extract Text,
-ocrResultModal, helpModal, renameModal, paddingModal), and any future modal.
+Enforced for: WysiScan `ocr-modal`s (ocrResultModal, helpModal, renameModal,
+paddingModal), and any future modal.
+
+**Not** a modal any more — kept in its own browser window instead:
+- Adds > Amazon (`Adds/amazon_add_page.html`) — popup window opened by the app or
+  the Chrome extension; the panel fills the window.
+- WysiScan **Extract Text From Image(s)** (`?extract=1` mode of
+  `scanner_test.html`) — popup window; Cancel/× closes it, Pin keeps the whole OS
+  window on top via `POST /api/window-pin`.
 
 ### Protected areas — do not edit without explicit permission (mandatory)
 - **Walmart Sheet** (`WalmartSheet/`, `walmart.html`, `walmartapp.js`, `walmart.py`, `generate_sheet.py`)

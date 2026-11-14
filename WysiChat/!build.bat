@@ -2,10 +2,16 @@
 echo [1/3] Verifying files...
 echo.
 echo [2/3] Cleaning old builds...
-rmdir /s /q build dist 2>nul
+rem NEVER delete the dist folder: it also holds this machine's own chat data
+rem (chat_history_<alias>.db, user_prefs_<alias>.json, machine_conf_<name>.json).
+rem Only the previous exe and the PyInstaller scratch dir are removed.
+if exist "dist\Wysichat.exe" del /q "dist\Wysichat.exe"
+rmdir /s /q build 2>nul
 
 echo [3/3] Building Wysichat.exe...
-pyinstaller --noconfirm --onefile --windowed --name "Wysichat" --icon "fyr-logo.ico" --add-data "fyrlogo.png;." --add-data "fyrlogo_alert.png;." main.py
+rem Those data files are created per user at runtime next to the exe - never pass
+rem them to --add-data, or every user would inherit this machine's history.
+pyinstaller --noconfirm --onefile --windowed --name "Wysichat" --icon "wysichat-logo.ico" --add-data "fyrlogo.png;." --add-data "fyrlogo_alert.png;." main.py
 
 
 echo Syncing to local root...

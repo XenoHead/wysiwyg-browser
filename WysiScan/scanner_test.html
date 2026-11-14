@@ -499,6 +499,51 @@
         .ocr-modal.stay-on-top {
             z-index: 2000;
         }
+
+        /* --- Extract Text window mode -------------------------------------
+           Extract Text opens in its own browser window. The page re-loads itself
+           with ?extract=1 and body.extract-mode hides the scanner UI so only the
+           panel shows, stretched to fill the window (no backdrop, no dragging). */
+        body.extract-mode {
+            margin: 0;
+            overflow: hidden;
+        }
+        body.extract-mode > *:not(#cliModal):not(#toast-container) {
+            display: none !important;
+        }
+        body.extract-mode #cliModal {
+            display: flex !important;
+            position: static !important;
+            transform: none !important;
+            left: auto !important;
+            top: auto !important;
+            width: 100vw !important;
+            max-width: 100vw !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            resize: none !important;
+            overflow: hidden !important;
+        }
+        body.extract-mode #cliModal .ocr-modal-content {
+            height: 100%;
+            box-sizing: border-box;
+        }
+        /* Maximizing is meaningless when the window *is* the panel. */
+        body.extract-mode #cliMaxBtn {
+            display: none !important;
+        }
+        /* Dark/light switch only exists in the extract window (the scanner page
+           has Theme in its own drawer). */
+        #cliThemeBtn {
+            display: none;
+        }
+        body.extract-mode #cliThemeBtn {
+            display: inline-block;
+        }
         #cliPinBtn.pinned {
             background: #6f42c1;
             color: #fff;
@@ -534,23 +579,14 @@
             margin-top: 10px;
         }
 
-        #ocrResultText {
-            width: calc(100% - 12px);
-            height: 200px;
-            font-family: monospace;
-            background: var(--input-bg);
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-        }
-
         #tilt-ui {
             background: var(--bg-container);
-            padding: 15px 10px;
+            padding: 10px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 4px;
             align-items: center;
             min-width: 130px;
             flex-shrink: 0;
@@ -559,6 +595,119 @@
         #tilt-ui button {
             margin: 0;
             min-width: 45px;
+        }
+
+        #adjust-ui {
+            background: var(--bg-container);
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            align-items: center;
+            min-width: 130px;
+            flex-shrink: 0;
+        }
+
+        #adjust-ui .adj-row {
+            width: 100%;
+            font-size: 11px;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            margin: 0;
+        }
+
+        /* Name on the left, value on the right - one line instead of two. */
+        #adjust-ui .adj-row .adj-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            width: 100%;
+        }
+
+        #adjust-ui .adj-row .adj-val {
+            font-weight: bold;
+            color: var(--accent, #6f42c1);
+        }
+
+        /* Compact slider: 10px tall so the whole rail fits without scrolling. */
+        #adjust-ui .adj-row input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 10px;
+            margin: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        #adjust-ui .adj-row input[type="range"]::-webkit-slider-runnable-track {
+            height: 3px;
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        #adjust-ui .adj-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            margin-top: -3.5px;
+            border-radius: 50%;
+            background: var(--primary-text, #6f42c1);
+            cursor: pointer;
+        }
+
+        #adjust-ui button {
+            margin: 0;
+            min-width: 45px;
+        }
+
+        /* Preset picker: three stacked radios so the narrow rail stays readable. */
+        #adjust-ui .adj-presets {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            font-size: 11px;
+            color: var(--text-main);
+            padding-bottom: 3px;
+            margin-bottom: 2px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #adjust-ui .adj-presets label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        #adjust-ui .adj-presets input[type="radio"] {
+            width: 12px;
+            height: 12px;
+            margin: 0;
+        }
+
+        /* Low-key text button: it edits a preset, it is not a normal action. */
+        #adjust-ui .adj-presets .adj-reset-default {
+            align-self: flex-start;
+            margin: 2px 0 0 0;
+            padding: 0;
+            min-width: 0;
+            background: none;
+            border: none;
+            color: var(--text-muted, #888);
+            font-size: 10px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        #adjust-ui .adj-presets .adj-reset-default:hover {
+            color: var(--accent, #6f42c1);
         }
 
         /* ==== COMPACT TOP AREA (2026-10-27) ====
@@ -603,6 +752,29 @@
 </head>
 
 <body>
+    <script>
+        // Extract Text lives in its own browser window: set the mode class before
+        // first paint so the scanner UI never flashes behind the panel. Restore
+        // the saved theme here too, so the panel never flashes light-then-dark.
+        if (new URLSearchParams(location.search).get('extract') === '1') {
+            document.body.classList.add('extract-mode');
+        }
+        try {
+            if (localStorage.getItem('wysiscan_theme') === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+            }
+        } catch (e) { /* private mode / storage blocked */ }
+    </script>
+    <!-- Tint filter used by the Image Adjust preview (magenta +, green -) -->
+    <svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true" focusable="false">
+        <filter id="adjTintFilter" color-interpolation-filters="sRGB">
+            <feComponentTransfer>
+                <feFuncR type="linear" slope="1" intercept="0" id="adjTintR" />
+                <feFuncG type="linear" slope="1" intercept="0" id="adjTintG" />
+                <feFuncB type="linear" slope="1" intercept="0" id="adjTintB" />
+            </feComponentTransfer>
+        </filter>
+    </svg>
     <div class="container">
         <div class="app-topbar">
             <button class="menu-btn" onclick="openWysiScanDrawer()">☰ Menu</button>
@@ -784,49 +956,109 @@
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
                         name="mediaType" value="auto" checked onchange="handleCropModeChange()"> Auto</label>
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="cd" onchange="handleCropModeChange()"> Custom1</label>
+                        name="mediaType" value="cd" onchange="handleCropModeChange()"> CD Matrix</label>
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="tape" onchange="handleCropModeChange()"> Custom2</label>
+                        name="mediaType" value="tape" onchange="handleCropModeChange()"> CD/45 Front</label>
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="lp" onchange="handleCropModeChange()"> Custom3</label>
+                        name="mediaType" value="lp" onchange="handleCropModeChange()"> Custom One</label>
             </div>
         </div>
 
         <div id="status" class="status"></div>
 
         <div class="main-layout" style="display: flex; gap: 20px; align-items: flex-start;">
+            <!-- Left column: Tilt Correction + Image Adjust, stacked -->
+            <div id="left-controls" style="display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;">
             <!-- Manual Tilt UI vertically aligned on the left -->
             <div id="tilt-ui">
-                <div style="font-weight: bold; font-size: 13px; margin-bottom: 2px;">📐 Tilt Correction</div>
-
                 <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
-                    <button onclick="adjustTilt(-5)" title="Tilt Left 5°"
-                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;&lt;</button>
-                    <button onclick="adjustTilt(-1)" title="Tilt Left 1°"
-                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;</button>
+                    <button onpointerdown="tiltPressStart(event, -10)" onpointerup="stopTiltHold()"
+                        onpointerleave="stopTiltHold()" onpointercancel="stopTiltHold()"
+                        onclick="tiltClick(event, -10)" title="Tilt Left 10° (hold to repeat)"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;&lt;</button>
+                    <button onpointerdown="tiltPressStart(event, -1)" onpointerup="stopTiltHold()"
+                        onpointerleave="stopTiltHold()" onpointercancel="stopTiltHold()"
+                        onclick="tiltClick(event, -1)" title="Tilt Left 1° (hold to repeat)"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&lt;</button>
                 </div>
 
-                <input type="number" id="tiltAngle" value="0" step="0.1"
-                    style="width: 70px; text-align: center; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: var(--input-bg); color: var(--text-main);"
-                    title="Manual degree input">
+                <input type="number" id="tiltAngle" value="0.0" step="1"
+                    onchange="setTiltFromInput()"
+                    style="width: 70px; text-align: center; padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: var(--input-bg); color: var(--text-main);"
+                    title="Absolute tilt in degrees - measured from the untouched scan">
 
                 <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
-                    <button onclick="adjustTilt(5)" title="Tilt Right 5°"
-                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;&gt;</button>
-                    <button onclick="adjustTilt(1)" title="Tilt Right 1°"
-                        style="background: #000; color: #fff; border: 1px solid #333; padding: 4px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;</button>
+                    <button onpointerdown="tiltPressStart(event, 10)" onpointerup="stopTiltHold()"
+                        onpointerleave="stopTiltHold()" onpointercancel="stopTiltHold()"
+                        onclick="tiltClick(event, 10)" title="Tilt Right 10° (hold to repeat)"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;&gt;</button>
+                    <button onpointerdown="tiltPressStart(event, 1)" onpointerup="stopTiltHold()"
+                        onpointerleave="stopTiltHold()" onpointercancel="stopTiltHold()"
+                        onclick="tiltClick(event, 1)" title="Tilt Right 1° (hold to repeat)"
+                        style="background: #000; color: #fff; border: 1px solid #333; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-weight: bold;">&gt;</button>
                 </div>
 
                 <div style="width: 100%; display: flex; gap: 5px;">
-                    <button onclick="applyTilt()"
-                        style="flex: 1; padding: 8px 4px; background: #000; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Apply</button>
-                    <button onclick="document.getElementById('tiltAngle').value = 0"
-                        style="flex: 1; padding: 8px 4px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer; font-size: 12px;">Reset</button>
+                    <button onclick="resetTilt()" title="Back to 0° (the untouched scan)"
+                        style="flex: 1; padding: 2px 4px; background: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 12px;">Reset</button>
                 </div>
 
                 <button onclick="autoDeskew()"
-                    style="width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">✨
+                    style="width: 100%; padding: 3px 10px; background-color: #6f42c1; color: #fff; border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">✨
                     Auto-Align</button>
+            </div>
+
+            <!-- Image adjustments: live CSS preview on the original scan, baked on Apply -->
+            <div id="adjust-ui">
+                <div class="adj-presets">
+                    <label title="Baked into every new scan automatically">
+                        <input type="radio" name="adjPreset" value="default" checked
+                            onchange="selectAdjustPreset('default')"> Default</label>
+                    <label title="Loaded when you pick it - applied only when you press Apply">
+                        <input type="radio" name="adjPreset" value="custom1"
+                            onchange="selectAdjustPreset('custom1')"> Custom One</label>
+                    <label title="Loaded when you pick it - applied only when you press Apply">
+                        <input type="radio" name="adjPreset" value="custom2"
+                            onchange="selectAdjustPreset('custom2')"> Custom Two</label>
+                    <button type="button" class="adj-reset-default" onclick="resetDefaultPreset()"
+                        title="Put the Default preset back to 0, so new scans are left as the scanner made them">Reset Default</button>
+                </div>
+                <label class="adj-row">
+                    <span class="adj-head">Brightness<span class="adj-val" id="adjBrightnessVal">0</span></span>
+                    <input type="range" id="adjBrightness" min="-100" max="100" step="1" value="0"
+                        oninput="adjustCssFilter()">
+                </label>
+                <label class="adj-row">
+                    <span class="adj-head">Contrast<span class="adj-val" id="adjContrastVal">0</span></span>
+                    <input type="range" id="adjContrast" min="-100" max="100" step="1" value="0"
+                        oninput="adjustCssFilter()">
+                </label>
+                <label class="adj-row">
+                    <span class="adj-head">Saturation<span class="adj-val" id="adjSaturationVal">0</span></span>
+                    <input type="range" id="adjSaturation" min="-100" max="100" step="1" value="0"
+                        oninput="adjustCssFilter()">
+                </label>
+                <label class="adj-row">
+                    <span class="adj-head">Hue<span class="adj-val" id="adjHueVal">0</span></span>
+                    <input type="range" id="adjHue" min="-180" max="180" step="1" value="0"
+                        oninput="adjustCssFilter()">
+                </label>
+                <label class="adj-row">
+                    <span class="adj-head">Tint<span class="adj-val" id="adjTintVal">0</span></span>
+                    <input type="range" id="adjTint" min="-100" max="100" step="1" value="0"
+                        oninput="adjustCssFilter()">
+                </label>
+
+                <div style="width: 100%; display: flex; gap: 5px;">
+                    <button onclick="applyImageAdjust()" title="Bake these adjustments into the image"
+                        style="flex: 1; padding: 2px 4px; background-color: #28a745; border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Apply</button>
+                    <button onclick="resetImageAdjustSliders()" title="Sliders back to 0 (image untouched)"
+                        style="flex: 1; padding: 2px 4px; background: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 12px;">Boost</button>
+                </div>
+
+                <button onclick="resetImageAdjustAll()" title="Remove the brightness/contrast/colour settings - rotation and tilt are kept"
+                    style="width: 100%; padding: 2px 4px; background: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">↺ Remove All</button>
+            </div>
             </div>
 
             <div class="main-previews" style="flex: 2;">
@@ -871,8 +1103,6 @@
                                 style="flex: 1; margin-right: 0;">Full</button>
                             <button type="button" onclick="openImageExternal(document.getElementById('croppedImg'))"
                                 title="Open in Default Application" style="flex: 1; margin-right: 0;">Open</button>
-                            <button onclick="saveCurrentCropped()"
-                                style="background-color: #28a745; flex: 1; margin-right: 0;">Save</button>
                         </div>
                     </div>
                 </div>
@@ -918,21 +1148,6 @@
         </div>
     </div>
 
-    <div id="ocrResultModal" class="ocr-modal">
-        <div class="ocr-modal-content">
-            <div class="ocr-modal-header">
-                <h3 style="margin: 0;">OCR Lookup Result</h3>
-                <label style="font-size: 12px; cursor: pointer; user-select: none;">
-                    <input type="checkbox" id="ocrStayOnTop" onchange="toggleOcrStayOnTop(this.checked)"> Stay on Top
-                </label>
-                <button onclick="closeOcrModal()" class="close-btn" title="Close">&times;</button>
-            </div>
-            <textarea id="ocrResultText" readonly></textarea>
-            <div class="ocr-modal-footer">
-                <button onclick="copyOcrResult(this)">Copy Text</button>
-            </div>
-        </div>
-    </div>
 
     <div id="helpModal" class="ocr-modal">
         <div class="ocr-modal-content">
@@ -1019,7 +1234,11 @@
 
     <script>
         // Heartbeat keep-alive to notify scanner_server.py that the frontend is active
-        async function openCliModal() {
+        // "Extract Text" runs in its own browser window. Clicking the button opens
+        // this same page with ?extract=1&files=[...]; body.extract-mode hides the
+        // scanner UI and shows only the panel. The window is opened BEFORE any
+        // await, otherwise Chrome drops the user gesture and blocks the popup.
+        function openCliModal() {
             const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
 
             if (checked.length < 1 || checked.length > 8) {
@@ -1027,35 +1246,80 @@
                 return;
             }
 
+            cliFiles = checked;
+            const url = '/?extract=1&files=' + encodeURIComponent(JSON.stringify(checked));
+            const win = window.open(url, 'WysiScanExtract',
+                'width=720,height=900,resizable=yes,scrollbars=yes,status=yes');
+            if (!win) {
+                showToast("Popup blocked - allow popups for the scanner to open Extract Text.", "warn");
+                return;
+            }
+            win.focus();
+        }
+
+        function isExtractWindow() {
+            return document.body.classList.contains('extract-mode');
+        }
+
+        // Prompt presets: everything else keeps its file order, "Custom" goes last
+        // so the editable option is always at the bottom of the list.
+        function sortPromptNames(names) {
+            return (names || []).slice().sort((a, b) => (a === 'Custom') - (b === 'Custom'));
+        }
+
+        // Rebuild the preset dropdown (shared by the initial load and after save).
+        function renderPromptOptions(names, selected) {
+            const sel = document.getElementById('cliPromptSelect');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">-- Select a prompt --</option>';
+            sortPromptNames(names).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                // Only "Custom" is editable; mark the rest as read-only in the list.
+                opt.textContent = (name === 'Custom') ? name : `${name} (read only)`;
+                sel.appendChild(opt);
+            });
+            if (selected) sel.value = selected;
+        }
+
+        // Dark/light switch in the extract window header.
+        function updateCliThemeBtn() {
+            const btn = document.getElementById('cliThemeBtn');
+            if (!btn) return;
+            const dark = document.body.getAttribute('data-theme') === 'dark';
+            btn.textContent = dark ? '☀️ Light' : '🌙 Dark';
+            btn.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+            btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+        }
+
+        // Populate the panel (selection list, prompt presets, cached result).
+        // Runs in whichever window owns the panel - the extract window.
+        async function loadCliModalContent(files) {
             const listDiv = document.getElementById('cliSelectedList');
-            listDiv.innerHTML = checked.map(p => `<div>📄 ${p.split(/[\\/]/).pop()}</div>`).join('');
-            document.getElementById('cliSelectedCount').innerText = checked.length;
+            listDiv.innerHTML = files.map(p => `<div>📄 ${p.split(/[\\/]/).pop()}</div>`).join('');
+            document.getElementById('cliSelectedCount').innerText = files.length;
             document.getElementById('cliResultBox').innerHTML = '';
             lastCliResultText = '';
+            cliResultFromCache = false;
+            cliLastPromptSent = null;
             document.getElementById('cliStatusMsg').innerText = '';
+            updateCliDiscogsBtn();
 
             // Load selectable prompt presets from prompts.json
             try {
                 const pres = await fetch('/get-prompts');
                 const pdata = await pres.json();
                 const sel = document.getElementById('cliPromptSelect');
-                sel.innerHTML = '<option value="">-- Select a prompt --</option>';
                 if (pdata.status === 'success' && pdata.names && pdata.names.length) {
                     window._promptPresets = pdata.prompts || {};
-                    pdata.names.forEach(name => {
-                        const opt = document.createElement('option');
-                        opt.value = name;
-                        // Only "Custom" is editable; mark the rest as read-only in the list.
-                        opt.textContent = (name === 'Custom') ? name : `${name} (read only)`;
-                        sel.appendChild(opt);
-                    });
-                    // Auto-select the first preset and populate the text box
-                    const first = pdata.names[0];
-                    sel.value = first;
+                    // Auto-select the first preset as displayed (Custom is last).
+                    const first = sortPromptNames(pdata.names)[0];
+                    renderPromptOptions(pdata.names, first);
                     document.getElementById('cliPromptText').value = window._promptPresets[first] || '';
                     onCliPromptSelect(); // apply readonly/save state for the selected preset
                 } else {
                     window._promptPresets = {};
+                    renderPromptOptions([], '');
                 }
             } catch (e) {
                 console.error("Could not load prompt presets:", e);
@@ -1068,10 +1332,11 @@
                 const cres = await fetch('/get-cli-cache', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ files: checked })
+                    body: JSON.stringify({ files: files })
                 });
                 const cdata = await cres.json();
                 if (cdata.status === 'hit' && cdata.output) {
+                    cliResultFromCache = true;
                     renderCliResults(cdata.output || '');
                     document.getElementById('cliStatusMsg').innerText = 'Loaded from cache (click Re-Run to refresh).';
                     const rb = document.getElementById('btnRunCli');
@@ -1080,18 +1345,44 @@
             } catch (e) {
                 console.error("Could not load AI cache:", e);
             }
+        }
 
+        // Boot the extract window from its ?files=[] parameter.
+        async function initExtractWindow() {
+            document.title = 'Extract Text From Image(s)';
+            let files = [];
+            try {
+                files = JSON.parse(new URLSearchParams(location.search).get('files') || '[]');
+            } catch (e) {
+                files = [];
+            }
+            cliFiles = Array.isArray(files) ? files : [];
+            // Keep the scanner server alive from this window too - the heartbeat
+            // lives in the normal page boot, which the extract window skips.
+            const beat = () => {
+                fetch('/api/heartbeat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hidden: document.hidden })
+                }).catch(() => { });
+            };
+            beat();
+            setInterval(beat, 3000);
+            document.addEventListener('visibilitychange', beat);
             document.getElementById('cliModal').style.display = 'flex';
+            await loadCliModalContent(cliFiles);
         }
 
         // Populate the prompt text box when a preset is chosen, and enforce
         // editability: ONLY the "Custom" prompt may be edited; Basic / Detailed
-        // (and any future non-Custom) load read-only and SAVE is disabled.
+        // (and any future non-Custom) load read-only, hide SAVE, and hide the
+        // editor entirely.
         function onCliPromptSelect() {
             const sel = document.getElementById('cliPromptSelect');
             const name = sel.value;
             const box = document.getElementById('cliPromptText');
-            const saveBtn = document.querySelector('button[onclick="saveCliPrompt()"]');
+            const saveBtn = document.getElementById('cliSaveBtn') ||
+                document.querySelector('button[onclick="saveCliPrompt()"]');
 
             if (name && window._promptPresets && window._promptPresets[name]) {
                 box.value = window._promptPresets[name];
@@ -1108,6 +1399,8 @@
                 promptWrap.style.display = (name === 'Basic' || name === 'Detailed') ? 'none' : '';
             }
             if (saveBtn) {
+                // Save only makes sense for the editable Custom prompt.
+                saveBtn.style.display = editable ? '' : 'none';
                 saveBtn.disabled = !editable;
                 saveBtn.title = editable ? 'Save this custom prompt' : 'Only the Custom prompt can be saved';
             }
@@ -1154,13 +1447,8 @@
                         const pdata = await pres.json();
                         if (pdata.status === 'success') {
                             window._promptPresets = pdata.prompts || {};
-                            sel.innerHTML = '<option value="">-- Select a prompt --</option>';
-                            pdata.names.forEach(n => {
-                                const opt = document.createElement('option');
-                                opt.value = n; opt.textContent = n;
-                                sel.appendChild(opt);
-                            });
-                            sel.value = name;
+                            renderPromptOptions(pdata.names, name);
+                            onCliPromptSelect();
                         }
                     } catch (e) { /* non-fatal */ }
                 } else {
@@ -1174,16 +1462,61 @@
         }
 
         function closeCliModal() {
+            // In the extract window, closing means closing that window.
+            if (isExtractWindow()) {
+                try { window.close(); } catch (e) { }
+                return;
+            }
             document.getElementById('cliModal').style.display = 'none';
         }
 
-        // Toggle: keep the AI Prompt modal above other in-page panels.
-        function toggleCliPin() {
-            const modal = document.getElementById('cliModal');
+        function paintCliPin(on) {
             const btn = document.getElementById('cliPinBtn');
-            const on = modal.classList.toggle('stay-on-top');
-            btn.classList.toggle('pinned', on);
+            if (!btn) return;
+            btn.classList.toggle('pinned', !!on);
             btn.textContent = on ? '📌 Pinned' : '📌 Pin';
+            btn.title = on ? 'Pinned on top - click to release' : 'Keep this window on top';
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+
+        // Pin = keep the whole browser window above other applications. A page
+        // cannot do that itself, so scanner_server.py does it with SetWindowPos.
+        async function toggleCliPin() {
+            const btn = document.getElementById('cliPinBtn');
+            if (!btn) return;
+            const want = !btn.classList.contains('pinned');
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/window-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: document.title, topmost: want })
+                });
+                const d = await r.json();
+                if (d && d.status === 'success' && d.found) {
+                    paintCliPin(!!d.topmost);
+                } else {
+                    paintCliPin(false);
+                    showToast('Pin failed: ' + ((d && d.message) || 'window not found'), 'error');
+                }
+            } catch (e) {
+                paintCliPin(false);
+                showToast('Pin failed: ' + e, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Reflect the real topmost state on load (the window may already be pinned
+        // if it was reopened while pinned).
+        async function initCliPinState() {
+            try {
+                const r = await fetch('/api/window-pin?title=' + encodeURIComponent(document.title));
+                const d = await r.json();
+                paintCliPin(!!(d && d.found && d.topmost));
+            } catch (e) {
+                paintCliPin(false);
+            }
         }
 
         // Toggle: maximize the AI Prompt window to fill most of the viewport
@@ -1270,8 +1603,74 @@
             }
         }
 
+        // Read one of the extracted fields straight out of the rendered rows
+        // (textarea values are what the user sees, edits included).
+        function cliFieldValue(labelNames) {
+            const box = document.getElementById('cliResultBox');
+            if (!box) return '';
+            const wanted = labelNames.map(n => n.toLowerCase());
+            for (const row of box.querySelectorAll('[data-cli-label]')) {
+                const label = (row.dataset.cliLabel || '').trim().toLowerCase();
+                if (!wanted.includes(label)) continue;
+                const ta = row.querySelector('textarea');
+                const val = ta ? ta.value.trim() : '';
+                if (val) return val;
+            }
+            return '';
+        }
+
+        // The extracted fields the Discogs search is built from.
+        function cliDiscogsFields() {
+            return {
+                artist: cliFieldValue(['band/artist', 'band name', 'artist', 'brand name']),
+                title: cliFieldValue(['album title', 'title', 'item name']),
+                catno: cliFieldValue(['catalog number', 'catalogue number', 'catalog #', 'catalogue #', 'cat#', 'catno']),
+                upc: cliFieldValue(['upc', 'upc/gtin', 'upc/gtin (scanned)', 'upc/gtin (text display)',
+                    'barcode', 'barcode (scanned)', 'barcode (text)', 'barcode number',
+                    'ean', 'gtin'])
+            };
+        }
+
+        // Search the Discogs marketplace for the extracted item.
+        // The marketplace search takes ONE free-text query (q) — its per-field
+        // filters are internal IDs, not names — so every extracted identifier is
+        // folded into that string: Band/Artist Album Title Catalog# UPC/Barcode.
+        // The results page is /sell/list (the /sell marketplace search); the
+        // newer /shop/list renders the redesigned shop UI instead.
+        function searchDiscogsMarketplace() {
+            const f = cliDiscogsFields();
+            const query = [f.artist, f.title, f.catno, f.upc].filter(Boolean).join(' ').trim();
+            if (!query) {
+                showToast('Nothing to search - run an extraction first.', 'warn');
+                return;
+            }
+
+            const url = 'https://www.discogs.com/sell/list?q=' + encodeURIComponent(query);
+            // Named window: subsequent searches reuse the same tab.
+            const win = window.open(url, 'DiscogsMarketplaceSearch');
+            if (win) win.focus();
+        }
+
+        // The Discogs button stays disabled until an extraction provides fields.
+        function updateCliDiscogsBtn() {
+            const btn = document.getElementById('cliDiscogsBtn');
+            if (!btn) return;
+            const f = cliDiscogsFields();
+            const hasData = !!(f.artist || f.title || f.catno || f.upc);
+            btn.disabled = !hasData;
+            btn.style.opacity = hasData ? '1' : '0.5';
+            btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
+            btn.title = hasData
+                ? 'Search the Discogs marketplace for this item'
+                : 'Run an extraction first';
+        }
+
         async function submitCliPrompt() {
-            const checked = Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
+            // Files come from the gallery (opener window) or, in the extract
+            // window, from the ?files=[] hand-off.
+            const checked = cliFiles.length
+                ? cliFiles
+                : Array.from(document.querySelectorAll('#scan-gallery .file-checkbox:checked')).map(cb => cb.value);
             const prompt = document.getElementById('cliPromptText').value.trim();
             const btn = document.getElementById('btnRunCli');
             const statusMsg = document.getElementById('cliStatusMsg');
@@ -1285,12 +1684,17 @@
             btn.disabled = true;
             statusMsg.innerText = "Processing...";
             resultBox.innerHTML = '<div style="font-size:12px;color:var(--muted-color,#888);">Extracting text from image(s)...</div>';
+            updateCliDiscogsBtn();
+
+            // "Re-Run" must actually re-run: tell the server to ignore its cache.
+            // A changed prompt does too, because the cache is keyed by files only.
+            const force = cliResultFromCache || (cliLastPromptSent !== null && prompt !== cliLastPromptSent);
 
             try {
                 const response = await fetch('/run-cli-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: prompt, files: checked })
+                    body: JSON.stringify({ prompt: prompt, files: checked, force: force })
                 });
                 // Read as text first so an HTML/plain error page still shows
                 // its actual message instead of a JSON parse failure.
@@ -1305,6 +1709,8 @@
                     statusMsg.innerText = "Failed.";
                 } else if (data.status === 'success') {
                     renderCliResults(data.output || '');
+                    cliResultFromCache = !!data.cached;
+                    cliLastPromptSent = prompt;
                     if (data.cached) {
                         statusMsg.innerText = "Loaded from cache (click Re-Run to refresh).";
                         btn.textContent = "Re-Run";
@@ -1347,6 +1753,7 @@
                 lastCliResultText = text || '';
                 if (!text || !text.trim()) {
                     box.innerHTML = '<div style="font-size:12px;color:var(--muted-color,#888);">No text returned.</div>';
+                    updateCliDiscogsBtn();
                     return;
                 }
                 const lines = text.split('\n');
@@ -1416,6 +1823,9 @@
                         entryLabel = entryLabel.replace(/[-:]\s*$/, '').trim();
                         entryValue = line.slice(splitAt).trim();
                     }
+                    // Label normalisation. The prompt used to ask for "Band Name";
+                    // cached extractions (and the odd AI drift) still carry it.
+                    if (/^band\s*name$/i.test(entryLabel)) entryLabel = 'Band/Artist';
                     const row = document.createElement('div');
                     row.style.cssText = 'display:flex;gap:6px;align-items:flex-start;margin:4px 0;';
                     if (entryLabel) {
@@ -1444,6 +1854,7 @@
                     box.appendChild(row);
                 }
                 flushMedia();
+                updateCliDiscogsBtn();
             }
             function sendHeartbeat() {
                         fetch('/api/heartbeat', {
@@ -1458,9 +1869,22 @@
         const PLACEHOLDER_SVG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg==";
         let scanCounter = 0;
         let lastCliResultText = '';
+        // Files handed to the Extract Text window via ?files=[...].
+        let cliFiles = [];
+        // True while the panel is showing a cached result, so the Run button
+        // bypasses the server cache (that is what "Re-Run" means).
+        let cliResultFromCache = false;
+        // Prompt text used by the last result shown. If the user edits the prompt
+        // (Custom) the cache is bypassed too - it is keyed by files only, so a
+        // different prompt would otherwise silently return the old extraction.
+        let cliLastPromptSent = null;
         let groupStarted = false;
         let lastOriginalPath = '';
         let lastCroppedPath = '';
+        let tiltValue = 0;          // absolute degrees, measured from the untouched scan
+        // What is already baked into the picture on screen. The CSS preview shows
+        // only the difference, so an applied adjustment is never shown twice.
+        let adjustApplied = { brightness: 0, contrast: 0, saturation: 0, hue: 0, tint: 0 };
         let cropper = null;
         let currentCropTarget = null;
         let currentCropMode = 'overwrite';
@@ -1950,6 +2374,12 @@
             }
             croppedImg.src = data.cropped;
             croppedImg.dataset.path = data.cropped_path;
+            // The Default preset was baked into this scan, so show those values
+            // and preview nothing on top of them.
+            if (typeof selectAdjustPreset === 'function') {
+                selectAdjustPreset('default');
+                setAdjustApplied((adjustPresets && adjustPresets.default) || {});
+            }
 
             // If original was deleted, we can't "Revert" to it, but we can still "Adjust Pad" the cropped one
             lastOriginalPath = data.original_deleted ? "" : data.original_path;
@@ -2009,6 +2439,13 @@
             }
 
             lastCroppedPath = croppedPath || "";
+            // Restoring a different item must not keep the previous sliders' preview.
+            // Its colour state is unknown, so the sliders start at 0 and nothing
+            // is previewed until the user moves one.
+            if (typeof resetImageAdjustSliders === 'function') {
+                setAdjustApplied({});
+                resetImageAdjustSliders();
+            }
             croppedImg.src = croppedSrc;
             croppedImg.dataset.path = lastCroppedPath;
 
@@ -2402,7 +2839,7 @@
         // Refresh every <img> that shows this file. Gallery tiles stay on the
         // cheap /thumb URL (their server-side cache key includes the new mtime);
         // everything else reloads the full image with a fresh cache buster.
-        function refreshImageElements(path, fullUrl) {
+        function refreshImageElements(path, fullUrl, keepTilt) {
             document.querySelectorAll(`img[data-path="${CSS.escape(path)}"]`).forEach(img => {
                 const current = img.getAttribute('src') || '';
                 if (current.includes('/thumb?')) {
@@ -2411,6 +2848,9 @@
                     img.src = withCacheBuster(fullUrl);
                 }
             });
+            // Anything other than a tilt edit starts from a different image, so
+            // the absolute tilt is back to 0 for it.
+            if (!keepTilt && typeof tiltShow === 'function') tiltShow(0);
         }
 
         async function rotateImage(imgElement, direction) {
@@ -2631,27 +3071,6 @@
             }
         }
 
-        async function saveCurrentCropped() {
-            const img = document.getElementById('croppedImg');
-            if (!img || !img.dataset.path) {
-                showToast("No cropped image to save.", "warn")
-                return;
-            }
-            const path = img.dataset.path;
-            const saveLocation = document.getElementById('saveLocation').value.trim();
-
-            try {
-                const response = await fetch('/manage-files', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'save', files: [path], save_location: saveLocation })
-                });
-                const data = await response.json();
-                if (data.status === 'success') showToast("Saved!", "success")
-                else showToast("Error: " + data.message, "error")
-            } catch (e) { showToast("Network Error: " + e, "error") }
-        }
-
         async function openSaveFolder() {
             const saveLocation = document.getElementById('saveLocation').value.trim();
             try {
@@ -2845,6 +3264,15 @@
         // Load configuration on startup
         let lastScanSaveLoc = '';
         window.addEventListener('DOMContentLoaded', async () => {
+            // Extract Text window: skip the scanner boot (config, gallery, hotkeys)
+            // and just bring up the panel.
+            if (isExtractWindow()) {
+                paintCliPin(false);
+                updateCliThemeBtn();
+                await initExtractWindow();
+                initCliPinState();
+                return;
+            }
             try {
                 const response = await fetch('/config');
                 const config = await response.json();
@@ -2889,9 +3317,6 @@
                 if (paddingByMode[initialMode] !== undefined) {
                     document.getElementById('cropPadding').value = paddingByMode[initialMode];
                 }
-                if (config.ocr_stay_on_top !== undefined) {
-                    localStorage.setItem('wysiscan_ocr_stay_on_top', config.ocr_stay_on_top);
-                }
                 if (config.padding_options && Array.isArray(config.padding_options)) {
                     currentPaddingOptions = config.padding_options;
                 }
@@ -2902,6 +3327,14 @@
                 if (config.auto_delete_original !== undefined) {
                     document.getElementById('autoDeleteOriginal').checked = config.auto_delete_original;
                 }
+                // Presets load last so the sliders land on the user's Default values.
+                if (config.adjust_presets && typeof config.adjust_presets === 'object') {
+                    ADJ_PRESETS.forEach(name => {
+                        const stored = config.adjust_presets[name];
+                        if (stored && typeof stored === 'object') adjustPresets[name] = stored;
+                    });
+                }
+                selectAdjustPreset('default');
                 renderPaddingList();
                 fetchGroups(); // Load groups after config is loaded
                 fetchScanners(); // Load available scanners
@@ -2991,34 +3424,6 @@
             }
         };
 
-        function closeOcrModal() {
-            document.getElementById('ocrResultModal').style.display = 'none';
-        }
-
-        function copyOcrResult(btn) {
-            const textarea = document.getElementById('ocrResultText');
-            textarea.select();
-            navigator.clipboard.writeText(textarea.value).then(() => {
-                const originalText = btn.innerText;
-                btn.innerText = "Copied!";
-                setTimeout(() => { btn.innerText = originalText; }, 1500);
-            });
-        }
-
-        async function toggleOcrStayOnTop(checked) {
-            document.getElementById('ocrResultModal').classList.toggle('stay-on-top', checked);
-            localStorage.setItem('wysiscan_ocr_stay_on_top', checked);
-            try {
-                await fetch('/update-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ocr_stay_on_top: checked })
-                });
-            } catch (err) {
-                console.error("Failed to save 'stay on top' config", err);
-            }
-        }
-
         async function fetchScanners() {
             try {
                 const response = await fetch('/list-scanners');
@@ -3056,64 +3461,12 @@
             }
         }
 
-        async function extractAndLookup() {
-            const croppedImg = document.getElementById('croppedImg');
-            const path = croppedImg.dataset.path;
-
-            if (!path) {
-                showToast("No cropped image available to look up.", "warn")
-                return;
-            }
-
-            const status = document.getElementById('status');
-            const btn = document.getElementById('extractAndLookupBtn');
-            const originalText = btn.innerText;
-
-            btn.disabled = true;
-            btn.innerText = 'Working...';
-            status.innerText = 'Performing OCR and web lookup... This may take a moment.';
-
-            try {
-                const response = await fetch('/ocr-and-lookup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: path })
-                });
-                const data = await response.json();
-
-                if (data.status === 'success' && data.scraped_text) {
-                    showOcrPopup(data.scraped_text);
-                    status.innerText = 'Success! Results are in the popup.';
-                } else {
-                    status.innerText = 'Lookup failed: ' + (data.message || 'No release found or text was unreadable.');
-                    showToast('Lookup failed: ' + (data.message || 'Could not find a matching release.'), "error")
-                }
-            } catch (e) {
-                status.innerText = 'Network Error during lookup: ' + e;
-                showToast('A network error occurred: ' + e, "error")
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
-
-        function showOcrPopup(text) {
-            const modal = document.getElementById('ocrResultModal');
-            const textarea = document.getElementById('ocrResultText');
-            const checkbox = document.getElementById('ocrStayOnTop');
-
-            textarea.value = text;
-
-            const stayOnTop = localStorage.getItem('wysiscan_ocr_stay_on_top') === 'true';
-            checkbox.checked = stayOnTop;
-            modal.classList.toggle('stay-on-top', stayOnTop);
-
-            modal.style.display = 'flex';
-        }
-
         // --- Draggable Modal Logic (applies to every .ocr-modal) ---
         (function () {
+            // The extract window is a plain page, so its panel must not be draggable.
+            const freePage = document.body.classList.contains('extract-mode');
             document.querySelectorAll('.ocr-modal').forEach((modal) => {
+                if (freePage && modal.id === 'cliModal') return;
                 const header = modal.querySelector('.ocr-modal-header');
                 if (!header) return;
                 let isDragging = false;
@@ -3154,48 +3507,405 @@
         })();
 
         // --- Tilt & Auto-Align Logic ---
-        async function applyTilt() {
-            const angleInput = document.getElementById('tiltAngle');
-            const angle = angleInput ? angleInput.value : 0;
-            const padding = document.getElementById('cropPadding').value;
+        // --- Image Adjust: live CSS-filter preview, baked into the file on Apply ---
+        const ADJ_KEYS = ['Brightness', 'Contrast', 'Saturation', 'Hue', 'Tint'];
 
-            const pathsToRotate = [];
-            if (lastOriginalPath) pathsToRotate.push(lastOriginalPath);
-            if (lastCroppedPath && lastCroppedPath !== lastOriginalPath) pathsToRotate.push(lastCroppedPath);
+        // Preset state must exist before any slider can fire adjustCssFilter().
+        const ADJ_PRESETS = ['default', 'custom1', 'custom2'];
+        let adjustPresets = { default: {}, custom1: {}, custom2: {} };
+        let adjustPresetName = 'default';
+        let adjustPresetLoading = false;
+        let adjustPresetTimer = null;
+        let adjustPresetPending = null;
 
-            if (pathsToRotate.length === 0) {
-                showToast("No image loaded to rotate.", "warn")
+        function adjValue(key) {
+            const el = document.getElementById('adj' + key);
+            return el ? (parseInt(el.value, 10) || 0) : 0;
+        }
+
+        function adjustCssFilter() {
+            const img = document.getElementById('originalImg');
+            const b = adjValue('Brightness'), c = adjValue('Contrast'),
+                s = adjValue('Saturation'), h = adjValue('Hue'), t = adjValue('Tint');
+
+            ADJ_KEYS.forEach(k => {
+                const out = document.getElementById('adj' + k + 'Val');
+                if (out) out.textContent = adjValue(k);
+            });
+
+            // Any real slider move is remembered in the selected preset.
+            scheduleAdjustPresetSave();
+
+            if (!img) return;
+            // All sliders at zero means "change nothing", so show the scan as it
+            // is - otherwise the preview would show a negative of what is baked in.
+            if (!b && !c && !s && !h && !t) {
+                img.style.filter = 'none';
+                return;
+            }
+            // Only preview what is NOT already baked into the picture, so the
+            // preview never double-counts an adjustment that was applied.
+            const applied = adjustApplied || {};
+            const db = b - (applied.brightness || 0);
+            const dc = ((1 + c / 100) / (1 + (applied.contrast || 0) / 100) - 1) * 100;
+            const ds = ((1 + s / 100) / (1 + (applied.saturation || 0) / 100) - 1) * 100;
+            const dh = h - (applied.hue || 0);
+            const dt = t - (applied.tint || 0);
+
+            // Tint mirrors the server maths: magenta (+) lifts R and B, drops G.
+            const shift = dt * 0.004;
+            [['adjTintR', shift], ['adjTintB', shift], ['adjTintG', -shift]].forEach(([id, v]) => {
+                const el = document.getElementById(id);
+                if (el) el.setAttribute('intercept', v.toFixed(4));
+            });
+
+            const parts = [];
+            if (db) parts.push('brightness(' + (1 + db / 100) + ')');
+            if (dc) parts.push('contrast(' + (1 + dc / 100) + ')');
+            if (ds) parts.push('saturate(' + (1 + ds / 100) + ')');
+            if (dh) parts.push('hue-rotate(' + dh + 'deg)');
+            if (dt) parts.push('url(#adjTintFilter)');
+            img.style.filter = parts.length ? parts.join(' ') : 'none';
+        }
+
+        function resetImageAdjustSliders() {
+            ADJ_KEYS.forEach(k => {
+                const el = document.getElementById('adj' + k);
+                if (el) el.value = 0;
+            });
+            // Zeroing is not "the user moved a slider", so it must not overwrite
+            // the stored preset with zeros.
+            adjustPresetLoading = true;
+            adjustCssFilter();
+            adjustPresetLoading = false;
+        }
+
+        // Remember what is already in the pixels, so the preview stays honest.
+        function setAdjustApplied(values) {
+            adjustApplied = {
+                brightness: Number((values && values.brightness) || 0),
+                contrast: Number((values && values.contrast) || 0),
+                saturation: Number((values && values.saturation) || 0),
+                hue: Number((values && values.hue) || 0),
+                tint: Number((values && values.tint) || 0)
+            };
+            adjustPresetLoading = true;
+            adjustCssFilter();
+            adjustPresetLoading = false;
+        }
+
+        // --- Presets: Default (baked into every scan) + two customs ------------
+        // Values save themselves into the selected slot whenever a slider moves,
+        // so there is no Save button to press.
+        function adjustPresetValues() {
+            const out = {};
+            ADJ_KEYS.forEach(k => { out[k.toLowerCase()] = adjValue(k); });
+            return out;
+        }
+
+        function selectAdjustPreset(name, opts) {
+            if (!ADJ_PRESETS.includes(name)) name = 'default';
+            adjustPresetName = name;
+            const values = adjustPresets[name] || {};
+            adjustPresetLoading = true;
+            ADJ_KEYS.forEach(k => {
+                const el = document.getElementById('adj' + k);
+                if (el) el.value = parseInt(values[k.toLowerCase()], 10) || 0;
+            });
+            adjustCssFilter();
+            adjustPresetLoading = false;
+            const rad = document.querySelector(`input[name="adjPreset"][value="${name}"]`);
+            if (rad) rad.checked = true;
+        }
+
+        function scheduleAdjustPresetSave() {
+            if (adjustPresetLoading) return;
+            clearTimeout(adjustPresetTimer);
+            // Snapshot now: the sliders get zeroed after Apply/scan, and a late
+            // timer must write what the user set, not those zeros.
+            adjustPresetPending = { name: adjustPresetName, values: adjustPresetValues() };
+            adjustPresetTimer = setTimeout(saveAdjustPreset, 400);
+        }
+
+        async function saveAdjustPreset() {
+            if (!adjustPresetPending) return;
+            const { name, values } = adjustPresetPending;
+            adjustPresetPending = null;
+            adjustPresets[name] = values;
+            await postAdjustPreset(name, values);
+        }
+
+        async function postAdjustPreset(name, values) {
+            try {
+                await fetch('/adjust-preset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset: name, values: values })
+                });
+            } catch (e) {
+                console.error('Could not save the adjustment preset:', e);
+            }
+        }
+
+        // One-click way back to "adjust nothing": clears the Default preset and,
+        // if it is the selected one, the sliders that show it.
+        async function resetDefaultPreset() {
+            const zeros = { brightness: 0, contrast: 0, saturation: 0, hue: 0, tint: 0 };
+            adjustPresets.default = zeros;
+
+            clearTimeout(adjustPresetTimer);
+            adjustPresetPending = null;
+
+            if (adjustPresetName === 'default') {
+                adjustPresetLoading = true;
+                ADJ_KEYS.forEach(k => {
+                    const el = document.getElementById('adj' + k);
+                    if (el) el.value = 0;
+                });
+                adjustCssFilter();
+                adjustPresetLoading = false;
+            }
+            await postAdjustPreset('default', zeros);
+            showToast('Default preset set to 0 - new scans are left as scanned.', 'success');
+        }
+
+        // Adjustments go to BOTH copies: the original you preview on, and the
+        // cropped output that gets saved/uploaded - otherwise the two would drift.
+        function adjustTargetPaths() {
+            const originalImg = document.getElementById('originalImg');
+            const croppedImg = document.getElementById('croppedImg');
+            const originalPath = (originalImg && originalImg.dataset.path) || lastOriginalPath || '';
+            const croppedPath = (croppedImg && croppedImg.dataset.path) || lastCroppedPath || '';
+
+            const paths = [];
+            if (originalPath) paths.push(originalPath);
+            if (croppedPath && croppedPath !== originalPath) paths.push(croppedPath);
+            return paths;
+        }
+
+        function basenameOf(p) {
+            return String(p || '').split(/[\\/]/).pop();
+        }
+
+        async function applyImageAdjust() {
+            const paths = adjustTargetPaths();
+            if (!paths.length) { showToast('No image to adjust.', 'warn'); return; }
+
+            const values = {
+                brightness: adjValue('Brightness'), contrast: adjValue('Contrast'),
+                saturation: adjValue('Saturation'), hue: adjValue('Hue'), tint: adjValue('Tint')
+            };
+            if (!Object.values(values).some(v => v !== 0)) {
+                showToast('Move a slider first.', 'warn');
                 return;
             }
 
-            const btn = document.querySelector('#tilt-ui button');
-            const oldText = btn.innerText;
-            btn.innerText = "Rotating...";
-            btn.disabled = true;
-
-            for (const path of pathsToRotate) {
+            let applied = 0;
+            for (const path of paths) {
                 try {
-                    const isOriginal = (path === lastOriginalPath);
-                    const effectivePadding = isOriginal ? 0 : padding;
-                    const resp = await fetch('/deskew-image', {
+                    const resp = await fetch('/adjust-image', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: path, angle: angle, padding: effectivePadding, skip_crop: isOriginal })
+                        body: JSON.stringify(Object.assign({ path: path }, values))
                     });
                     const res = await resp.json();
                     if (res.status === 'success') {
-                        // Refresh any image on the page using this path
                         refreshImageElements(path, res.new_url);
+                        applied++;
                     } else {
-                        showToast(`Error rotating ${path.split(/[\\/]/).pop()}: ${res.message}`, "error")
+                        showToast(`Adjust failed for ${basenameOf(path)}: ${res.message}`, 'error');
                     }
                 } catch (e) {
-                    showToast(`Network error rotating ${path.split(/[\\/]/).pop()}: ${e}`, "error")
+                    showToast(`Network error adjusting ${basenameOf(path)}: ${e}`, 'error');
                 }
             }
 
-            btn.innerText = oldText;
-            btn.disabled = false;
+            if (applied) {
+                // Keep the values on the sliders (they are what is now in the
+                // picture, and a second Apply adds another helping on top).
+                setAdjustApplied(values);
+                showToast(applied > 1 ? 'Adjustments applied to both images.' : 'Adjustments applied.', 'success');
+            }
+        }
+
+        // Remove All = take the colour adjustments back off, in place. Rotation,
+        // tilt and crop are untouched, which is the whole point of the button.
+        async function resetImageAdjustAll() {
+            const paths = adjustTargetPaths();
+            if (!paths.length) { showToast('No image loaded.', 'warn'); return; }
+
+            let restored = 0;
+            let notRemoved = 0;
+            for (const path of paths) {
+                try {
+                    const resp = await fetch('/adjust-image-reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: path })
+                    });
+                    const res = await resp.json();
+                    if (res.status === 'success') {
+                        refreshImageElements(path, res.new_url, true);   // keep the tilt angle
+                        restored++;
+                    } else {
+                        notRemoved++;
+                    }
+                } catch (e) {
+                    showToast(`Network error removing adjustments from ${basenameOf(path)}: ${e}`, 'error');
+                }
+            }
+
+            if (restored) {
+                // Nothing colour is left in the pixels now, and the sliders go
+                // back to zero so they describe the picture again.
+                setAdjustApplied({});
+                resetImageAdjustSliders();
+                showToast(restored > 1 ? 'Colour settings removed from both images - rotation and tilt kept.'
+                    : 'Colour settings removed - rotation and tilt kept.', 'success');
+            } else if (notRemoved) {
+                showToast('No colour adjustments to remove for this image.', 'warn');
+            }
+        }
+
+        // --- Tilt: absolute and immediate -----------------------------------
+        // The angle is measured from the untouched scan, so < then < then < is
+        // 1, 2, 3 degrees - not a rotation of a rotation. Every change is sent
+        // straight away; there is no Apply step. Holding a button repeats it.
+        // Positive means "picture turns to the right" (clockwise); the server
+        // takes OpenCV angles, which run the other way, so it is negated on send.
+        const TILT_HOLD_DELAY = 350;      // ms before a held button starts repeating
+        const TILT_MIN_GAP = 400;         // never send tilt requests faster than this
+        let tiltHoldTimer = null;
+        let tiltHoldInterval = null;
+        let tiltWorkerRunning = false;
+        let tiltLastSent = 0;
+        let tiltSettleTimer = null;
+
+        function tiltShow(angle) {
+            tiltValue = Math.max(-180, Math.min(180, angle));
+            const input = document.getElementById('tiltAngle');
+            if (input) input.value = tiltValue.toFixed(1);
+        }
+
+        function adjustTilt(delta) {
+            tiltShow(tiltValue + delta);
+            queueTiltApply();
+        }
+
+        // Press-and-hold: tap gives one step, holding keeps stepping.
+        function tiltPressStart(event, delta) {
+            event.preventDefault();
+            stopTiltHold();
+            adjustTilt(delta);                      // the first step is immediate
+            tiltHoldTimer = setTimeout(() => {
+                const interval = Math.abs(delta) >= 10 ? 180 : 110;
+                tiltHoldInterval = setInterval(() => adjustTilt(delta), interval);
+            }, TILT_HOLD_DELAY);
+        }
+
+        function stopTiltHold() {
+            if (tiltHoldTimer) { clearTimeout(tiltHoldTimer); tiltHoldTimer = null; }
+            if (tiltHoldInterval) { clearInterval(tiltHoldInterval); tiltHoldInterval = null; }
+        }
+
+        // Safety: never keep repeating if the release happened off the button.
+        window.addEventListener('pointerup', stopTiltHold);
+        window.addEventListener('pointercancel', stopTiltHold);
+        window.addEventListener('blur', stopTiltHold);
+
+        // Keyboard activation (Enter/Space) has detail 0; a mouse press has
+        // already been handled by pointerdown, so ignore that click.
+        function tiltClick(event, delta) {
+            if (event.detail > 0) return;
+            adjustTilt(delta);
+        }
+
+        function setTiltFromInput() {
+            const input = document.getElementById('tiltAngle');
+            if (!input) return;
+            tiltShow(parseFloat(input.value) || 0);
+            queueTiltApply();
+        }
+
+        function resetTilt() {
+            tiltShow(0);
+            queueTiltApply();
+        }
+
+        function queueTiltApply() {
+            // A tap applies at once. While a button is held, the image is
+            // refreshed at most every TILT_MIN_GAP ms and once more when the
+            // number stops moving - the server only ever sees one request at a
+            // time, which is what keeps it stable during a long hold.
+            if (tiltWorkerRunning) return;            // the running pump picks it up
+            const sinceLast = Date.now() - tiltLastSent;
+            if (sinceLast >= TILT_MIN_GAP) {
+                tiltLastSent = Date.now();
+                startTiltWorker();
+                return;
+            }
+            clearTimeout(tiltSettleTimer);
+            tiltSettleTimer = setTimeout(() => {
+                tiltSettleTimer = null;
+                if (tiltWorkerRunning) return;
+                tiltLastSent = Date.now();
+                startTiltWorker();
+            }, TILT_MIN_GAP - sinceLast);
+        }
+
+        function startTiltWorker() {
+            if (tiltWorkerRunning) return;
+            tiltWorkerRunning = true;
+            tiltWorkerPump();
+        }
+
+        async function tiltWorkerPump() {
+            try {
+                for (; ;) {
+                    const angle = tiltValue;
+                    await applyTilt(angle);
+                    if (angle === tiltValue) break;   // nothing newer arrived
+                }
+            } finally {
+                tiltWorkerRunning = false;
+            }
+        }
+
+        async function applyTilt(angle) {
+            const padding = document.getElementById('cropPadding').value;
+            const mediaType = document.querySelector('input[name="mediaType"]:checked').value;
+
+            // Only the cropped result is tilted. "Last Scan (Original)" is the raw
+            // scan and must stay exactly as the scanner produced it.
+            const target = (lastCroppedPath || (document.getElementById('croppedImg') || {}).dataset?.path || '');
+            if (!target) {
+                showToast("No cropped image to rotate yet.", 'warn');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/tilt-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // Sent negated: our + is "to the right", OpenCV's + is
+                    // counter-clockwise. media_type tells the server whether it
+                    // is a disc (crop to the circle) or artwork (auto-crop).
+                    body: JSON.stringify({
+                        path: target, angle: -angle, padding: padding,
+                        media_type: mediaType
+                    })
+                });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    // keepTilt: this refresh is the tilt itself, so it must not
+                    // reset the angle back to 0.
+                    refreshImageElements(target, res.new_url, true);
+                } else {
+                    showToast(`Error rotating ${basenameOf(target)}: ${res.message}`, "error")
+                }
+            } catch (e) {
+                showToast(`Network error rotating ${basenameOf(target)}: ${e}`, "error")
+            }
         }
 
         async function autoDeskew() {
@@ -3235,20 +3945,10 @@
                 }
             }
 
-            if (document.getElementById('tiltAngle')) {
-                document.getElementById('tiltAngle').value = 0;
-            }
+            // Auto-Align replaces the image, so the absolute tilt starts again.
+            tiltShow(0);
             btn.innerText = oldText;
             btn.disabled = false;
-        }
-
-        function adjustTilt(delta) {
-            const input = document.getElementById('tiltAngle');
-            if (input) {
-                let val = parseFloat(input.value) || 0;
-                val = (val + delta).toFixed(1);
-                input.value = val;
-            }
         }
 
         // --- Hotkey Management ---
@@ -3562,14 +4262,9 @@
                     case 'undo': undoLastAction(); break;
                     case 'redo': redoLastAction(); break;
                     case 'autoAlign': autoDeskew(); break;
-                    case 'applyTilt': if (document.getElementById('tiltAngle') && parseFloat(document.getElementById('tiltAngle').value) !== 0) applyTilt(); break;
-                    case 'tiltLeft': case 'tiltRight': {
-                        const input = document.getElementById('tiltAngle'); if (!input) return;
-                        const step = 0.1;
-                        let val = parseFloat(input.value) || 0;
-                        val = (val + (action === 'tiltLeft' ? -step : step)).toFixed(1);
-                        input.value = val;
-                    } break;
+                    case 'applyTilt': setTiltFromInput(); break;
+                    case 'tiltLeft': adjustTilt(-1); break;
+                    case 'tiltRight': adjustTilt(1); break;
                     case 'paddingUp': case 'paddingDown': {
                         const paddingInput = document.getElementById('cropPadding');
                         if (!paddingInput) return;
@@ -3587,13 +4282,8 @@
 
         document.addEventListener('keyup', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || isCapturingHotkey) return;
-            const tiltLeftHotkey = hotkeys['tiltLeft'];
-            const tiltRightHotkey = hotkeys['tiltRight'];
-            if ((e.key === tiltLeftHotkey.key && !e.ctrlKey && !e.altKey && !e.shiftKey) || (e.key === tiltRightHotkey.key && !e.ctrlKey && !e.altKey && !e.shiftKey)) {
-                if (document.getElementById('tiltAngle')) {
-                    applyTilt();
-                }
-            }
+            // Tilt arrows apply themselves on keydown now, so there is nothing
+            // to do on release.
         });
     </script>
     <div id="toast-container"
@@ -3605,6 +4295,8 @@
             <div class="ocr-modal-header">
                 <h3 style="margin: 0;">🤖 Extract Text From Image(s)</h3>
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="cliThemeBtn" onclick="toggleTheme(); updateCliThemeBtn();" title="Toggle dark/light"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">🌙 Dark</button>
                     <button id="cliMaxBtn" onclick="toggleCliMax()" title="Maximize / restore this window"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); font-size: 12px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">&#9633; Max</button>
                     <button id="cliPinBtn" onclick="toggleCliPin()" title="Keep this window on top of other panels"
@@ -3649,9 +4341,11 @@
             <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-text);"></span>
                 <div>
+                    <button onclick="searchDiscogsMarketplace()" id="cliDiscogsBtn" disabled title="Run an extraction first"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); margin-right: 6px; opacity: 0.5; cursor: not-allowed;">🔎 Discogs</button>
                     <button onclick="openCliInNotepad()"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main); margin-right: 6px;">📝 Open</button>
-                    <button onclick="saveCliPrompt()"
+                    <button onclick="saveCliPrompt()" id="cliSaveBtn"
                         style="background-color: #28a745; color: white; margin-right: 6px;">💾 Save</button>
                     <button onclick="closeCliModal()"
                         style="background: transparent; border: 1px solid var(--border-color); color: var(--text-main);">Cancel</button>

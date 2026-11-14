@@ -5,4 +5,4 @@ REM   Uncomment the next line to auto-kill stale processes before launch.
 REM call C:\Git\WysiWyg-Browser\kill_stale_wysiwyg.py
 
 set PYTHONPATH=
-C:\Git\WysiWyg-Browser\.venv311\Scripts\python.exe main.py %*
+C:\Git\WysiWyg-Browser\.venv311\Scripts\pythonw.exe main.py %*
