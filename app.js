@@ -326,27 +326,38 @@ function setupEventListeners() {
     // leftover value from the previous item could land on the incoming scrape.
     const scrapeForm = document.querySelector('form[hx-post="/scrape"]');
     if (scrapeForm) {
-        let resettingForScrape = false;
         document.addEventListener('submit', async (ev) => {
-            if (ev.target !== scrapeForm || resettingForScrape) return;
+            if (ev.target !== scrapeForm) return;
+
+            const urlEl = document.getElementById('discogsUrlInput');
+            const pendingUrl = (urlEl ? urlEl.value : '').trim();
+            // Nothing to scrape: let the browser show the field's "required" hint.
+            if (!pendingUrl) return;
+
             ev.preventDefault();
             ev.stopPropagation();
-            resettingForScrape = true;
 
-            // fullReset() blanks the URL box too, so keep the value we are scraping.
-            const urlEl = document.getElementById('discogsUrlInput');
-            const pendingUrl = urlEl ? urlEl.value : '';
             try {
-                await fullReset();
+                // Keep the URL box itself so the value can never be lost mid-reset.
+                await fullReset({ keepUrl: true });
             } catch (err) {
                 console.error('Reset All before scrape failed:', err);
             }
             if (urlEl) urlEl.value = pendingUrl;
 
-            // Re-submit for real; the guard lets this second event through.
-            if (typeof scrapeForm.requestSubmit === 'function') scrapeForm.requestSubmit();
-            else scrapeForm.submit();
-            setTimeout(() => { resettingForScrape = false; }, 0);
+            // Send it directly rather than re-submitting the form: no second
+            // submit event to re-enter this handler, no constraint validation to
+            // cancel silently, and the URL travels with the request.
+            if (window.htmx && typeof htmx.ajax === 'function') {
+                htmx.ajax('POST', '/scrape', {
+                    source: scrapeForm,
+                    target: '#scraperOutput',
+                    swap: 'innerHTML',
+                    values: { url: pendingUrl }
+                });
+            } else {
+                scrapeForm.requestSubmit();
+            }
         }, true);
     }
 
@@ -1681,9 +1692,14 @@ function getVal(id) {
     return el.value.trim();
 }
 
-async function fullReset() {
+async function fullReset(opts) {
+    const keepUrl = !!(opts && opts.keepUrl === true);
     const inputs = document.querySelectorAll('input[type="text"]:not(#boxNumber):not(#lister), input[type="url"], textarea:not(#outputDesc)');
-    inputs.forEach(input => input.value = "");
+    inputs.forEach(input => {
+        // A scrape-triggered reset must not wipe the URL it is about to use.
+        if (keepUrl && input.id === 'discogsUrlInput') return;
+        input.value = "";
+    });
     const selects = document.querySelectorAll('select:not(#skuFlag)');
     selects.forEach(sel => {
         Array.from(sel.options).forEach(opt => {
