@@ -1874,6 +1874,24 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
   `generateListingData()`, remove the format-tag fold in `processFormatData()`, drop `[FORMATS]` from `write_f0t_file()`,
   and delete `lastFormats` from `loadF0T()`.
 
+### 98. Release build — v1.20.15.0
+**Files:** `version.json`, `wysiWyg-installer.iss`, `changelog.txt`, built artifacts
+- `version.json` = `1.20.15.0`; `#define MyAppVersion "1.20.15.0"`.
+- `changelog.txt`: the never-built `v1.19.12.66` section was renamed to `### v1.20.15.0 - 2026-11-16` (same reasoning as the
+  1.16.6.00 → 1.19.8.3 rename) and gained seven new bullets for this batch: the vinyl colour engine (source, dictionaries,
+  noise, wholesale phrases, multi-map stitching), basic-list `/` vs complex `&`, box-set media rebuild, media modifiers,
+  Format Tags with their medium, and the Weight/Speed duplicate.
+- Build order (no exes were running; two source `pythonw` processes were left alone):
+  1. `WysiScan\` → `PyInstaller --noconfirm WysiScan.spec` → `WysiScan\dist\WysiScan.exe` 83.3 MB;
+  2. `!build.bat` → `dist\WYSIWYG\WYSIWYG.exe` 11.6 MB + `WysiChat\dist\Wysichat.exe` 23.9 MB, scanner payload trimmed,
+     `dist_install\run_me_Installer.bat` refreshed (5.7 KB);
+  3. `ISCC.exe wysiWyg-installer.iss` → `dist_install\INSTALL_WYSIWYG.exe` 310.9 MB.
+- `colourrules.json` ships twice on purpose: bundled by PyInstaller (`_internal\colourrules.json`) and copied to `{app}` by
+  the installer, which is the copy the app reads/edits (`get_local_path`). `f0t_last.txt` is generated at runtime and is
+  deliberately not shipped.
+- Build warnings: `Hidden import 'Xeno_ui.about' / 'Xeno_ui.theme' not found`. Harmless - `main.py` imports
+  `Xeno_ui.about` lazily inside the About handler and the module itself ships via `--add-data "C:/Git/Xeno_ui;Xeno_ui"`.
+
 ---
 
 ## Notes / gotchas
