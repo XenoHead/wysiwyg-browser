@@ -2,11 +2,11 @@
 
 [F0T MAPS]
 [FORMATS]
-[{"name":"CD","qty":"2","descriptions":["Compilation"]},{"name":"DVD","qty":"2","descriptions":["DVD-Video","NTSC","Compilation","Stereo","Quadraphonic"],"text":"Region 0"},{"name":"Blu-ray","qty":"1","descriptions":["Compilation","Stereo","Quadraphonic"]}]
+[{"name":"DVDr","qty":"1","descriptions":["DVD-Video"]}]
 [NOTES]
-title: Pink Floyd - The Early Years 1970 Devi/ation
-formats[0].name: CD
-formats[0].descriptions: Compilation
+title: Showtyme - State 2 State On The Road With Show
+formats[0].name: DVDr
+formats[0].descriptions: DVD-Video
 vinyl entries: 0
 country: US
-released: Mar 24, 2017
+released: Apr 22, 2005

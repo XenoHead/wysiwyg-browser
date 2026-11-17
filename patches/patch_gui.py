@@ -24,6 +24,7 @@ ISS_FILE = os.path.join(REPO_ROOT, "wysiWyg-installer.iss")
 CHANGELOG_FILE = os.path.join(REPO_ROOT, "changelog.txt")
 MAKE_PS1 = os.path.join(PATCH_DIR, "make_patch.ps1")
 APPLY_PS1 = os.path.join(PATCH_DIR, "apply_patch.ps1")
+BUILD_FULL_PS1 = os.path.join(PATCH_DIR, "build_full.ps1")
 OUT_ROOT = os.path.join(PATCH_DIR, "out")
 DEFAULT_SHARE = r"\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG"
 DEFAULT_INSTALL = r"C:\FYRTOOLS\WYSIWYG"
@@ -239,14 +240,18 @@ class PatchTool(tk.Tk):
 
         self.tab_build = ttk.Frame(self.notebook, padding=16)
         self.tab_apply = ttk.Frame(self.notebook, padding=16)
+        self.tab_full = ttk.Frame(self.notebook, padding=16)
         self.tab_help = ttk.Frame(self.notebook, padding=16)
         self.notebook.add(self.tab_build, text="Build a patch")
         self.notebook.add(self.tab_apply, text="Apply a patch")
+        self.notebook.add(self.tab_full, text="Full installer")
         self.notebook.add(self.tab_help, text="What can I patch?")
 
         self._build_build_tab()
         self._build_apply_tab()
+        self._build_full_tab()
         self._build_help_tab()
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
     # -- build tab ---------------------------------------------------------
     def _build_build_tab(self):
@@ -260,16 +265,21 @@ class PatchTool(tk.Tk):
         self.bump_button = ttk.Button(top, text="Bump patch version...",
                                       command=self.on_bump)
         self.bump_button.pack(side="right")
+        self.build_bump_button = ttk.Button(top, text="Bump build (hotfix)",
+                                            command=self.on_bump_build)
+        self.build_bump_button.pack(side="right", padx=(0, 6))
 
         note_row = ttk.Frame(root)
         note_row.pack(fill="x", pady=(0, 10))
-        ttk.Label(note_row, text="What changed:", style="Muted.TLabel").pack(side="left")
-        self.note_var = tk.StringVar()
-        self.note_entry = ttk.Entry(note_row, textvariable=self.note_var)
-        self.note_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
-        self.note_entry.insert(0, "")
-        ttk.Label(note_row, text="(one line, shows on the client)",
-                  style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        note_label = ttk.Frame(note_row)
+        note_label.pack(side="left", anchor="n", pady=(4, 0))
+        ttk.Label(note_label, text="What changed:", style="Muted.TLabel").pack(anchor="w")
+        ttk.Label(note_label, text="one line per change", style="Muted.TLabel").pack(anchor="w")
+        self.note_box = tk.Text(note_row, height=4, wrap="word", bg=PANEL, fg=FG,
+                                insertbackground=FG, relief="flat", font=FONT,
+                                padx=8, pady=6, highlightthickness=1,
+                                highlightbackground=PANEL, highlightcolor=ACCENT)
+        self.note_box.pack(side="left", fill="x", expand=True, padx=(10, 0))
 
         files_head = ttk.Frame(root)
         files_head.pack(fill="x")
@@ -304,7 +314,7 @@ class PatchTool(tk.Tk):
 
         publish_row = ttk.Frame(root)
         publish_row.pack(fill="x", pady=(0, 8))
-        self.publish_var = tk.BooleanVar(value=False)
+        self.publish_var = tk.BooleanVar(value=True)
         self.publish_check = ttk.Checkbutton(
             publish_row, text="Publish to the share after building",
             variable=self.publish_var, command=self._sync_share_state)
@@ -388,6 +398,153 @@ class PatchTool(tk.Tk):
         log_frame, self.apply_log = make_log(root, height=11)
         log_frame.pack(fill="both", expand=True)
 
+    # -- full installer tab ------------------------------------------------
+    def _build_full_tab(self):
+        root = self.tab_full
+
+        head = ttk.Frame(root)
+        head.pack(fill="x", pady=(0, 8))
+        ttk.Label(head, text="One installer that already contains every published patch",
+                  style="H2.TLabel").pack(side="left")
+        self.full_check_button = ttk.Button(head, text="Check now", command=self.check_full)
+        self.full_check_button.pack(side="right")
+
+        self.full_info = ttk.Label(root, text="Click Check now.", style="Muted.TLabel",
+                                   justify="left", wraplength=920, font=FONT_MONO)
+        self.full_info.pack(fill="x", pady=(0, 10))
+
+        opt = ttk.Frame(root)
+        opt.pack(fill="x", pady=(0, 8))
+        self.full_publish_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt, text="Publish the installer to the share after building",
+                        variable=self.full_publish_var,
+                        command=self._sync_full_share_state).pack(side="left")
+        ttk.Label(opt, text="  share:", style="Muted.TLabel").pack(side="left")
+        self.full_share_var = tk.StringVar(value=DEFAULT_SHARE)
+        self.full_share_entry = ttk.Entry(opt, textvariable=self.full_share_var)
+        self.full_share_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+
+        actions = ttk.Frame(root)
+        actions.pack(fill="x", pady=(4, 8))
+        self.full_build_button = ttk.Button(actions, text="Build full installer",
+                                            style="Accent.TButton",
+                                            command=self.on_build_full)
+        self.full_build_button.pack(side="left")
+        self.sync_button = ttk.Button(actions, text="Pull missing patches into this repo",
+                                      command=self.on_sync_repo)
+        self.sync_button.pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Open dist_install",
+                   command=self.on_open_dist).pack(side="right")
+
+        ttk.Label(root, text="Log", style="H2.TLabel").pack(anchor="w", pady=(6, 4))
+        log_frame, self.full_log = make_log(root, height=12)
+        log_frame.pack(fill="both", expand=True)
+
+    def _on_tab_changed(self, _event=None):
+        try:
+            current = self.notebook.nametowidget(self.notebook.select())
+        except Exception:
+            return
+        if current is self.tab_full and not self.busy:
+            self.check_full()
+
+    def _sync_full_share_state(self):
+        self.full_share_entry.configure(
+            state="normal" if self.full_publish_var.get() else "disabled")
+
+    def check_full(self):
+        if self.busy:
+            return
+        share = self.full_share_var.get().strip() or DEFAULT_SHARE
+        try:
+            proc = subprocess.run(ps_command(BUILD_FULL_PS1, ["-Check", "-ShareRoot", share]),
+                                  cwd=REPO_ROOT, capture_output=True, text=True,
+                                  errors="replace", creationflags=CREATE_NO_WINDOW,
+                                  timeout=45)
+            text = (proc.stdout or "").strip()
+            start = text.find("{")
+            if proc.returncode != 0 or start < 0:
+                raise RuntimeError((proc.stderr or text or "no output").strip())
+            data = json.loads(text[start:])
+        except Exception as exc:  # noqa: BLE001
+            self.full_info.configure(text="Check failed: " + str(exc), style="Err.TLabel")
+            return
+
+        self.full_data = data
+        missing = ", ".join(data.get("missing") or []) or "none"
+        to_apply = ", ".join(data.get("to_apply") or []) or "none"
+        info = (
+            "Repo (GOD copy):     {repo}\n"
+            "Installer on share:  {installer}\n"
+            "Newest patch:        {newest}\n"
+            "Target version:      {target}\n"
+            "\n"
+            "Missing from the installer:  {missing}\n"
+            "Patches newer than the repo: {to_apply}"
+        ).format(
+            repo=data.get("repo", "?"),
+            installer=data.get("installer") or "(none)",
+            newest=data.get("newest_patch") or "(none)",
+            target=data.get("target", "?"),
+            missing=missing,
+            to_apply=to_apply)
+        if data.get("build_needed"):
+            info += ("\n\nThe share is behind - a build is needed. The installer will carry "
+                     + data.get("target", "?") + ".")
+            if data.get("shared_with_patch"):
+                info += ("\n\nWARNING: " + data.get("target", "?") + " is already a published patch. "
+                         "Machines patched to it will NOT be offered this installer, and two different "
+                         "builds would share one number. Bump the version first if this build contains "
+                         "Python changes.")
+        else:
+            info += "\n\nThe share is already at the newest version - nothing to build."
+        self.full_info.configure(text=info, style="Warn.TLabel" if data.get("shared_with_patch")
+                                 else "Muted.TLabel")
+
+    def on_sync_repo(self):
+        if self.busy:
+            return
+        share = self.full_share_var.get().strip() or DEFAULT_SHARE
+        if not messagebox.askyesno(
+                "Pull patches into the repo",
+                "Apply every published patch that is newer than this repo, and set "
+                "version.json / the installer version to match?\n\nThe current files are "
+                "backed up under patches\\out\\_prebuild."):
+            return
+        self.start_job("full", ps_command(BUILD_FULL_PS1, ["-SyncOnly", "-ShareRoot", share]),
+                       "Repo synced from the share.")
+
+    def on_build_full(self):
+        if self.busy:
+            return
+        data = getattr(self, "full_data", None) or {}
+        target = data.get("target") or "the newest version"
+        warning = ""
+        if data.get("shared_with_patch"):
+            warning = ("\n\nWARNING: {} is already a published patch. Machines already patched to it "
+                       "will not be offered this installer. Bump the version first if this build "
+                       "contains Python changes.".format(target))
+        if not messagebox.askyesno(
+                "Build full installer",
+                "Build a full installer at {0}?\n\nThis runs !build.bat (a few minutes) and then "
+                "Inno Setup. Any published patch the repo lacks is applied first, and the "
+                "version files are set to {0}.{1}".format(target, warning)):
+            return
+        share = self.full_share_var.get().strip() or DEFAULT_SHARE
+        args = ["-ShareRoot", share]
+        if self.full_publish_var.get():
+            args.append("-Publish")
+        self.start_job("full", ps_command(BUILD_FULL_PS1, args),
+                       "Full installer built at {}. Publishing was {}.".format(
+                           target, "requested" if self.full_publish_var.get() else "skipped"))
+
+    def on_open_dist(self):
+        dist = os.path.join(REPO_ROOT, "dist_install")
+        if os.path.isdir(dist):
+            os.startfile(dist)  # noqa: S606 - local folder
+        else:
+            messagebox.showinfo("Full installer", "dist_install does not exist yet.")
+
     # -- help tab ----------------------------------------------------------
     def _build_help_tab(self):
         frame = ttk.Frame(self.tab_help)
@@ -448,6 +605,19 @@ class PatchTool(tk.Tk):
             "update banner, the page shows a live Patching screen and reloads itself on the new "
             "version.")
         add("")
+        add("Full installer", "h")
+        add("The Full installer tab builds one INSTALL_WYSIWYG.exe that already contains every "
+            "published patch. It reads the repo version, the installer on the share and every "
+            "patch, takes the highest as the target, applies any patch the repo is missing, sets "
+            "version.json and the installer version to the target, runs !build.bat and then Inno "
+            "Setup. Publishing the installer to the share is on by default.")
+        add("")
+        add("The GOD rule", "h")
+        add("C:\\Git\\WysiWyg-Browser is the master copy and must stay the newest. A patch build "
+            "refuses to run while a newer patch exists on the share - use 'Pull missing patches "
+            "into this repo' (Full installer tab) first. Patch builds publish to the share by "
+            "default, so the server never lags behind this checkout.")
+        add("")
         add("Same thing from a command prompt", "h")
         add(r"patches\make_patch.bat -Note ""fixed X"" -Changed", "code")
         add(r"patches\make_patch.bat -Note ""fixed X"" -Changed -Publish", "code")
@@ -461,7 +631,8 @@ class PatchTool(tk.Tk):
         state = "disabled" if busy else "normal"
         for button in (self.build_button, self.build_publish_button, self.refresh_button,
                        self.none_button, self.all_button, self.add_button, self.bump_button,
-                       self.dry_button, self.apply_button):
+                       self.dry_button, self.apply_button, self.full_build_button,
+                       self.sync_button, self.full_check_button, self.build_bump_button):
             try:
                 button.configure(state=state)
             except tk.TclError:
@@ -471,7 +642,7 @@ class PatchTool(tk.Tk):
     def start_job(self, target, command, success_message=None):
         if self.busy:
             return
-        log = self.build_log if target == "build" else self.apply_log
+        log = getattr(self, target + "_log")
         self._log_clear(log)
         self._set_busy(True)
         script = os.path.basename(command[5]) if len(command) > 5 else command[0]
@@ -502,7 +673,7 @@ class PatchTool(tk.Tk):
             while True:
                 item = self.jobs.get_nowait()
                 kind, target = item[0], item[1]
-                log = self.build_log if target == "build" else self.apply_log
+                log = getattr(self, target + "_log")
                 if kind == "line":
                     line = item[2]
                     tag = ""
@@ -542,6 +713,10 @@ class PatchTool(tk.Tk):
         elif target == "apply":
             if message:
                 messagebox.showinfo("Patch tool", message)
+        elif target == "full":
+            self.check_full()
+            if message:
+                messagebox.showinfo("Full installer", message)
 
     # -- log helpers -------------------------------------------------------
     def _log(self, widget, line, tag=None):
@@ -606,14 +781,17 @@ class PatchTool(tk.Tk):
             return
         self._add_file_row(rel, os.path.getsize(path))
 
+    def _note_text(self):
+        return self.note_box.get("1.0", "end").strip()
+
     def on_build(self, publish=False):
         if self.busy:
             return
-        note = self.note_var.get().strip()
+        note = self._note_text()
         if not note:
             messagebox.showwarning("Note required",
-                                   "Type a one-line note describing the change first.")
-            self.note_entry.focus_set()
+                                   "Describe the change first - one line per change.")
+            self.note_box.focus_set()
             return
         files = [path for path, var in self.file_vars.items() if var.get()]
         if not files:
@@ -637,25 +815,37 @@ class PatchTool(tk.Tk):
                        "Patch {} is in {}".format(os.path.basename(expected), expected))
 
     def on_bump(self):
-        note = self.note_var.get().strip()
+        self._bump_version("patch")
+
+    def on_bump_build(self):
+        self._bump_version("build")
+
+    def _bump_version(self, kind):
+        note = self._note_text()
         if not note:
             messagebox.showwarning("Note required",
-                                   "Type the one-line note first - it becomes the changelog "
-                                   "line for this version.")
+                                   "Describe the change first - each line becomes a changelog line.")
+            self.note_box.focus_set()
             return
         current = read_version()
         new = dict(current)
-        new["patch"] = int(current.get("patch", 0)) + 1
-        new["build"] = 0
+        if kind == "build":
+            new["build"] = int(current.get("build", 0)) + 1
+            what = "fourth digit +1 (bug-fix release); patch number unchanged"
+        else:
+            new["patch"] = int(current.get("patch", 0)) + 1
+            new["build"] = 0
+            what = "patch number +1; fourth digit back to 0"
         old_s, new_s = version_str(current), version_str(new)
         today = datetime.date.today().isoformat()
         plan = (
             "{0}  ->  {1}\n\n"
-            "version.json        patch {2} -> {3}\n"
-            "wysiWyg-installer.iss   MyAppVersion {0} -> {1}\n"
-            "changelog.txt       new heading \"### v{1} - {4}\" with your note\n"
-        ).format(old_s, new_s, current.get("patch"), new.get("patch"), today)
-        if not messagebox.askyesno("Bump patch version", plan + "\nApply these three edits?"):
+            "{2}\n\n"
+            "version.json            -> {1}\n"
+            "wysiWyg-installer.iss   MyAppVersion -> {1}\n"
+            "changelog.txt           new heading \"### v{1} - {3}\", one -- line per note line\n"
+        ).format(old_s, new_s, what, today)
+        if not messagebox.askyesno("Bump version", plan + "\nApply these three edits?"):
             return
         try:
             with open(VERSION_FILE, "w", encoding="utf-8", newline="") as fh:
@@ -672,8 +862,11 @@ class PatchTool(tk.Tk):
                 changelog = fh.read()
             if not changelog.lstrip("\ufeff").lstrip().startswith("### v" + new_s):
                 eol = "\r\n" if "\r\n" in changelog else "\n"
-                entry = eol.join(["### v{} - {}".format(new_s, today), "-- " + note])
-                entry += eol + eol
+                lines = [line.strip() for line in note.splitlines() if line.strip()]
+                entry = "### v{} - {}".format(new_s, today) + eol
+                for line in lines:
+                    entry += "-- " + line + eol
+                entry += eol
                 with open(CHANGELOG_FILE, "w", encoding="utf-8", newline="") as fh:
                     fh.write(entry + changelog.lstrip("\ufeff"))
         except Exception as exc:  # noqa: BLE001

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WYSIWYG - Walmart API Lookup</title>
+<link rel="icon" type="image/png" href="/fyrlogo.png">
+<link rel="stylesheet" href="/styles.css">
+<style>
+    :root {
+        --wapi-panel-bg: #ffffff;
+        --wapi-panel-border: #ced4da;
+        --wapi-quiet: #666666;
+        --wapi-mono: Consolas, "Courier New", monospace;
+        --wapi-green: #0a7d32;
+        --wapi-green-bg: #e6f4ec;
+        --wapi-amber: #8a5a00;
+        --wapi-amber-bg: #fff5e0;
+        --wapi-blue-bg: #e8ecff;
+    }
+    [data-theme="dark"] {
+        --wapi-panel-bg: #2d2d2d;
+        --wapi-panel-border: #444444;
+        --wapi-quiet: #b0b0b0;
+        --wapi-green: #7ee2a8;
+        --wapi-green-bg: #16351f;
+        --wapi-amber: #ffd479;
+        --wapi-amber-bg: #3a2a08;
+        --wapi-blue-bg: #1d2340;
+    }
+
+    body { padding: 10px; }
+    .wapi-page { max-width: 1080px; margin: 0 auto; }
+
+    .wapi-head h1 {
+        margin: 0 0 2px 0;
+        font-size: 18px;
+        color: var(--wysiwyg-accent-text);
+    }
+    .wapi-head h1 small {
+        font-size: 12px;
+        font-weight: normal;
+        color: var(--wapi-quiet);
+        margin-left: 8px;
+    }
+    .wapi-head p { margin: 0 0 12px 0; font-size: 11px; color: var(--wapi-quiet); }
+
+    .scan-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--wapi-panel-bg);
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 6px;
+        padding: 10px 12px;
+    }
+    .scan-row label {
+        font-size: 11px;
+        font-weight: bold;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--wapi-quiet);
+        flex: 0 0 92px;
+    }
+    #upcInput {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-family: var(--wapi-mono);
+        font-size: 20px;
+        letter-spacing: .12em;
+        padding: 6px 10px;
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+        background: var(--input-bg);
+        color: var(--input-text);
+    }
+    #upcInput:focus { outline: 2px solid var(--wysiwyg-blue); outline-offset: 0; }
+    #lookupBtn {
+        flex: 0 0 120px;
+        width: 120px;
+        padding: 8px 0;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: .04em;
+        border: 1px solid var(--wysiwyg-blue);
+        border-radius: 4px;
+        background: var(--wysiwyg-blue);
+        color: #ffffff;
+        cursor: pointer;
+    }
+    #lookupBtn:disabled { opacity: .55; cursor: default; }
+    #clearBtn {
+        flex: 0 0 84px;
+        width: 84px;
+        padding: 8px 0;
+        font-size: 12px;
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-color);
+        cursor: pointer;
+    }
+    [data-theme="dark"] #clearBtn { color: #e0e0e0; }
+
+    .status-line {
+        min-height: 18px;
+        margin: 8px 2px 0 2px;
+        font-size: 11px;
+        color: var(--wapi-quiet);
+    }
+    .status-line.error { color: var(--danger-color); }
+
+    .banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border: 1px solid var(--wapi-panel-border);
+        border-left-width: 5px;
+        border-radius: 5px;
+        padding: 10px 12px;
+        margin-top: 12px;
+        background: var(--wapi-panel-bg);
+    }
+    .banner .banner-code {
+        font-family: var(--wapi-mono);
+        font-size: 10px;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid currentColor;
+        white-space: nowrap;
+    }
+    .banner .banner-headline { font-size: 14px; font-weight: bold; }
+    .banner .banner-detail { font-size: 11px; color: var(--wapi-quiet); margin-top: 2px; }
+    .banner.yours-live { border-left-color: var(--wapi-green); background: var(--wapi-green-bg); }
+    .banner.yours-live .banner-headline { color: var(--wapi-green); }
+    .banner.yours-live .banner-code { color: var(--wapi-green); }
+    .banner.yours-unpublished { border-left-color: var(--wapi-amber); background: var(--wapi-amber-bg); }
+    .banner.yours-unpublished .banner-headline { color: var(--wapi-amber); }
+    .banner.yours-unpublished .banner-code { color: var(--wapi-amber); }
+    .banner.offer { border-left-color: var(--wysiwyg-blue); background: var(--wapi-blue-bg); }
+    .banner.offer .banner-headline { color: var(--wysiwyg-accent-text); }
+    .banner.offer .banner-code { color: var(--wysiwyg-accent-text); }
+    .banner.new-item { border-left-color: var(--secondary-color); }
+    .banner.new-item .banner-code { color: var(--wapi-quiet); }
+    .banner.invalid { border-left-color: var(--danger-color); }
+    .banner.invalid .banner-headline,
+    .banner.invalid .banner-code { color: var(--danger-color); }
+
+    .panels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+    }
+    @media (max-width: 820px) { .panels { grid-template-columns: 1fr; } }
+
+    .panel {
+        background: var(--wapi-panel-bg);
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        min-height: 120px;
+    }
+    .panel h3 {
+        margin: 0 0 8px 0;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--wapi-quiet);
+        border-bottom: 1px solid var(--wapi-panel-border);
+        padding-bottom: 6px;
+    }
+    .panel .empty { font-size: 12px; color: var(--wapi-quiet); font-style: italic; }
+
+    .thumb-row { display: flex; gap: 10px; align-items: flex-start; }
+    .thumb {
+        width: 72px; height: 72px; flex: 0 0 72px;
+        object-fit: contain;
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+        background: #fff;
+    }
+    .thumb.blank { background: transparent; }
+    .kv { font-size: 12px; line-height: 1.55; word-break: break-word; }
+    .kv .k { color: var(--wapi-quiet); display: inline-block; min-width: 92px; }
+    .kv .v { font-family: var(--wapi-mono); }
+    .kv .v.name { font-family: inherit; font-weight: bold; }
+
+    .reason {
+        font-size: 11px;
+        border-left: 3px solid var(--wapi-amber);
+        background: var(--wapi-amber-bg);
+        color: var(--wapi-amber);
+        padding: 6px 8px;
+        margin-top: 8px;
+        border-radius: 3px;
+    }
+
+    .link-row { margin-top: 8px; font-size: 11px; }
+    .link-row a { color: var(--wysiwyg-accent-text); }
+
+    details { margin-top: 12px; font-size: 11px; }
+    details summary { cursor: pointer; color: var(--wapi-quiet); }
+    pre#rawJson {
+        margin: 8px 0 0 0;
+        padding: 10px;
+        max-height: 320px;
+        overflow: auto;
+        font-family: var(--wapi-mono);
+        font-size: 11px;
+        background: var(--wapi-panel-bg);
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+        color: var(--text-color);
+    }
+
+    .recent { margin-top: 14px; }
+    .recent h4 {
+        margin: 0 0 6px 0;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--wapi-quiet);
+    }
+    .recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+        font-family: var(--wapi-mono);
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 10px;
+        border: 1px solid var(--wapi-panel-border);
+        background: var(--wapi-panel-bg);
+        color: var(--text-color);
+        cursor: pointer;
+    }
+    .chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+    .chip .dot.yours-live { background: var(--wapi-green); }
+    .chip .dot.yours-unpublished { background: var(--wapi-amber); }
+    .chip .dot.offer { background: var(--wysiwyg-blue); }
+    .chip .dot.new-item { background: var(--secondary-color); }
+    .chip .dot.invalid { background: var(--danger-color); }
+    .chip .dot.error { background: var(--danger-color); }
+
+    .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="wapi-page">
+    <div class="wapi-head">
+        <h1>Walmart API <small>UPC lookup</small></h1>
+        <p>Scan a barcode or type a UPC / EAN / GTIN. The lookup runs by itself at 12&ndash;14 digits.</p>
+    </div>
+
+    <div class="scan-row">
+        <label for="upcInput">UPC / GTIN</label>
+        <input id="upcInput" type="text" inputmode="numeric" autocomplete="off" spellcheck="false"
+               placeholder="Scan or type here..." autofocus>
+        <button id="lookupBtn" type="button">LOOK UP</button>
+        <button id="clearBtn" type="button">CLEAR</button>
+    </div>
+
+    <div id="statusLine" class="status-line"></div>
+
+    <section id="result" class="hidden">
+        <div id="banner" class="banner">
+            <span class="banner-code" id="bannerCode"></span>
+            <div>
+                <div class="banner-headline" id="bannerHeadline"></div>
+                <div class="banner-detail" id="bannerDetail"></div>
+            </div>
+        </div>
+
+        <div class="panels">
+            <div class="panel">
+                <h3>Walmart catalog</h3>
+                <div id="catalogBody"></div>
+            </div>
+            <div class="panel">
+                <h3>Your listing</h3>
+                <div id="sellerBody"></div>
+            </div>
+        </div>
+
+        <details>
+            <summary>Raw response</summary>
+            <pre id="rawJson"></pre>
+        </details>
+    </section>
+
+    <div class="recent">
+        <h4>This session</h4>
+        <div id="recentList" class="recent-list"><span class="empty" style="font-size:11px;color:var(--wapi-quiet);">Nothing scanned yet.</span></div>
+    </div>
+</div>
+
+<script src="/heartbeat.js" defer></script>
+<script>
+(function () {
+    "use strict";
+
+    var savedTheme = localStorage.getItem('wysiwyg_theme');
+    if (savedTheme === 'dark') { document.body.setAttribute('data-theme', 'dark'); }
+
+    var $ = function (id) { return document.getElementById(id); };
+    var input = $('upcInput');
+    var lookupBtn = $('lookupBtn');
+    var clearBtn = $('clearBtn');
+    var statusLine = $('statusLine');
+    var resultBox = $('result');
+    var recent = [];
+    var busy = false;
+    var lastAutoValue = "";
+    var debounceTimer = null;
+
+    function digitsOnly(s) { return (s || "").replace(/\D+/g, ""); }
+
+    function esc(s) {
+        return String(s == null ? "" : s)
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function money(amount, currency) {
+        if (amount === null || amount === undefined || amount === "") { return "&mdash;"; }
+        var n = Number(amount);
+        if (isNaN(n)) { return esc(amount); }
+        try {
+            return n.toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
+        } catch (e) {
+            return "$" + n.toFixed(2);
+        }
+    }
+
+    function setStatus(text, isError) {
+        statusLine.textContent = text || "";
+        statusLine.className = "status-line" + (isError ? " error" : "");
+    }
+
+    function kv(rows) {
+        var out = '<div class="kv">';
+        rows.forEach(function (row) {
+            if (row[1] === null || row[1] === undefined || row[1] === "") { return; }
+            out += '<div><span class="k">' + esc(row[0]) + '</span><span class="v' +
+                   (row[2] ? " " + row[2] : "") + '">' + row[1] + '</span></div>';
+        });
+        return out + '</div>';
+    }
+
+    function renderCatalog(data) {
+        var body = $('catalogBody');
+        if (!data.found) {
+            body.innerHTML = '<div class="empty">No match in the Walmart catalog for this barcode.</div>';
+            return;
+        }
+        body.innerHTML = data.items.map(function (it) {
+            var thumb = it.image
+                ? '<img class="thumb" src="' + esc(it.image) + '" alt="">'
+                : '<div class="thumb blank"></div>';
+            var rows = [
+                ["Title", esc(it.title), "name"],
+                ["Brand", esc(it.brand)],
+                ["Type", esc(it.productType)],
+                ["Price", money(it.price, it.currency)],
+                ["Item ID", esc(it.itemId)],
+                ["Seller", it.isMarketPlaceItem ? "Marketplace seller" : "Walmart (1P)"],
+                ["Category", esc((it.categories || []).slice(-2).join(" / "))]
+            ];
+            var link = it.itemId
+                ? '<div class="link-row"><a href="https://www.walmart.com/ip/' + encodeURIComponent(it.itemId) +
+                  '" target="_blank" rel="noopener">Open on walmart.com</a></div>'
+                : "";
+            return '<div class="thumb-row">' + thumb + '<div style="flex:1 1 auto;min-width:0;">' +
+                   kv(rows) + link + '</div></div>';
+        }).join('<hr style="border:0;border-top:1px solid var(--wapi-panel-border);margin:10px 0;">');
+    }
+
+    function renderSeller(data) {
+        var body = $('sellerBody');
+        if (!data.found || !data.item) {
+            body.innerHTML = '<div class="empty">Not in your catalog.</div>';
+            return;
+        }
+        var it = data.item;
+        var rows = [
+            ["SKU", esc(it.sku)],
+            ["Product", esc(it.productName), "name"],
+            ["Status", esc(it.publishedStatus)],
+            ["Price", money(it.price, it.currency)],
+            ["Stock", esc(it.availability)],
+            ["Condition", esc(it.condition)],
+            ["WPID", esc(it.wpid)],
+            ["Item ID", esc(it.itemId)]
+        ];
+        var html = kv(rows);
+        if (it.unpublishedReasons && it.unpublishedReasons.length) {
+            html += it.unpublishedReasons.map(function (r) {
+                return '<div class="reason">' + esc(String(r).replace(/\|\|\|/g, " ").replace(/@@@/g, " ")) + '</div>';
+            }).join("");
+        }
+        body.innerHTML = html;
+    }
+
+    function pushRecent(upc, code) {
+        recent = recent.filter(function (r) { return r.upc !== upc; });
+        recent.unshift({ upc: upc, code: code });
+        recent = recent.slice(0, 12);
+        var list = $('recentList');
+        list.innerHTML = recent.map(function (r) {
+            var cls = r.code === 'new' ? 'new-item' : r.code;
+            return '<span class="chip" data-upc="' + esc(r.upc) + '">' +
+                   '<span class="dot ' + esc(cls) + '"></span>' + esc(r.upc) + '</span>';
+        }).join("");
+    }
+
+    function render(data) {
+        var banner = $('banner');
+        var code = data.decision.code;
+        var cls = code === 'new' ? 'new-item' : code;
+        banner.className = 'banner ' + cls;
+        $('bannerCode').textContent = cls;
+        $('bannerHeadline').textContent = data.decision.headline;
+        $('bannerDetail').textContent = data.decision.detail;
+        renderCatalog(data.catalog || { found: false, items: [] });
+        renderSeller(data.seller || { found: false, item: null });
+        $('rawJson').textContent = JSON.stringify(data, null, 2);
+        resultBox.classList.remove('hidden');
+        pushRecent(data.upc, code);
+        if (data.warnings && data.warnings.length) {
+            setStatus(data.warnings.join("  |  "), true);
+        } else {
+            setStatus("Checked UPC " + data.upc + " against the Walmart catalog and your catalog.");
+        }
+    }
+
+    function lookup(value) {
+        var digits = digitsOnly(value);
+        if (!digits) { setStatus("Type or scan a barcode first.", true); return; }
+        if (busy) { return; }
+
+        busy = true;
+        lookupBtn.disabled = true;
+        setStatus("Looking up " + digits + " ...");
+
+        fetch('/api/walmart-api/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upc: digits })
+        }).then(function (resp) {
+            return resp.json().then(function (body) { return { status: resp.status, body: body }; });
+        }).then(function (r) {
+            if (r.status >= 400 || !r.body || r.body.ok === false) {
+                var msg = (r.body && (r.body.error || r.body.detail)) || ("Lookup failed (" + r.status + ").");
+                setStatus(msg, true);
+                pushRecent(digits, 'error');
+                return;
+            }
+            render(r.body);
+        }).catch(function (err) {
+            setStatus("Lookup failed: " + err.message, true);
+        }).then(function () {
+            busy = false;
+            lookupBtn.disabled = false;
+            input.focus();
+            input.select();
+        });
+    }
+
+    input.addEventListener('input', function () {
+        var digits = digitsOnly(input.value);
+        if (digits.length >= 12 && digits.length <= 14 && digits !== lastAutoValue) {
+            clearTimeout(debounceTimer);
+            lastAutoValue = digits;
+            // 700 ms idle: a scanner finishes a 12-14 digit code in well under
+            // 100 ms, so this never fires mid-scan; it also picks up typed codes
+            // and barcodes that do not end with Enter.
+            debounceTimer = setTimeout(function () { lookup(digits); }, 700);
+        }
+    });
+
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(debounceTimer);
+            lastAutoValue = digitsOnly(input.value);
+            lookup(input.value);
+        }
+    });
+
+    lookupBtn.addEventListener('click', function () { lookup(input.value); });
+
+    clearBtn.addEventListener('click', function () {
+        input.value = "";
+        lastAutoValue = "";
+        resultBox.classList.add('hidden');
+        setStatus("");
+        input.focus();
+    });
+
+    $('recentList').addEventListener('click', function (e) {
+        var chip = e.target.closest('.chip');
+        if (!chip) { return; }
+        input.value = chip.getAttribute('data-upc');
+        lastAutoValue = input.value;
+        lookup(input.value);
+    });
+
+    input.focus();
+})();
+</script>
+</body>
+</html>

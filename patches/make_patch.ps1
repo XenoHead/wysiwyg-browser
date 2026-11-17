@@ -44,6 +44,8 @@ param(
 
     [switch]$Publish,
 
+    [switch]$AllowStaleRepo,
+
     [string]$ShareRoot = '\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG'
 )
 
@@ -168,6 +170,40 @@ if ($List) {
 
 if ([string]::IsNullOrWhiteSpace($Note)) {
     throw 'A note is required: -Note "what this patch fixes".'
+}
+
+# --- GOD repo rule ----------------------------------------------------------
+# This checkout is the master copy. Never build a patch from it while the
+# server has a newer patch, or the new patch would fork from stale files.
+# (build_full.ps1 -SyncOnly pulls the newer patches in.)
+if (-not $AllowStaleRepo) {
+    $staleMessage = $null
+    try {
+        $verRaw = Get-Content -LiteralPath (Join-Path $RepoRoot 'version.json') -Raw | ConvertFrom-Json
+        $repoVer = [version]('{0}.{1}.{2}.{3}' -f [int]$verRaw.major, [int]$verRaw.minor, [int]$verRaw.patch, [int]$verRaw.build)
+        $patchesDir = Join-Path $ShareRoot 'patches'
+        if (Test-Path -LiteralPath $patchesDir) {
+            $newest = $null
+            foreach ($folder in @(Get-ChildItem -LiteralPath $patchesDir -Directory -ErrorAction SilentlyContinue)) {
+                $manifest = Join-Path $folder.FullName 'patch.json'
+                if (-not (Test-Path -LiteralPath $manifest)) { continue }
+                try {
+                    $v = (Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json).version
+                    $pv = [version]('{0}.{1}.{2}.{3}' -f [int]$v.major, [int]$v.minor, [int]$v.patch, [int]$v.build)
+                    if (-not $newest -or $pv -gt $newest) { $newest = $pv }
+                } catch { }
+            }
+            if ($newest -and $newest -gt $repoVer) {
+                $staleMessage = ("This repo is at {0} but the server already has patch {1}. " +
+                    "Pull it in first so the master copy stays the newest:" +
+                    "`n    powershell -File patches\build_full.ps1 -SyncOnly" +
+                    "`n(or the Full installer tab > 'Pull missing patches into this repo')") -f $repoVer.ToString(), $newest.ToString()
+            }
+        }
+    } catch {
+        Write-Host ("Could not check the server for newer patches: " + $_.Exception.Message) -ForegroundColor DarkYellow
+    }
+    if ($staleMessage) { throw $staleMessage }
 }
 
 # --- Select the payload -----------------------------------------------------

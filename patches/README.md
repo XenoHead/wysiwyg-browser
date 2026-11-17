@@ -108,6 +108,34 @@ for a machine where the app cannot start.
 > has to go out as a full installer; after that, JS/HTML/CSS/data fixes are
 > patches all the way.
 
+## Full installer with every patch baked in
+
+`patches\Patch GUI.bat` → **Full installer** tab (or `build_full.ps1`).
+
+1. **Check now** reads three things: this repo's `version.json`, the installer
+   version on the share, and every `patches\<version>\patch.json`.
+2. Target = the highest of those. "Missing" = published patches newer than the
+   installer; "Patches newer than the repo" = payloads the checkout does not
+   have yet.
+3. **Build full installer** applies any newer patch payload into the repo (with
+   a backup under `patches\out\_prebuild\`), sets `version.json` and
+   `wysiWyg-installer.iss` to the target, runs `!build.bat`, then compiles the
+   `.iss` with `ISCC`. It refuses when the share is already at the target.
+4. Publishing the installer to the share is **on by default**. `!build.bat`
+   also produces `WysiScan\dist\WysiScan.exe`, which the `.iss` expects - build
+   the scanner first if that file is missing.
+
+## The GOD rule
+
+`C:\Git\WysiWyg-Browser` is the master copy and must stay the newest.
+
+- `make_patch` **refuses to build** while a published patch is newer than this
+  checkout (override only for offline work: `-AllowStaleRepo`).
+- Fix it with **Pull missing patches into this repo** on the Full installer tab,
+  or `powershell -File patches\build_full.ps1 -SyncOnly`.
+- The Build tab publishes to the share by default, so the server never lags
+  behind this checkout.
+
 ## Apply it (client)
 
 Run from the share:

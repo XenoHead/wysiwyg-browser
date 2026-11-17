@@ -751,10 +751,18 @@ function runUpdate() {
     else runInstaller();
 }
 
+function escapeHtmlText(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function runPatch() {
     const title = pendingUpdateVersion ? 'Patch ' + pendingUpdateVersion : 'A patch';
     const note = pendingUpdateNote
-        ? '<p style="margin:8px 0 0; font-size:0.9em; opacity:0.8;">' + pendingUpdateNote + '</p>'
+        ? '<p style="margin:8px 0 0; font-size:0.9em; opacity:0.8;">' +
+          escapeHtmlText(pendingUpdateNote).replace(/\n/g, '<br>') + '</p>'
         : '';
     customConfirm(title + ' is ready.' +
         '<p style="margin:8px 0 0;">The files are copied and checked while the app is still open, then it restarts on the new version.</p>' + note,
@@ -2378,11 +2386,18 @@ function parsePastedData(input) {
                 // Sort by length descending to prioritize specific formats (e.g. "DVD-Video" over "DVD")
                 opts.sort((a, b) => b.length - a.length);
 
-                for (const optVal of opts) {
-                    const safeVal = optVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    if (new RegExp("(^|\\W|\\d+x)" + safeVal + "(\\W|$)", "i").test(fLower)) {
-                        mSel.value = optVal;
-                        break;
+                // DVDr is a recordable disc. Discogs lists it as the format name
+                // with "DVD-Video" only as a description, so the longest-match
+                // rule would call it a DVD-Video. The name wins (release 8729192).
+                if (/\bdvdr\b/i.test(fLower)) {
+                    mSel.value = 'DVDr';
+                } else {
+                    for (const optVal of opts) {
+                        const safeVal = optVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        if (new RegExp("(^|\\W|\\d+x)" + safeVal + "(\\W|$)", "i").test(fLower)) {
+                            mSel.value = optVal;
+                            break;
+                        }
                     }
                 }
                 
@@ -3013,7 +3028,11 @@ function assembleDescription(inputs, country, fmtData) {
 
     if (inputs.isOOP) desc += ' is Out-of-Print';
 
-    if (inputs.trackTime) desc += ' with ' + inputs.trackTime + ' Tracks';
+    if (inputs.trackTime) {
+        // One track is singular: "with 1 Track", not "with 1 Tracks".
+        const trackCount = Number(String(inputs.trackTime).trim());
+        desc += ' with ' + inputs.trackTime + (trackCount === 1 ? ' Track' : ' Tracks');
+    }
 
     if (inputs.label) desc += ' - ' + inputs.label;
 

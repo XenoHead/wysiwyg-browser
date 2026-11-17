@@ -165,6 +165,14 @@ THUMB_DIR = os.path.join(TEMP_DIR, "thumbs")
 if not os.path.exists(THUMB_DIR):
     os.makedirs(THUMB_DIR)
 
+# Thumbnails are a regenerable cache. The 1-hour temp sweep only removes files
+# directly in temp\, so thumbs\ survives it, and the 30-minute periodic sweep
+# never runs when the scanner is only opened for a few minutes - which is why
+# the folder grew without bound. A weekly wipe is enough to keep it in check;
+# the stamp lives inside the folder and is the one file the wipe keeps.
+THUMB_CLEAN_STAMP = os.path.join(THUMB_DIR, ".last_clean")
+THUMB_CLEAN_INTERVAL = 7 * 24 * 60 * 60
+
 # --- Path safety for file-serving endpoints -------------------------------
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
 
@@ -201,10 +209,11 @@ def _is_under_allowed_root(path):
 
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 
-def cleanup_directory(directory, older_than=0):
+def cleanup_directory(directory, older_than=0, keep=()):
     """
     Cleans up files in a directory.
     older_than: seconds. If 0, deletes all files.
+    keep: file names to leave alone (e.g. the weekly-cleanup stamp).
     """
     if not os.path.exists(directory):
         return
@@ -214,6 +223,8 @@ def cleanup_directory(directory, older_than=0):
         with os.scandir(directory) as entries:
             for entry in entries:
                 if entry.is_file():
+                    if keep and entry.name in keep:
+                        continue
                     try:
                         if older_than == 0 or entry.stat().st_mtime < (now - older_than):
                             os.remove(entry.path)
@@ -225,17 +236,60 @@ def cleanup_directory(directory, older_than=0):
 def cleanup_temp(older_than=0):
     cleanup_directory(TEMP_DIR, older_than)
 
+def cleanup_thumbs(force=False):
+    """Wipe the thumbnail cache at most once a week (or now, with force).
+
+    Safe at any time: every thumbnail is regenerated from its source image on
+    the next /thumb request. Called on startup as well as from the periodic
+    loop, so a scanner that is only opened briefly still gets its weekly wipe.
+    """
+    now = time.time()
+    try:
+        last = os.path.getmtime(THUMB_CLEAN_STAMP)
+    except OSError:
+        last = 0
+    if not force and last and (now - last) < THUMB_CLEAN_INTERVAL:
+        return
+
+    removed = 0
+    try:
+        with os.scandir(THUMB_DIR) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                if os.path.abspath(entry.path) == os.path.abspath(THUMB_CLEAN_STAMP):
+                    continue
+                try:
+                    os.remove(entry.path)
+                    removed += 1
+                except OSError as e:
+                    logging.error(f"Failed to remove thumbnail {entry.name}: {e}")
+    except OSError as e:
+        logging.error(f"Error scanning {THUMB_DIR}: {e}")
+        return
+
+    try:
+        with open(THUMB_CLEAN_STAMP, "w", encoding="utf-8") as fh:
+            fh.write(str(int(now)))
+    except OSError:
+        pass
+    logging.info(f"Weekly thumbnail cleanup: removed {removed} file(s).")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Clean all temp files on startup
     cleanup_temp(older_than=0)
-    
+    # ...and the thumbnail cache if a week has passed
+    cleanup_thumbs()
+
     # Start periodic cleanup task
     def periodic_cleanup():
         while True:
             time.sleep(1800) # Check every 30 minutes
             cleanup_temp(older_than=3600) # Delete files older than 1 hour
-            cleanup_directory(THUMB_DIR, older_than=86400) # Stale thumbnails
+            cleanup_directory(THUMB_DIR, older_than=86400,
+                              keep=(os.path.basename(THUMB_CLEAN_STAMP),)) # Stale thumbnails
+            cleanup_thumbs() # Weekly wipe, no-op until due
             
     threading.Thread(target=periodic_cleanup, daemon=True).start()
     yield

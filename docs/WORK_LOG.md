@@ -2409,6 +2409,146 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
 - **Undo:** restore the unconditional `Start-Process` branch in `apply_patch.ps1` and the
   `seconds >= 6` reload rule in `showPatchingScreen()`.
 
+### 125. Weekly thumbnail-cache cleanup
+**Files:** `WysiScan\scanner_server.py`
+- Reported: `C:\FYRTOOLS\WYSIWYG\temp\thumbs` keeps growing.
+- Cause: the cache had a sweep, but only inside the 30-minute periodic thread
+  (`cleanup_directory(THUMB_DIR, older_than=86400)`). The scanner is usually opened for a few
+  minutes, so that loop never ran; startup's `cleanup_temp(0)` deletes files directly in `temp\`
+  and deliberately does not touch subfolders, so `thumbs\` survived every session.
+- Fix:
+  - `cleanup_thumbs(force=False)` wipes `thumbs\` when a week has passed, then writes
+    `thumbs\.last_clean` (mtime is the gate). Called at scanner startup and from the periodic loop,
+    so a briefly-opened scanner still gets its weekly wipe. Thumbs are regenerated on demand.
+  - `cleanup_directory()` gained `keep=(...)`; the existing 1-day stale sweep passes
+    `.last_clean` so it can no longer delete the stamp and force a wipe on every next start.
+- **Verified:** throwaway script imported the module, pointed `THUMB_DIR` at a temp folder and
+  exercised: first run wipes and writes the stamp; a fresh stamp leaves new thumbs alone; an
+  8-day-old stamp wipes; the 1-day sweep keeps the stamp; `force` wipes. All five pass.
+  `py_compile` clean.
+- Deploy: `scanner_server.py` is bundled Python, so this needs a **full build** (`!build.bat`).
+  It must ship as **1.20.24.0 or higher** - 1.20.23.0 is already published as a patch, and a full
+  installer at the same version would never be offered to patched machines.
+- **Undo:** delete `cleanup_thumbs`/the two calls/`THUMB_CLEAN_STAMP`/`THUMB_CLEAN_INTERVAL` and the
+  `keep` parameter, and restore the bare `cleanup_directory(THUMB_DIR, older_than=86400)` call.
+
+### 126. Full installer tab (repo + every published patch)
+**Files:** `patches\build_full.ps1`, `patches\patch_gui.py`, `patches\README.md`
+- New **Full installer** tab in `Patch GUI.bat`, backed by `build_full.ps1`.
+- `-Check` prints JSON for the GUI: repo version, installer version on the share, newest patch,
+  computed target, `build_needed`, `missing` (patches newer than the installer) and `to_apply`
+  (patches newer than the repo).
+- Target = highest of (repo, all published patches, installer already on the share). Nothing is
+  built when the share already has that version.
+- Build: backup `version.json` + `.iss` under `patches\out\_prebuild\<stamp>`, apply any patch
+  payload newer than the repo (skipping its `version.json`, which is set explicitly), set both
+  version files to the target, run `!build.bat`, then `ISCC` (auto-detected under Program Files,
+  overridable with `-Iscc`), verify `dist_install\version.json` reads the target, optionally
+  robocopy `dist_install\*` to the share and verify the share's `version.json`.
+- `-SyncOnly` stops after the payload/version steps - used by the GUI's
+  **Pull missing patches into this repo** button.
+- **Verified:** `-Check` on the real share reports repo 23.0, installer 19.0, newest patch 23.0,
+  target 23.0, missing 20.0-23.0, nothing to apply; `-SyncOnly` completes and leaves
+  `version.json`/`.iss` byte-identical. PowerShell parser and `py_compile` clean. The build itself
+  (PyInstaller + ISCC) is Scott's to run.
+
+### 127. GOD repo rule
+**Files:** `patches\make_patch.ps1`, `patches\patch_gui.py`, `patches\README.md`
+- `C:\Git\WysiWyg-Browser` is the master copy and must stay newest.
+- `make_patch.ps1` now refuses to build while the share has a patch newer than the repo version,
+  pointing at `build_full.ps1 -SyncOnly` (or the GUI's pull button). `-AllowStaleRepo` overrides for
+  offline work; if the share is unreachable the check only warns. `-List` is unaffected.
+- The Build tab's "Publish to the share after building" now defaults to **on**, so a patch made from
+  the master copy reaches the server unless deliberately unticked.
+- **Verified:** parse clean; a normal build still succeeds at 23.0 == newest patch 23.0.
+
+### 128. DVDr must win over the "DVD-Video" description (1.20.24.1)
+**Files:** `app.js`, `changelog.txt`, `version.json`, `wysiWyg-installer.iss`,
+`patches\patch_gui.py`
+- Report (release 8729192, Showtyme - State 2 State): output said `DVD-Video`, expected `DVDr`.
+- Discogs returns `{"name": "DVDr", "qty": "1", "descriptions": ["DVD-Video"]}`, so the Format line
+  is `DVDr, DVD-Video`. The Media Format select uses "longest match wins", and `DVD-Video` (9
+  characters) beats `DVDr` (4), so the description overwrote the format name.
+- Fix: before the generic loop, `if (/\bdvdr\b/i.test(fLower)) mSel.value = 'DVDr';` - the name wins
+  whenever it is present. `DVDr` is already a real option in `data.json`.
+- Version 1.20.24.1: changelog heading + one line, `version.json` patch 24 build 1, `.iss`
+  `MyAppVersion "1.20.24.1"` (first hotfix on the fourth digit).
+- GUI: **Bump build (hotfix)** button next to **Bump patch version** - increments only the fourth
+  digit and leaves the patch number alone; `_bump_version("patch"|"build")` shares the version.json /
+  `.iss` / changelog edit. Bumping patch still resets the fourth digit to 0.
+- **Verified:** a throwaway node script against `data.json` shows the longest-match rule picks
+  `DVD-Video` and the DVDr override triggers; `DVDr` exists as an option. `node --check`,
+  `py_compile`, PowerShell parser clean.
+- **Undo:** delete the `/\bdvdr\b/` branch (and the `else`), remove the Bump build button and
+  `on_bump_build`, and restore `on_bump` to the patch-only body.
+
+### 129. "with 1 Track", not "with 1 Tracks" (1.20.24.1)
+**Files:** `app.js`, `changelog.txt`
+- Report: `... is Out-of-Print with 1 Tracks ...`; singular expected for one track, plural above one.
+- `assembleDescription()` built `' with ' + trackTime + ' Tracks'` unconditionally. It now tests
+  `Number(trackTime) === 1` and writes `Track` in that case, `Tracks` otherwise (0 and non-numeric
+  stay plural). Recorded under the still-unreleased 1.20.24.1 heading.
+- **Verified:** throwaway node check of 1, 2, 12, 0 and blanks; `node --check` clean.
+- Note: `WalmartSheet\walmartapp.js` has the same unconditional "Tracks" string in two places. Left
+  alone - it is a separate tool and was not part of the report.
+
+### 130. "What changed" is a multi-line box
+**Files:** `patches\patch_gui.py`, `app.js`
+- The Build tab's note was a single-line `ttk.Entry`. It is now a 4-line `tk.Text`
+  ("What changed / one line per change"); both the patch build and both bump buttons read it
+  through `_note_text()`.
+- Bumping a version turns **each non-empty line into its own `-- ` changelog line** under the new
+  heading, instead of one long line.
+- `patch.json` keeps the note as typed (newlines included). The update banner confirmation in
+  `app.js` now escapes the text and renders newlines as `<br>` (`escapeHtmlText`), so a multi-line
+  note reads as a list and cannot inject HTML.
+- **Verified:** a throwaway script invoked `make_patch.ps1` exactly like the GUI with a two-line
+  note - exit 0, `patch.json` stored the note with `\n` intact. Test build removed afterwards.
+  `py_compile` and `node --check` clean.
+
+### 131. New `WalmartAPI/` — Marketplace client + UPC lookup page
+**Files:** `WalmartAPI/__init__.py`, `walmart_api.py`, `routes.py`, `cli.py`,
+`walmart_api.html`, `__main__.py`, `README.md` (all new); `!run-walmart.bat`
+(new, repo root). `main.py`, `WYSIWYG.spec` and `install.py` were briefly wired
+and then **reverted** — see the last bullet.
+- New, self-contained package for Walmart's Marketplace REST API. Nothing in
+  `WalmartSheet/` was touched (protected files).
+- Auth reality check: the `.env` keys are a **seller-owned app**, so the flow is
+  `grant_type=client_credentials` against `/v3/token` (900 s bearer, no sellerId,
+  no refresh token). The OAuth authorization-code page applies only to approved
+  Solution Providers. Confirmed with a live token call.
+- Read-only probes recorded in the README: 11,875 items, product type `Music`,
+  partnerId `10001373153`, 403 feeds, item spec `5.0.20260829-12_49_39`,
+  `limit`/`offset` paging (max 200/page), catalog search by UPC.
+- `walmart_api.py`: token cache (60 s margin), retry with backoff on 429/5xx,
+  one method per endpoint (items, count, catalog search incl. `responseFormat=SPEC`,
+  inventory get/set, price put, feeds submit/status/wait, taxonomy, spec),
+  `WalmartAPIError` that surfaces Walmart's own error text.
+- `cli.py`: `python -m WalmartAPI.cli …` smoke tests. Reads are open; the two
+  catalog-writing commands (`inv-set`, `price`) refuse without `--yes`.
+- **New page:** `GET /walmart-api` — scan/type a UPC, auto-runs at 12-14 digits.
+  `POST /api/walmart-api/lookup` makes two read-only calls: catalog search
+  (Walmart-wide, identifier variants tried in order) and `GET /v3/items/{upc}`
+  for our own listing. Verdict banner is one of `yours-live`,
+  `yours-unpublished`, `offer` (=> MP_ITEM_MATCH), `new-item` (=> MP_ITEM),
+  `invalid` (bad check digit). Both panels, raw JSON, clickable session chips.
+- `__main__.py`: standalone runner, `python -m WalmartAPI` — a small FastAPI app
+  holding only the two routes, served on **8009** (8008 belongs to the main app),
+  `/` redirecting to the page, `--port` / `--open` / `--sandbox` flags.
+- **Verified:** `py_compile` clean on all Python touched; `node --check` clean on
+  the inline page script; lookup function called directly against the live API —
+  `656605531151` => `yours-unpublished`, `076732157848` => `yours-live`,
+  `001234567890` => `invalid`, `"abc"` => 400. No server started and no browser
+  driven — UI is yours to test.
+- **Kept separate on purpose.** The first wiring (`main.py` guarded import +
+  `include_router`, `WYSIWYG.spec` datas entry, `install.py` sub-dir) was
+  reverted at Scott's call: how this should work into the app is still open. All
+  three files are back to their committed state (verified `git diff` empty), so
+  the package stands alone. The 404 seen from the *installed* build was expected —
+  `C:\FYRTOOLS\WYSIWYG\WalmartAPI` does not exist there, so the guard dropped the
+  route. Run it with `python -m WalmartAPI` until integration is decided.
+  Changelog line left for the patch GUI to bump, as usual.
+
 ---
 
 ## Notes / gotchas

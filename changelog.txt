@@ -1,3 +1,7 @@
+### v1.20.24.1 - 2026-11-17
+-- Media format: a DVDr release now reads as DVDr, not DVD-Video, when Discogs also lists DVD-Video among its descriptions (Showtyme - State 2 State On The Road With Show).
+-- Description: a release with a single track now ends "with 1 Track" instead of "with 1 Tracks"; two or more stay plural.
+
 ### v1.20.23.0 - 2026-11-17
 -- Updates: applying a patch no longer opens a second browser tab - the app is left running, the files are copied and checked underneath it, and the page reloads on the new version.
 
