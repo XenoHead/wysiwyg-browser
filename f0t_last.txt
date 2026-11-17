@@ -1,13 +1,12 @@
 [F0T]
-Red Transparent
+
 [F0T MAPS]
-Red Transparent
 [FORMATS]
-[{"name":"Vinyl","qty":"1","descriptions":["LP","Album","Reissue","Stereo"],"text":"Red Transparent"}]
+[{"name":"CD","qty":"2","descriptions":["Compilation"]},{"name":"DVD","qty":"2","descriptions":["DVD-Video","NTSC","Compilation","Stereo","Quadraphonic"],"text":"Region 0"},{"name":"Blu-ray","qty":"1","descriptions":["Compilation","Stereo","Quadraphonic"]}]
 [NOTES]
-title: The Cult - Love
-formats[0].name: Vinyl
-formats[0].descriptions: LP, Album, Reissue, Stereo
-vinyl entries: 1
-country: Europe
-released: Feb 24, 2023
+title: Pink Floyd - The Early Years 1970 Devi/ation
+formats[0].name: CD
+formats[0].descriptions: Compilation
+vinyl entries: 0
+country: US
+released: Mar 24, 2017

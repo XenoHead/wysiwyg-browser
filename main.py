@@ -350,6 +350,62 @@ def get_installer_path():
     return os.path.join(server_dir, "INSTALL_WYSIWYG.exe")
 
 
+def get_server_patches_dir():
+    """Published loose-file patches live beside the installer: WYSIWYG\\patches."""
+    _, server_dir = resolve_server_paths()
+    return os.path.join(server_dir, "patches")
+
+
+def _version_key(obj):
+    return tuple(int((obj or {}).get(k, 0)) for k in ("major", "minor", "patch", "build"))
+
+
+def get_local_version_key():
+    try:
+        with open(resource_path("version.json"), "r") as f:
+            return _version_key(json.load(f))
+    except Exception:
+        return (0, 0, 0, 0)
+
+
+def list_server_patches():
+    """Newest-first published patches: version, note and folder.
+
+    Each patch is a folder with a patch.json written by patches\\make_patch.ps1.
+    Unreadable folders are skipped - a broken patch must never break the check.
+    """
+    root = get_server_patches_dir()
+    found = []
+    try:
+        names = os.listdir(root)
+    except OSError:
+        # Not published yet, or the share is offline.
+        return found
+
+    for name in names:
+        folder = os.path.join(root, name)
+        manifest = os.path.join(folder, "patch.json")
+        if not os.path.isfile(manifest):
+            continue
+        try:
+            with open(manifest, "r", encoding="utf-8-sig") as f:
+                data = json.load(f)
+            version = {k: int((data.get("version") or {}).get(k, 0))
+                       for k in ("major", "minor", "patch", "build")}
+        except Exception as e:
+            logging.error(f"Ignoring unreadable patch manifest {manifest}: {e}")
+            continue
+        found.append({
+            "version": version,
+            "key": _version_key(version),
+            "note": str(data.get("note") or ""),
+            "folder": folder,
+        })
+
+    found.sort(key=lambda patch: patch["key"], reverse=True)
+    return found
+
+
 def load_json_data(filename):
     path = resource_path(filename)
     if not os.path.exists(path):
@@ -389,26 +445,102 @@ async def get_version_endpoint():
 
 @app.get("/api/server-version")
 async def get_server_version_endpoint():
-    """Lazy update check. Called by the UI after load, never blocks startup."""
+    """Lazy update check. Called by the UI after load, never blocks startup.
+
+    Two things can be published on the share: the full installer (version.json
+    next to INSTALL_WYSIWYG.exe) and loose-file patches (one folder per version
+    under patches/). A patch is preferred whenever it is at least as new as the
+    installer, because it needs no reinstall. A strictly newer installer wins.
+    """
     try:
+        local_key = get_local_version_key()
+        result = {"update_available": False, "patch_available": False}
+
+        installer_version = None
+        installer_key = None
         server_path = get_server_version_path()
-        if not os.path.exists(server_path):
-            return {"update_available": False}
-        with open(server_path, "r") as f:
-            server_version = json.load(f)
+        if os.path.exists(server_path):
+            with open(server_path, "r") as f:
+                installer_version = json.load(f)
+            installer_key = _version_key(installer_version)
 
-        local_path = resource_path("version.json")
-        local_version = {}
-        if os.path.exists(local_path):
-            with open(local_path, "r") as f:
-                local_version = json.load(f)
+        newest_patch = next(iter(list_server_patches()), None)
+        patch_is_newer = bool(newest_patch and newest_patch["key"] > local_key)
+        patch_is_better = patch_is_newer and (
+            not installer_key or installer_key <= newest_patch["key"])
 
-        l_ver = tuple(int(local_version.get(k, 0)) for k in ("major", "minor", "patch", "build"))
-        s_ver = tuple(int(server_version.get(k, 0)) for k in ("major", "minor", "patch", "build"))
-        return {"update_available": s_ver > l_ver, "server_version": server_version}
+        if patch_is_better:
+            # Only one route is offered: a patch already carries the same files
+            # as an installer of the same or older version.
+            patch_version = newest_patch["version"]
+            result["patch_available"] = True
+            result["patch_version"] = patch_version
+            result["patch_version_text"] = ".".join(
+                str(patch_version[k]) for k in ("major", "minor", "patch", "build"))
+            result["patch_note"] = newest_patch["note"]
+        elif installer_key and installer_key > local_key:
+            result["update_available"] = True
+            result["server_version"] = installer_version
+
+        return result
     except Exception as e:
         logging.error(f"Error checking server version: {e}")
-        return {"update_available": False}
+        return {"update_available": False, "patch_available": False}
+
+
+@app.post("/run-patch")
+async def run_patch_endpoint():
+    """Apply the newest published patch, the same way the patch folder does.
+
+    The applier copies and verifies while the app is still running, then starts
+    a fresh instance which replaces this one ("Found old instance"). A batch
+    window shows the progress and stays open on failure.
+    """
+    try:
+        local_key = get_local_version_key()
+        candidates = [p for p in list_server_patches() if p["key"] > local_key]
+        if not candidates:
+            return JSONResponse(status_code=404, content={
+                "status": "error", "message": "No newer patch is published."})
+
+        patch = candidates[0]
+        applier = os.path.join(patch["folder"], "apply_patch.ps1")
+        if not os.path.isfile(applier):
+            return JSONResponse(status_code=404, content={
+                "status": "error",
+                "message": "That patch has no apply_patch.ps1 - rebuild and republish it."})
+
+        version = patch["version"]
+        version_text = ".".join(str(version[k]) for k in
+                                ("major", "minor", "patch", "build"))
+
+        import tempfile
+        bat_path = os.path.join(tempfile.gettempdir(), "update_wysiwyg_patch.bat")
+        with open(bat_path, "w", encoding="utf-8") as f:
+            f.write("@echo off\n"
+                    "title WYSIWYG update\n"
+                    "timeout /t 2 /nobreak >nul\n"
+                    f"echo Patching WYSIWYG to {version_text} ...\n"
+                    "echo.\n"
+                    f'powershell -NoProfile -ExecutionPolicy Bypass -File "{applier}" '
+                    f'-PatchDir "{patch["folder"]}" -Yes\n'
+                    "set RC=%errorlevel%\n"
+                    'echo [%date% %time%] updater exit %RC%>>"%TEMP%\\wysiwyg_patch_apply.log"\n'
+                    'if not "%RC%"=="0" (\n'
+                    "  echo.\n"
+                    "  echo Patch failed. Details: %TEMP%\\wysiwyg_patch_apply.log\n"
+                    "  pause\n"
+                    "  exit /b %RC%\n"
+                    ")\n"
+                    "echo.\n"
+                    "echo Done - the update is applied.\n"
+                    "timeout /t 4 /nobreak >nul\n")
+
+        os.startfile(bat_path)
+        return {"status": "success", "version_text": version_text}
+    except Exception as e:
+        logging.error(f"Error starting patch: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @app.get("/api/changelog")
 async def get_changelog_endpoint():

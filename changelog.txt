@@ -1,3 +1,25 @@
+### v1.20.23.0 - 2026-11-17
+-- Updates: applying a patch no longer opens a second browser tab - the app is left running, the files are copied and checked underneath it, and the page reloads on the new version.
+
+### v1.20.22.0 - 2026-11-17
+-- Updates: after a patch restarts the app, a small "Updated to x.y.z" confirmation appears in the bottom corner, so it is obvious the patch took and which version is now running.
+
+### v1.20.21.0 - 2026-11-17
+-- Updates: a patch now copies and checks its files while the app is still open, then restarts it - and from this version on the page shows a live "Patching WYSIWYG" spinner until the new version answers. A failed update stays on screen with the reason instead of vanishing.
+
+### v1.20.20.0 - 2026-11-17
+-- Patches are now quicker and easier
+
+### v1.20.19.0 - 2026-11-17
+-- Updates: small fixes now reach every machine without a reinstall - a patch published on the share shows as "PATCH x.y.z AVAILABLE!" in the title bar, and one click closes the app, copies the files, verifies them and restarts. The confirmation shows what the patch fixes, and a full installer is still offered when it is genuinely newer.
+-- Updates: the check runs when the app loads and when you come back to its tab, so a patch published while the app is already open is picked up without a refresh.
+
+### v1.20.18.0 - 2026-11-17
+-- Multiple distinct media types without a Box Set format entry now keeps every one and each medium carries its own quantity. Releases with a single kind of media (including several vinyl discs) are unchanged.
+
+### v1.20.17.0 - 2026-11-17
+-- Descriptions: a release that lists several kinds of media without a Box Set format entry now keeps every one - Pink Floyd's "The Early Years 1970 Devi/ation" reads "2xCD + NTSC Quadraphonic 2xDVD-Video + Blu-ray" instead of only the DVD, and each medium carries its own quantity. Releases with a single kind of media (including several vinyl discs) are unchanged.
+
 ### v1.20.16.0 - 2026-11-17
 -- App: a refresh no longer leaves the previous item's menus on screen while the settings load - Reset All now starts as soon as the page finishes loading instead of falling through to a 3-second safety timer.
 -- App: the automatic shutdown no longer ends the app on a slow start, a slow refresh or a laptop waking from sleep - it waits for the first browser connection, allows 30 seconds with no tab open, and keeps a backgrounded tab alive for four hours instead of thirty minutes. The debug log now names the reason it shut down.

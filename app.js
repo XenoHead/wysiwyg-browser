@@ -291,7 +291,7 @@ function setupEventListeners() {
     });
 
     // --- Banners & Titles ---
-    addClickListener('updateBanner', runInstaller);
+    addClickListener('updateBanner', runUpdate);
     addClickListener('appTitle', showChangelogModal);
 
     // --- Tabs ---
@@ -666,23 +666,183 @@ async function loadAppVersion() {
         document.getElementById('updateBanner').style.display = 'none';
         if (titleEl) titleEl.innerHTML = titleHtml;
 
+        // A patch that reloaded this page left a marker so the new version is
+        // confirmed rather than silently assumed.
+        try {
+            const justUpdated = sessionStorage.getItem('wysiwyg_just_updated');
+            if (justUpdated) {
+                sessionStorage.removeItem('wysiwyg_just_updated');
+                showUpdateToast(justUpdated);
+            }
+        } catch (e) { /* storage unavailable is not an error */ }
+
         // Update check happens after load so startup never waits on the network share.
         checkServerUpdate();
+        // Also re-check when the user comes back to the tab, so a patch pushed
+        // while the app was left open is offered without a full reload.
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) checkServerUpdate();
+        });
     } catch (e) { console.error("Version load failed", e); }
 }
 
+// Brief corner confirmation after a patch reloads the app.
+function showUpdateToast(version) {
+    if (!version) return;
+    const el = document.createElement('div');
+    el.textContent = '✓ Updated to ' + version;
+    el.style.cssText = 'position:fixed; right:18px; bottom:18px; z-index:99999; ' +
+        'background:#1e1e26; color:#fff; border:1px solid #3fb950; border-left:4px solid #3fb950; ' +
+        'padding:10px 14px; border-radius:6px; font:13px Arial,Helvetica,sans-serif; ' +
+        'box-shadow:0 6px 18px rgba(0,0,0,.4); opacity:0; transition:opacity .3s;';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 400);
+    }, 4000);
+}
+
+// Set by checkServerUpdate() so clicking the banner does the right thing.
+let pendingUpdateKind = null;
+let pendingUpdateVersion = '';
+let pendingUpdateNote = '';
+
 async function checkServerUpdate() {
     try {
-        const resp = await fetch('/api/server-version');
+        const resp = await fetch('/api/server-version?t=' + Date.now());
         const r = await resp.json();
-        if (!r.update_available) return;
+
         const banner = document.getElementById('updateBanner');
-        if (banner) banner.style.display = 'block';
         const titleEl = document.getElementById('appTitleText');
-        if (titleEl) {
-            titleEl.innerHTML += ` <span onclick="event.stopPropagation(); runInstaller()" style="cursor:pointer; background: #ffc107; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; border: 1px solid #000; vertical-align: middle;" title="Click to run installer">* UPDATE AVAILABLE *</span>`;
+
+        if (!r.patch_available && !r.update_available) {
+            pendingUpdateKind = null;
+            if (banner) banner.style.display = 'none';
+            const badge = document.getElementById('updateBadge');
+            if (badge) badge.remove();
+            return;
+        }
+
+        // A patch is smaller and needs no reinstall, so it is offered first;
+        // the server only reports one of the two as the better route.
+        pendingUpdateKind = r.patch_available ? 'patch' : 'installer';
+        pendingUpdateVersion = r.patch_version_text || '';
+        pendingUpdateNote = r.patch_note || '';
+
+        if (banner) {
+            banner.textContent = r.patch_available
+                ? `⚠️ PATCH ${pendingUpdateVersion} AVAILABLE - CLICK HERE TO UPDATE ⚠️`
+                : '⚠️ NEW VERSION AVAILABLE! CLICK HERE TO UPDATE ⚠️';
+            banner.style.display = 'block';
+        }
+        if (titleEl && !document.getElementById('updateBadge')) {
+            titleEl.insertAdjacentHTML('beforeend',
+                ' <span id="updateBadge" onclick="event.stopPropagation(); runUpdate()" ' +
+                'style="cursor:pointer; background: #ffc107; color: #000; padding: 2px 6px; ' +
+                'border-radius: 4px; font-size: 0.8em; margin-left: 10px; border: 1px solid #000; ' +
+                'vertical-align: middle;" title="Click to update">* UPDATE AVAILABLE *</span>');
         }
     } catch (e) { /* offline / share unavailable is not an error */ }
+}
+
+function runUpdate() {
+    if (pendingUpdateKind === 'patch') runPatch();
+    else runInstaller();
+}
+
+function runPatch() {
+    const title = pendingUpdateVersion ? 'Patch ' + pendingUpdateVersion : 'A patch';
+    const note = pendingUpdateNote
+        ? '<p style="margin:8px 0 0; font-size:0.9em; opacity:0.8;">' + pendingUpdateNote + '</p>'
+        : '';
+    customConfirm(title + ' is ready.' +
+        '<p style="margin:8px 0 0;">The files are copied and checked while the app is still open, then it restarts on the new version.</p>' + note,
+        async () => {
+            try {
+                const resp = await fetch('/run-patch', { method: 'POST' });
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.message || ('HTTP ' + resp.status));
+                }
+                showPatchingScreen(pendingUpdateVersion);
+            } catch (e) { customAlert("Failed to start the patch: " + e.message); }
+        });
+}
+
+// Live "Patching..." screen. The page keeps polling the app; when the restarted
+// app answers again, the page reloads itself on the new version.
+function showPatchingScreen(targetVersion) {
+    document.body.innerHTML = `
+        <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#15151b;color:#fff;font-family:Arial,Helvetica,sans-serif;">
+            <div style="text-align:center;max-width:540px;padding:0 20px;">
+                <div class="patch-spinner"></div>
+                <h1 style="margin:20px 0 6px;font-size:22px;">Patching WYSIWYG</h1>
+                <p id="patchStatus" style="margin:0;font-size:15px;opacity:.9;">Starting...</p>
+                <p id="patchDetail" style="margin:8px 0 0;font-size:12px;opacity:.55;min-height:16px;"></p>
+                <p style="margin:28px 0 0;font-size:11px;opacity:.35;">A black update window may open - leave it until it closes.</p>
+            </div>
+        </div>
+        <style>
+            .patch-spinner { width:44px; height:44px; margin:0 auto; border:4px solid rgba(255,255,255,.15); border-top-color:#0078d7; border-radius:50%; animation:patchspin 1s linear infinite; }
+            @keyframes patchspin { to { transform: rotate(360deg); } }
+        </style>`;
+
+    const status = document.getElementById('patchStatus');
+    const detail = document.getElementById('patchDetail');
+    const started = Date.now();
+    const target = targetVersion || '';
+    let sawDowntime = false;
+    let targetSeen = 0;
+
+    const poll = async () => {
+        const seconds = Math.round((Date.now() - started) / 1000);
+        let current = null;
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 2500);
+            const resp = await fetch('/api/version?t=' + Date.now(),
+                { cache: 'no-store', signal: controller.signal });
+            clearTimeout(timer);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const v = await resp.json();
+            current = `${v.major}.${v.minor}.${v.patch}.${v.build || 0}`;
+        } catch (e) {
+            sawDowntime = true;
+            status.textContent = 'Patching...';
+            detail.textContent = 'Waiting for the app. ' + seconds + 's';
+        }
+
+        if (current !== null) {
+            // version.json is written last, so a match means every other file is
+            // already in place. Two matches in a row wait out the verify step.
+            const isTarget = !target || current === target;
+            targetSeen = isTarget ? targetSeen + 1 : 0;
+            if (!sawDowntime && targetSeen < 2) {
+                status.textContent = 'Checking the copied files...';
+                detail.textContent = seconds + 's';
+            }
+            if (sawDowntime || targetSeen >= 2) {
+                status.textContent = isTarget ? ('Updated to ' + current) : 'Back online';
+                detail.textContent = 'Reloading...';
+                if (isTarget) {
+                    try { sessionStorage.setItem('wysiwyg_just_updated', current); } catch (e) { }
+                }
+                setTimeout(() => location.reload(), 1000);
+                return;
+            }
+        }
+
+        if (seconds > 90) {
+            status.textContent = 'Still waiting';
+            detail.innerHTML = 'If WYSIWYG does not come back, start it from the Start menu, '
+                + 'then <a href="/" style="color:#8ecae6;">reload this page</a>.';
+            return;
+        }
+        setTimeout(poll, 800);
+    };
+
+    setTimeout(poll, 600);
 }
 
 function runInstaller() {
@@ -2007,16 +2167,36 @@ function colourPhraseFromMaps(maps) {
     return phrases.join(' + ');
 }
 
-// --- BOX SETS ---------------------------------------------------------------
+// --- BOX SETS / MULTI-MEDIUM RELEASES ---------------------------------------
 // A box set lists every medium as its own format entry (2xCD, DVD, three LPs,
 // a 7"...). The old one-line join mashed those into "LP 7\" 2xDVD-Video", so
 // for a Box Set the media portion is rebuilt from the raw formats array, in
 // Discogs order, with a count whenever a medium appears more than once.
-// Returns "" for anything that is not a box set, so every other release keeps
-// the existing behaviour.
+// Releases that mix several kinds of medium (CD + DVD + Blu-ray) get the same
+// rebuild; anything with a single kind of medium keeps the existing behaviour.
 function isBoxSetFormats(formats) {
     return Array.isArray(formats)
         && formats.some(f => String((f && f.name) || '').trim().toLowerCase() === 'box set');
+}
+
+// More than one kind of medium (CD + DVD + Blu-ray) needs the same per-entry
+// rebuild as a box set even when Discogs has not tagged the release "Box Set"
+// (release 10070875 is a five-disc bundle listed as plain CD/DVD/Blu-ray).
+// Repeated entries of the same medium (two Vinyl entries) stay on the old
+// single-medium path, so those releases are untouched.
+function hasMultipleMedia(formats) {
+    if (!Array.isArray(formats)) return false;
+    const names = new Set();
+    formats.forEach(f => {
+        const name = String((f && f.name) || '').trim().toLowerCase();
+        if (!name || name === 'all media' || name === 'box set') return;
+        names.add(name);
+    });
+    return names.size > 1;
+}
+
+function needsFormatsMedia(formats) {
+    return isBoxSetFormats(formats) || hasMultipleMedia(formats);
 }
 
 // Descriptions that belong in front of their medium rather than with the
@@ -2040,7 +2220,7 @@ function mediaModifierWords(formats) {
 }
 
 function buildBoxSetMediaString(formats, colourPhrase) {
-    if (!isBoxSetFormats(formats)) return '';
+    if (!needsFormatsMedia(formats)) return '';
 
     const groups = [];
     let hasBoxSet = false;
@@ -2423,12 +2603,13 @@ function processFormatData(inputs) {
         sleeveDesc = withoutWith ? "with " + withoutWith : "with";
     }
 
-    // A box set's media string is rebuilt from the formats array, so the Format
-    // Tags selections have no home there ("Reissue" on the vinyl entry would be
-    // lost). Fold them into the edition words instead, before the year. If the
-    // select came back empty, read the tags straight from the raw descriptions
-    // so a tag can never disappear.
-    if (isBoxSetFormats(lastFormats)) {
+    // A box set (or any release with several kinds of medium) gets its media
+    // rebuilt from the formats array, so the Format Tags selections have no
+    // home there ("Reissue" on the vinyl entry would be lost). Fold them into
+    // the edition words instead, before the year. If the select came back
+    // empty, read the tags straight from the raw descriptions so a tag can
+    // never disappear.
+    if (needsFormatsMedia(lastFormats)) {
         const modifierWords = mediaModifierWords(lastFormats);
         let boxTags = formatTags;
         if (!boxTags) {
@@ -2541,12 +2722,13 @@ function processFormatData(inputs) {
 
     // Format String Construction
     let finalFormatString = "";
-    // A box set gets its media rebuilt from the raw formats array ("2xCD +
-    // NTSC DVD-Video + Colored (...) 3xLP + 7\" Box Set"). Every other release
-    // falls through to the logic below, unchanged.
-    const boxSetMedia = buildBoxSetMediaString(lastFormats, colorVal);
-    if (boxSetMedia) {
-        finalFormatString = boxSetMedia;
+    // A box set (or any release with several kinds of medium) gets its media
+    // rebuilt from the raw formats array ("2xCD + NTSC DVD-Video + Colored (...)
+    // 3xLP + 7\" Box Set"). Every other release falls through to the logic
+    // below, unchanged.
+    const formatsMedia = buildBoxSetMediaString(lastFormats, colorVal);
+    if (formatsMedia) {
+        finalFormatString = formatsMedia;
     } else if (formatLineRaw.includes(" + ")) {
         let complex = formatLineRaw;
 

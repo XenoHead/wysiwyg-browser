@@ -2107,7 +2107,307 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
   (and `build_app.py` / `build_scanner.py`), so the build source would never have been committed; added
   explicit `!build_*.py` exceptions. Nothing was committed here.
 - Verified: `py_compile` clean, `!buildt.bat` exit 0, `tkinter.filedialog` present in the new build's
-  Analysis TOC, `version.json` + `prompts.json` + `keys.txt` next to the exe. Both are cosmetic for a first look.
+  Analysis TOC, `version.json` + `prompts.json` + `keys.txt` next to the exe.
+
+### 112. XenoScan icon, artwork, and the shared Xeno_ui shell
+**Files:** `WysiScanStandalone\XenoScan.ico` (new), `XenoScan.png` / `XenoScan-ico.png` (art supplied),
+`scanner_server.py`, `scanner_test.html`, `build_windowed.py`, `XenoScan.spec`
+- **Icon:** `XenoScan.ico` built from the supplied square art (centre-cropped to 398x398) at 16/32/48/64/128/256.
+  It is the exe icon and the page favicon; `XenoScan.png` (644x649) is the artwork/apple-touch image. Both ship
+  in the bundle (`_internal\WysiScan\`), and the old WysiScan files stay as a fallback.
+- **Favicon routes:** `/XenoScan.ico` and `/XenoScan.png` added, falling back to the WysiScan files when absent.
+  `scanner_test.html` head now points at them.
+- **Xeno_ui** (`C:\Git\Xeno_ui`) is bundled as `_internal\Xeno_ui` and used by the window shell:
+  - `Xeno_ui.theme.BG_COLOR` is passed as the window's `background_color` (no white flash before the page loads);
+  - `Xeno_ui.menus` builds the native menu bar - File (Open Files -> the page's import button, Open Folder ->
+    the scans folder, Exit) and Help (About);
+  - About opens a second window from `Xeno_ui.about` (shared template + XenoHead logo).
+  Each piece degrades to a plain window if the package or a menu API is unavailable, so the exe still starts.
+- Not changed: the scanner page's own palette (`--primary-color` blue/yellow). The Xeno_ui accent is used by the
+  shell only; say the word if the page itself should adopt the Xeno_ui tokens.
+- Built and bundled (exe 12.3 MB): `XenoScan.ico/png` and the whole `Xeno_ui` tree (about/menus/theme/templates
+  + logo) confirmed inside `_internal`. Not launched here.
+
+### 113. XenoScan: in-app Extract Text, keys from this folder only, own .env
+**Files:** `WysiScanStandalone\scanner_server.py`, `scanner_test.html`, `gemini_pool.py` (shared, opt-in)
+- **Extract Text no longer opens a browser tab.** Inside the WebView2 shell, `window.open()` is handed to the
+  system browser, which is why the panel kept appearing as a tab. The window now carries a pywebview JS API
+  (`_ShellApi.open_extract`), and `openCliModal()` uses `window.pywebview.api.open_extract(url)` when it exists,
+  falling back to `window.open()` for browser mode. The Extract Text window is a real app window (980x820).
+  The Discogs marketplace search still goes to the browser on purpose - it is an external site.
+- **Keys come from this folder only.** `_load_main_env_file()` used to read `<repo>\.env` first and only fall
+  back to the scanner's own; it now reads `APP_DIR\.env` and nothing else. `gemini_pool._near_app_dirs()` gained
+  an opt-in `XENO_KEY_DIR` override (repo-root / cwd search suppressed), and the scanner sets it to `APP_DIR`.
+  Verified: `_near_app_dirs()` returns exactly `WysiScanStandalone`.
+- The shared `gemini_pool.py` change is additive: WYSIWYG sets no `XENO_KEY_DIR`, so its behaviour is unchanged.
+- This folder already had `.env` (27 Oct) and `keys.txt` (26 Oct); both are copied next to the exe by the build,
+  so the frozen app reads them from its own folder too.
+- Rebuilt: `dist_windowed\XenoScan\XenoScan.exe` 12.0 MB, with `.env`, `keys.txt`, `prompts.json` and
+  `version.json` beside it. Not launched here.
+
+### 114. XenoScan palette matched to Image Convert, native File/Options/Help menu
+**Files:** `WysiScanStandalone\scanner_test.html`, `scanner_server.py`
+- **Palette** rewritten from `imageconvert\styles.css`: base `#060608`, panel `#121218`, text `#f8fafc`,
+  muted `#64748b`, cyan `#06b6d4` (primary), violet `#a855f7` (secondary), green `#10b981`, amber `#f59e0b`,
+  red `#f43f5e`, borders `rgba(255,255,255,0.08)`.
+  - `:root` is now the light variant (same accents, light surfaces); `[data-theme="dark"]` is the Image
+    Convert look. The app now **starts dark** unless the user last picked light (`wysiscan_theme`).
+  - Remapped inside the stylesheet: `#007bff`/`#0000FF` -> `--primary-color`, `#6f42c1` -> `--accent-color`,
+    `#28a745` -> `#10b981`, `#dc3545`/`#c62828` -> `#f43f5e`, `#ffc107` -> `#f59e0b`, `#17a2b8` -> `#06b6d4`,
+    `#6c757d` -> `#64748b`, greys -> `--border-color` / `--text-muted` / `--input-bg`.
+  - Remapped the same way inside `style="..."` attributes in the body (buttons, crop-mode buttons, borders),
+    so the old Bootstrap-ish colours are gone from the page.
+- **Menu:** the window now has a real menu bar - **File** (Open Files -> page import, Open Folder -> scans,
+  Exit), **Options** (Toggle Theme, Hot Keys) and **Help** (About). File/Help come from `Xeno_ui.menus`,
+  Options is a `webview.menu.Menu` holding what used to be in the drawer. The in-page `? Menu` button is
+  hidden once `pywebviewready` fires, so there is only one menu; browser mode (`--browser`) still shows it.
+- Not done: Image Convert pulls the `Outfit` webfont from Google Fonts; XenoScan keeps the system font rather
+  than adding a CDN dependency to a local tool. Say the word if the font matters.
+- Built (`dist_windowed\XenoScan\XenoScan.exe`) and the bundle confirmed to carry the new stylesheet + the
+  `pywebviewready` hook. Visual result is Scott's to check.
+
+### 115. XenoScan laid out like a window app, not a centred page
+**Files:** `WysiScanStandalone\scanner_test.html`
+- Symptom (screenshot from Scott): at full size the UI sat in a 1200px card with wide empty gutters, and the
+  page background showed around it - it read as a web page in a frame.
+- New `DESKTOP WORKSPACE` block at the end of the stylesheet, scoped to `body:not(.extract-mode)` so the
+  Extract Text window is untouched:
+  - body loses its 8px page padding; `.container` is full width (`max-width:none`, `min-height:100vh`), no
+    margin, no radius, no shadow, transparent over `--bg-body` - the app now fills the window.
+  - Scanner settings, the Image Convert panel and the control strip become Image Convert-style cards
+    (`rgba(20,20,28,0.65)`, 1px border, 12px radius).
+  - Type scale raised back to 12-13px where the "COMPACT TOP AREA" block had shrunk it to 11px; inputs and
+    buttons follow. The compact block itself is left in place - this block carries the `!important` overrides.
+  - Gallery tiles grow to 168px with a card background and hover-friendly spacing.
+- Built: `dist_windowed\XenoScan\XenoScan.exe`. Not launched here; Scott has the screenshot loop. Both are cosmetic for a first look.
+
+### 116. Multi-medium releases (no Box Set entry) keep every medium
+**Files:** `app.js`
+- Symptom (release 10070875, Pink Floyd – The Early Years 1970 Devi/ation): output was
+  `… NTSC Quadraphonic 2xDVD-Video …`, losing the two CDs and the Blu-ray. Expected
+  `2xCD + NTSC Quadraphonic 2xDVD-Video + Blu-ray`.
+- Cause: the rebuild from the formats array was gated on a format entry literally named `Box Set`
+  (entry 97). This release is a five-disc bundle whose Discogs formats are plain
+  `2xCD` / `2xDVD` / `Blu-ray` with no `Box Set` entry, so it fell through to the single-medium
+  branch: the Media Format select picked the longest matching label (`DVD-Video` over `Blu-ray`) and
+  the `2x` came from the **CD's** quantity. The comma-joined Format line never contains `" + "`, so
+  the complex branch could not rescue it either.
+- Fix: new `hasMultipleMedia(formats)` — true when the formats array holds more than one distinct
+  `name` (ignoring `All Media` / `Box Set`). `needsFormatsMedia()` = box set **or** multi-medium, and
+  that is now the gate for `buildBoxSetMediaString()` and for the Format Tags fold into the edition.
+  Repeated entries of the **same** medium (two `Vinyl` entries) still count as one and keep the old
+  path, so those releases are byte-identical.
+- Behaviour on 10070875: blocks in Discogs order, `2xCD` / `NTSC Quadraphonic 2xDVD-Video` /
+  `Blu-ray`, joined with ` + `; the `Box Set` word is still only added when a `Box Set` entry exists.
+  `NTSC` and `Quadraphonic` ride in front of the DVD and are filtered out of the edition fold
+  (they are `MEDIA_MODIFIERS`), so `Compilation` stays alone with the edition words.
+- **Verified:** `node --check app.js` only — Scott runs the release test.
+- **Undo:** drop `hasMultipleMedia()` / `needsFormatsMedia()`, restore
+  `if (!isBoxSetFormats(formats)) return '';` in `buildBoxSetMediaString()` and
+  `if (isBoxSetFormats(lastFormats))` at the two `processFormatData()` call sites.
+
+### 117. Patch release v1.20.17.0 (multi-medium descriptions)
+**Files:** `changelog.txt`, `version.json`, `wysiWyg-installer.iss`
+- 1.20.16.0 was already built and published on 17 Nov (installer in the share's `WYSIWYG\dist_install`), so
+  the multi-medium fix (entry 116) ships as **1.20.17.0**: new changelog heading, `version.json` patch 17,
+  `#define MyAppVersion "1.20.17.0"`. ChromeExt version untouched (no extension change).
+- Not built here - Scott runs `!build.bat` + ISCC.
+- **Publishing problem found while checking the share:** `get_server_version_path()` and
+  `get_installer_path()` read `\\<server>\FYRShare\Tools\FYRTools\WYSIWYG\version.json` and
+  `…\WYSIWYG\INSTALL_WYSIWYG.exe`, but the release was copied as a **folder** into
+  `…\WYSIWYG\dist_install\`, so both files are one directory too deep. `/api/server-version` therefore
+  never reports an update and `/run-installer` would 404. Either copy the *contents* of `dist_install`
+  to `WYSIWYG\`, or point the two helpers at `WYSIWYG\dist_install`. Not changed yet - needs Scott's call.
+
+### 118. Loose-file patch channel (`patches\`)
+**Files:** `patches\README.md`, `patches\make_patch.ps1`, `patches\make_patch.bat`,
+`patches\apply_patch.ps1`, `patches\apply_patch.bat`, `.gitignore`
+- Second release channel next to the full installer: small JS/HTML/CSS/data fixes now ship as a
+  file drop, with no PyInstaller build and no 325 MB reinstall.
+- Why it is safe: `resource_path()` (`main.py:146`) prefers the file next to `WYSIWYG.exe` over the
+  bundled copy, and the installer already leaves `app.js`, `index.html`, `styles.css`, `data.json`,
+  `colourmap.json`, `changelog.txt`, ... in `C:\FYRTOOLS\WYSIWYG`. A patch only replaces those.
+- `make_patch.bat -Note "..." -Changed` takes the payload from `git status` (or `-Files a.js,b.html`),
+  validates every path against a whitelist, writes `patches\out\<version>\` with `patch.json`
+  (version, note, sha256 + size per file) plus the applier, and `-Publish` robocopies it to
+  `<share>\WYSIWYG\patches\<version>\`. `patches\out\` is gitignored.
+- Refuses to build when a changed file is not patchable (any `.py`, `WysiScan\*.html`, `Uberpaste\`,
+  `WysiChat\`, `Adds\`, ...). That is the guard that stops a Python fix being "released" as a JS patch.
+- `Conditions.json`, `.env`, `keys.txt` are never patchable: Conditions.json holds each machine's own
+  favourites/edits.
+- `apply_patch.bat` (shipped inside every patch): resolves the install folder from the Inno
+  `InstallLocation` (fallback `C:\FYRTOOLS\WYSIWYG`), refuses a version that is not newer, confirms,
+  stops the app via `kill-wysiwyg.ps1`, backs replaced files up to `C:\FYRTOOLS\wysiwyg.patch-backup\`,
+  copies the payload with `version.json` **last**, verifies every SHA-256 and rolls the whole patch
+  back on mismatch, then restarts the app. Elevation is requested only when the folder is not
+  writable.
+- Rule recorded in the README: if a batch of changes includes Python, do the full build and skip the
+  patch; never publish a full installer under a version already patched to clients, or the Python
+  changes never reach them.
+- **Verified:** PowerShell parser check on both scripts (`0` errors); `make_patch` built a real patch
+  (app.js + version.json + changelog.txt, 303 KB) and its `-Changed` guard refused the dirty
+  `gemini_pool.py`; `apply_patch` was exercised on a throwaway install folder
+  (`-SkipStop -NoStart`): dry run, successful apply (version bumped, unrelated `index.html` untouched,
+  backup written), "already at" refusal, and a deliberately corrupted payload rolled back to the old
+  files and old version. The stop-the-app path was not run here - Scott tests that on a real install.
+  `node --check app.js` passed.
+- **Undo:** delete `patches\` and the `patches/out/` line in `.gitignore`. Nothing in the app or the
+  build references it.
+
+### 119. Patch Tool GUI (`patches\Patch GUI.bat`)
+**Files:** `patches\patch_gui.py`, `patches\Patch GUI.bat`, `patches\make_patch.ps1`,
+`patches\README.md`
+- Scott asked for a GUI because the README workflow was not sticking. Tkinter (Python 3.12 on
+  PATH, tkinter 8.6 verified) with the project palette from `Xeno_ui\theme.py` (#15151b / #0078d7),
+  so no new dependency and nothing added to any build.
+- Three tabs:
+  - **Build a patch** - current version, one-line note, the changed-file list as tick boxes
+    (populated from `make_patch.ps1 -List`), a warning when a changed file cannot be patched, an
+    "Add file..." dialog, an optional Publish tick + share path, and live script output.
+  - **Apply a patch** - patch folder picker plus a list of built patches, manifest summary
+    (version, note, files), install folder (registry-detected), Dry run / Apply (Apply closes the
+    app, backs up and restarts through `apply_patch.ps1`).
+  - **What can I patch?** - the README rules in plain English.
+- **Bump patch version** does the three manual edits in one confirmed action: `version.json`
+  patch+1 (build reset to 0), the `.iss` `MyAppVersion`, and a new `### vX - date` changelog heading
+  carrying the note. Line endings are preserved per file (`version.json`/`changelog.txt` are LF,
+  `.iss` is CRLF) by reading/writing with `newline=""`.
+- `make_patch.ps1` gained **`-List`** (JSON: version, patchable files with sizes, blocked files) so
+  the GUI never keeps its own copy of the whitelist, and `-Note` is now optional except when
+  building.
+- GUI runs the same `.ps1` scripts as the command line, in a worker thread with streamed output.
+- **Verified:** `python -m py_compile`, module import (`version_str` / `read_version` /
+  `detect_install_dir` -> `C:\FYRTOOLS\WYSIWYG`), `make_patch.ps1 -List` JSON, and the
+  "note required" guard. The window itself is Scott's to test.
+- **Undo:** delete `patch_gui.py` and `Patch GUI.bat`; the `-List` switch can stay (harmless).
+
+### 120. Patch build: `-Files a,b,c` arrived as one string
+**Files:** `patches\make_patch.ps1`
+- Symptom (first real GUI build, 1.20.18.0): `'app.js,changelog.txt,version.json' is not a patchable loose
+  file`. The GUI was right; the script was wrong.
+- Cause: `powershell.exe -File script.ps1 -Files a,b,c` passes the comma list as **one** argv string.
+  PowerShell does not parse commas outside a session, so `[string[]] $Files` bound to a single element
+  containing the commas. The earlier single-file CLI test (`-Files app.js`) never exercised it, and the
+  same fault applied to the documented `make_patch.bat -Files a.js,b.html`.
+- Fix: normalise `-Files` through `$fileArgs`, splitting each element on `,` and trimming, before the
+  whitelist check. Accepts `-Files app.js,index.html`, `-Files "app.js, index.html"` and a single path.
+- **Verified:** the GUI's exact call (`-Note "<long sentence>" -Files app.js,changelog.txt,version.json`)
+  now builds `patches\out\1.20.18.0` (303 KB), and the space-after-comma form does too. Rebuilt the
+  1.20.18.0 patch afterwards so the note is the real one, not the test string.
+
+### 121. Apply: the GUI ran the repo applier, not the patch's
+**Files:** `patches\apply_patch.ps1`, `patches\patch_gui.py`, `patches\README.md`
+- Symptom (Dry run on the real install): `patch.json not found next to apply_patch.ps1
+  (C:\Git\WysiWyg-Browser\patches)`. The GUI always invoked `patches\apply_patch.ps1`, whose
+  `$PSScriptRoot` is the repo, so it looked for `patch.json` in the wrong folder.
+- Fix, both ends:
+  - `apply_patch.ps1` gained **`-PatchDir`** (default `$PSScriptRoot`, resolved to an absolute path
+    and validated). `patch.json`, `files\` and the `kill-wysiwyg.ps1` lookup all use it, and the
+    elevation relaunch passes it through so the elevated child keeps the same patch.
+  - `patch_gui.py` passes `-PatchDir <selected folder>` on Dry run and Apply, so any built patch can
+    be applied even though the applier ships inside the patch.
+- Clients are unaffected: the copy inside a patch folder defaults to its own folder, exactly as before.
+  Rebuilt `patches\out\1.20.18.0` so the shipped applier is the fixed one.
+- **Verified:** `patches\apply_patch.ps1 -PatchDir patches\out\1.20.18.0 -InstallDir C:\FYRTOOLS\WYSIWYG
+  -DryRun` reports `current : 1.20.16.0`, 3 files, payload verified, nothing changed; `py_compile` clean.
+
+### 122. Published patches reach clients by themselves
+**Files:** `main.py`, `app.js`, `patches\README.md`, `patches\patch_gui.py`,
+`changelog.txt`, `version.json`, `wysiWyg-installer.iss`
+- Goal: stop applying `apply_patch.bat` on every machine. A published patch is now advertised by the
+  app and installed with one click.
+- `main.py`
+  - `list_server_patches()` reads `<share>\WYSIWYG\patches\*\patch.json`, ignores unreadable folders,
+    returns newest-first (`version`, `note`, `folder`).
+  - `/api/server-version` now returns either `patch_available` + `patch_version_text` + `patch_note`,
+    or `update_available` + `server_version` - never both. A patch wins when it is at least as new as
+    the installer (it carries the same files and needs no reinstall); a strictly newer installer wins.
+    Local version is read from the loose `version.json` (`resource_path`), so it is the patched value.
+  - New `POST /run-patch`: picks the newest patch newer than the installed version, requires its
+    `apply_patch.ps1`, writes a detached temp .bat that waits 2s and runs
+    `apply_patch.ps1 -PatchDir <patch> -Yes`, then starts it. The applier closes the app, backs up,
+    copies, verifies, rolls back on failure and restarts - unchanged behaviour.
+- `app.js`
+  - `checkServerUpdate()` sets `pendingUpdateKind` (`patch`/`installer`), rewrites the banner text
+    (`PATCH 1.20.19.0 AVAILABLE - CLICK HERE TO UPDATE`) and keeps one `#updateBadge` in the title
+    instead of appending it on every check.
+  - Banner and badge call `runUpdate()` -> `runPatch()` or `runInstaller()`. `runPatch()` confirms
+    with the note from `patch.json`, posts `/run-patch` and shows the closing screen.
+  - Check also re-runs on `visibilitychange`, so a patch published while the app sits open is offered
+    without a reload.
+- **Bootstrap (important):** the check lives in `main.py`, so the first release with this must be a
+  full installer; only then can JS/HTML/CSS/data fixes travel as patches. Recorded in
+  `patches\README.md`. Version bumped to **1.20.19.0** for that build (1.20.18.0 stays the
+  multi-medium patch/notes).
+- **Verified (no server started):** imported `main.py` into a scratch process, pointed
+  `POSSIBLE_ROOTS` at a temp fake share and ran the endpoint logic: patch 18 offered over installer 16;
+  nothing when installed 18 or 19; installer 19 preferred over patch 18; patch preferred when both are
+  18. Broken `patch.json` ignored. `node --check app.js` and `py_compile main.py` clean. The banner
+  itself is Scott's to test.
+- **Undo:** remove `list_server_patches`/`get_server_patches_dir`/`get_local_version_key`, restore the
+  old `/api/server-version`, delete `/run-patch`, revert `checkServerUpdate`/`runUpdate`/`runPatch` and
+  the `updateBadge` markup.
+
+### 123. Patch apply: visible progress, and never kill the updater's parent
+**Files:** `patches\apply_patch.ps1`, `main.py`, `app.js`, `patches\README.md`,
+`patches\patch_gui.py`, `changelog.txt`, `version.json`, `wysiWyg-installer.iss`
+- Symptom (first live 1.20.20.0 patch): the banner appeared, the app closed, and then
+  "nothing". The backup had been written, no file had changed, no restart, and the updater
+  window had closed - so the failure was invisible. `apply_patch.ps1` was later found to work
+  perfectly when run detached from the app.
+- Cause (best evidence): the app-triggered updater is a child of the app, and the old order was
+  backup -> **kill the app** -> copy. When the kill landed, the updater stopped there, leaving
+  nothing copied and nobody to restart. (The old app.js matched the payload by coincidence - the
+  20.0 patch changed no JS.)
+- Order changed: backup -> **copy** (app still running; these files are not locked) -> verify ->
+  start a fresh instance. `WYSIWYG.exe` already ends an older instance ("Found old instance ...
+  Terminating"), so the updater no longer kills anything. `Stop-App` deleted; `-SkipStop` kept as
+  a documented no-op.
+- Visibility:
+  - `apply_patch.ps1` appends every step (start/backup/copy/verify/rollback/start) to
+    `%TEMP%\wysiwyg_patch_apply.log`, with a `trap` for fatal errors.
+  - `/run-patch` writes a titled batch window that prints the version, logs the exit code and
+    `pause`s on failure instead of vanishing.
+  - `runPatch()` now renders a **live "Patching WYSIWYG" screen** (CSS spinner) that polls
+    `/api/version`; it detects the restart, then reloads the page on the new version. Fast
+    takeovers that never drop the connection reload after 6s; after 90s it tells the user to start
+    the app from the Start menu.
+- 1.20.21.0 carries the new app.js; the update *to* 21 still uses the old page (the code adding the
+  spinner is inside the patch), so the live screen applies from 22 onward.
+- **Verified:** `node --check app.js`, `py_compile main.py`, PowerShell parser clean on
+  `apply_patch.ps1`; patch 21 built and published (share lists 20.0 + 21.0, payload version 21);
+  the running 20.0 app reports `patch_available: true, patch_version_text: "1.20.21.0"`.
+- **Undo:** restore the old copy/stop order (`Stop-App` before the copy), remove `Write-PatchLog`
+  and its calls, drop the batch-window lines in `/run-patch`, and remove
+  `showPatchingScreen`/its call in `runPatch()`.
+
+### 124. Patch updates no longer open a second browser tab
+**Files:** `patches\apply_patch.ps1`, `app.js`, `main.py`, `patches\README.md`,
+`patches\patch_gui.py`, `changelog.txt`, `version.json`, `wysiWyg-installer.iss`
+- Symptom (1.20.22.0 update): after the patch, the browser had two tabs on the app - the
+  patching tab plus the tab the restarted app opened via `webbrowser.open(/opener)`.
+- Asked whether `close_local_chrome.ps1` would help: it would, but it posts `WM_CLOSE` to the whole
+  browser **window** whose caption starts with `WYSIWYG` (Chrome cannot close a single tab from
+  outside), so it would also close the user's other tabs. That behaviour is right before an
+  installer, wrong for a routine patch.
+- Real fix: **do not restart the app for a patch.** Nothing a patch carries needs the Python
+  process to restart - `index.html`, `app.js`, `version.json`, `data.json`, `colourmap.json`, ... are
+  read from disk per request. `apply_patch.ps1` now records whether `WYSIWYG` was running before the
+  copy and, if so, skips `Start-Process` entirely (log: "app was running - no second instance").
+  A closed app is still started as before.
+- `showPatchingScreen()` no longer waits for a restart: it reloads as soon as `/api/version`
+  reports the target **twice** (~1.6s apart). `version.json` is copied last, so a match already
+  means every other file is in place; the second match covers the verify step. The downtime branch
+  is kept for the manual/closed-app case and for any future restart.
+- `/run-patch`'s batch window now ends with "Done - the update is applied." instead of
+  "WYSIWYG is restarting."
+- 1.20.23.0 carries this (app.js + the applier is refreshed inside every published patch, so the
+  update it ships is already the new behaviour).
+- **Verified:** `node --check app.js`, `py_compile main.py`, PowerShell parser clean; patch 23
+  published with the new applier and payload version 23; the running 22.0 app reports
+  `patch_available: true, patch_version_text: "1.20.23.0"`.
+- **Undo:** restore the unconditional `Start-Process` branch in `apply_patch.ps1` and the
+  `seconds >= 6` reload rule in `showPatchingScreen()`.
 
 ---
 

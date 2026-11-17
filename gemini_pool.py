@@ -26,7 +26,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 def _near_app_dirs():
     """Directories that may hold user-supplied keys.txt / .env.
     Frozen onefile puts gemini_pool inside _MEIPASS, so the executable's own
-    folder (and cwd) must be searched too."""
+    folder (and cwd) must be searched too.
+
+    XENO_KEY_DIR pins the search to one folder. WysiScanStandalone sets it to its
+    own folder so a test build can never borrow the main app's keys."""
+    forced = os.environ.get("XENO_KEY_DIR")
+    if forced:
+        return [forced] if os.path.isdir(forced) else []
+
     dirs = []
     try:
         import sys as _sys

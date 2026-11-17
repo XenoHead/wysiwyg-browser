@@ -91,6 +91,8 @@ WysiScan/config.json
 !.continuity/SESSION_NOTES.md
 !.continuity/INSTRUCTIONS.md
 dist_install/
+# Generated loose-file patch payloads (scripts in patches\ are tracked)
+patches/out/
 /.other
 2_Conditions.json
 2conditions.json
