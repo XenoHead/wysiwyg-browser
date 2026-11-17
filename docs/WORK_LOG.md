@@ -2034,6 +2034,81 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
   update banner once that folder holds `version.json` (1.20.16.0) and the new `INSTALL_WYSIWYG.exe`.
 - Verified as a build only; behaviour is Scott's to test.
 
+### 108. `dist_install` now always gets `close_local_chrome.ps1` and `version.json`
+**Files:** `!build.bat`
+- `!build.bat` already refreshed `run_me_Installer.bat` in `dist_install` right before the installer is
+  compiled. It now copies `close_local_chrome.ps1` and `version.json` there too.
+- Why: `run_me_Installer.bat` only closes the app's browser windows when `close_local_chrome.ps1` sits next
+  to it, so a published folder silently lost that step. And `/api/server-version` reads `version.json` from
+  the folder the installer is published to (`\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG`), so a stale
+  copy there means no client ever sees the update banner.
+- Both files were also copied into the current `dist_install` by hand, hashes verified identical to the repo
+  copies, because the 1.20.16.0 installer had already been compiled when this was asked for.
+- Caveat: this lives in `!build.bat`, i.e. the step that runs before `ISCC`. Compiling the `.iss` on its own
+  will not refresh these three helper files.
+- No changelog bullet: nothing changes for an installed app.
+
+### 109. `WysiScanStandalone` builds as a desktop window (onedir)
+**Files:** `WysiScanStandalone\scanner_server.py`, `WysiScanStandalone\build_windowed.py` (new),
+`WysiScanStandalone\WysiScanWindowed.spec` (generated), `WysiScanStandalone\WysiScan.spec` (restored)
+- Scope: this folder only. `WysiScan\`, the embedded scanner, `!build.bat` and the installer are untouched.
+- `run_server()` in this copy now has a launch mode: **desktop window by default** (pywebview/WebView2 around
+  the same local server at 127.0.0.1:8010), `--browser` for the old tab behaviour, and `--launched-by-main`
+  unchanged. Uvicorn runs on a daemon thread so `webview.start()` can own the main thread; the server is
+  polled for ~15 s before the window opens; closing the window takes the process down with it. If pywebview
+  cannot start (no WebView2 runtime), it logs and falls back to the browser tab instead of dying.
+- `build_windowed.py`: PyInstaller **onedir + windowed**, output `dist_windowed\WysiScan\WysiScan.exe`
+  (11.4 MB exe, 203 MB folder), work path `build_windowed\`, and copies `prompts.json` next to the exe
+  (`keys.txt` / `.env` are copied only if present - this folder has neither, so AI features need one added).
+- Built OK. Not launched here - Scott tests.
+- **Incident, disclosed:** PyInstaller always writes `<name>.spec`, so the onedir build overwrote the
+  folder's existing `WysiScan.spec` (a onefile spec, untracked - no git copy existed). It has been
+  rewritten as a working onefile spec for this folder, and the onedir one kept as `WysiScanWindowed.spec`.
+  The canonical onefile build (`build_scanner.py`) is unaffected either way.
+- Known gaps for this build: the page's Pin button (`/api/window-pin`, Win32 `SetWindowPos` by window title)
+  may not find the WebView2 window; the page's EXIT button kills the process, so the window disappears
+  rather than closing politely.
+
+### 110. Test scanner: port 8011, tkinter dialogs, version.json, `!buildt.bat`
+**Files:** `WysiScanStandalone\scanner_server.py`, `scanner_test.html`, `build_windowed.py`,
+`!buildt.bat` (new), `WysiScan.spec` (restored)
+- **Ports:** every 8010 in this copy is now **8011** - `uvicorn.run`, the port wait, the window URL, the
+  browser fallback, the CORS origins and the page's `API_BASE` (4 places in `scanner_test.html`). It can run
+  beside the real scanner on 8010 now. The main repo's `WysiScan\` copy is untouched.
+- **Browse-button crash fixed:** `from tkinter import filedialog` failed in the frozen build because only
+  `tkinter` itself was collected. `build_windowed.py` now passes `--collect-submodules=tkinter`; the
+  generated Analysis TOC shows `tkinter.filedialog` is in the bundle.
+- **version.json** (2.5.0.66): bundled via `--add-data` and also copied next to the exe, which is where
+  `load_app_version()` looks first (then the bundle). The scanner now logs the version at startup, shows it
+  in the window title (`WysiScan 2.5.0.66`), and serves `GET /api/version` -> `{"version", "port"}`.
+- **`!buildt.bat`:** one command for this folder - checks the venv, runs `build_windowed.py`, verifies
+  `dist_windowed\WysiScan\WysiScan.exe` exists.
+- Note: PyInstaller's generated spec now goes to `build_windowed\`, so it no longer overwrites the folder's
+  onefile `WysiScan.spec` (that happened twice today; restored again).
+- **Seen while building:** `!buildt.bat` had been edited to say `XenoScan` in three comments and in the
+  exe-existence check, which broke the build ("no exe at ..."). The check is back to `WysiScan.exe` because
+  that is what `build_windowed.py` produces (`NAME = "WysiScan"`). Asked Scott whether the app itself is
+  meant to be renamed.
+- Verified: `py_compile` on both scripts; `!buildt.bat` exits 0 and the build prints the exe path.
+
+### 111. Test scanner renamed to XenoScan
+**Files:** `WysiScanStandalone\build_windowed.py`, `!buildt.bat`, `scanner_server.py`, `scanner_test.html`,
+`XenoScan.spec` (new), `WysiScan.spec` (deleted), `.gitignore`
+- `NAME = "XenoScan"` in `build_windowed.py`, so the output is
+  `dist_windowed\XenoScan\XenoScan.exe` (11.5 MB exe, 203 MB folder). `!buildt.bat`'s check and "Build OK"
+  line follow it; the onefile spec became `XenoScan.spec` with `name='XenoScan'`.
+- User-facing strings renamed: WebView2 window title `XenoScan 2.5.0.66`, the HTML `<title>`, and the
+  startup / no-heartbeat log lines.
+- **Deliberately not renamed:** the bundled asset folder `_internal\WysiScan\` (`ASSET_DIR` is shared with
+  the WYSIWYG copy), `wysiscan_debug.log`, the JS drawer ids/functions, and `WysiScan.ico` / `.png`. They
+  are paths and identifiers, not names the user sees; renaming them would ripple into shared code.
+- Cleaned up: the stale `dist_windowed\WysiScan\` output and the pre-rename `WysiScanWindowed.spec` are gone.
+- The folder is its own git repo now. Its `.gitignore` `build*` pattern was swallowing `build_windowed.py`
+  (and `build_app.py` / `build_scanner.py`), so the build source would never have been committed; added
+  explicit `!build_*.py` exceptions. Nothing was committed here.
+- Verified: `py_compile` clean, `!buildt.bat` exit 0, `tkinter.filedialog` present in the new build's
+  Analysis TOC, `version.json` + `prompts.json` + `keys.txt` next to the exe. Both are cosmetic for a first look.
+
 ---
 
 ## Notes / gotchas

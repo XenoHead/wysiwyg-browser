@@ -114,5 +114,16 @@ IF NOT EXIST "dist_install" MKDIR "dist_install"
 COPY /Y "run_me_Installer.bat" "dist_install\run_me_Installer.bat" >NUL
 ECHO run_me_Installer.bat refreshed in dist_install.
 
+rem run_me_Installer.bat looks for close_local_chrome.ps1 NEXT TO ITSELF to close
+rem the browser windows showing the local app before an install, so ship it too.
+COPY /Y "close_local_chrome.ps1" "dist_install\close_local_chrome.ps1" >NUL
+ECHO close_local_chrome.ps1 refreshed in dist_install.
+
+rem The update check reads version.json from the folder the installer is published
+rem to (\<server>\FYRShare\Tools\FYRTools\WYSIWYG), so keep the release number next
+rem to the installer - a stale copy there means no machine sees the update banner.
+COPY /Y "version.json" "dist_install\version.json" >NUL
+ECHO version.json refreshed in dist_install.
+
 rem IF EXIST ""%SERVER_SHARE%\WYSIWYG.exe" DEL /Q""
 rem copy /Y "dist\WYSIWYG.exe" "%SERVER_SHARE%\"

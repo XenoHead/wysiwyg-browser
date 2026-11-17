@@ -9198,5 +9198,185 @@
       "source": "cli",
       "timestamp": "2026-11-17T16:18:44.163Z"
     }
+  },
+  {
+    "id": "e5dcc959-ce52-4c8b-b677-559a7697f7f2",
+    "question": "Why do close_local_chrome.ps1 and version.json ship in dist_install?",
+    "answer": "run_me_Installer.bat only closes the app's browser windows when close_local_chrome.ps1 sits next to it, and the update check reads version.json from the publish folder (\\\\\\\\192.168.0.108\\\\FYRShare\\\\Tools\\\\FYRTools\\\\WYSIWYG), so both now get copied into dist_install by !build.bat alongside run_me_Installer.bat before ISCC runs. A stale version.json there means no machine ever sees the update banner.",
+    "timestamp": "2026-11-17T16:23:49.014Z",
+    "tags": [
+      "build installer",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T16:23:49.015Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T16:23:49.010Z"
+    }
+  },
+  {
+    "id": "c8952650-aaf8-4d0a-ab4a-5c06d12153d8",
+    "question": "How is the WysiScanStandalone desktop build done?",
+    "answer": "Windowed only in WysiScanStandalone: scanner_server.py defaults to a pywebview/WebView2 window around the same 127.0.0.1:8010 server (--browser keeps the tab, --launched-by-main unchanged), and build_windowed.py produces a PyInstaller onedir windowed build in dist_windowed. Chosen over QtWebEngine to keep the download sane and because pywebview+pythonnet are already installed; onedir instead of onefile so WebView2 starts fast and Defender sees the same shape as WYSIWYG. Nothing in WysiScan/, the embedded scanner or the installer changed.",
+    "timestamp": "2026-11-17T18:03:24.500Z",
+    "tags": [
+      "how",
+      "wysiscan packaging ui"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T18:03:24.501Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "python"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T18:03:24.497Z"
+    }
+  },
+  {
+    "id": "6c246cb5-067f-41f5-866c-9b36bb885bb4",
+    "question": "Why does the test scanner run on 8011 and read version.json?",
+    "answer": "Scott wants the WysiScanStandalone test build usable on the same machine as the real scanner, so every 8010 reference in that copy (uvicorn bind, window/browser URLs, CORS origins, the page's API_BASE) is now 8011. version.json (2.5.0.66) ships in the bundle and next to the exe, is logged at startup, shown in the window title and served at GET /api/version. Browse dialogs needed --collect-submodules=tkinter because only the tkinter package was collected and tkinter.filedialog was missing at runtime.",
+    "timestamp": "2026-11-17T18:35:07.121Z",
+    "tags": [
+      "api",
+      "cors",
+      "why",
+      "wysiscan packaging ports"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T18:35:07.122Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api",
+        "cors"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T18:35:07.117Z"
+    }
+  },
+  {
+    "id": "805124d0-bbca-4e0f-8630-20f6a647a75b",
+    "question": "Why is the standalone test scanner called XenoScan?",
+    "answer": "Scott renamed the WysiScanStandalone test build to XenoScan (exe, dist folder, window title, HTML title, logs, spec), while the shipped WysiScan\\ build inside WYSIWYG stays WysiScan. The folder is now tracked as its own git repo at C:\\Git\\WysiWyg-Browser\\WysiScanStandalone. Internal identifiers (ASSET_DIR 'WysiScan', log filename, JS function names, icon files) were deliberately left alone because they are paths/ids, not user-facing names.",
+    "timestamp": "2026-11-17T18:35:55.129Z",
+    "tags": [
+      "naming packaging wysiscan",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T18:35:55.129Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "git"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T18:35:55.125Z"
+    }
   }
 ]
