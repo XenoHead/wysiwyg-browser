@@ -2,7 +2,7 @@
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.20.15.0"
+#define MyAppVersion "1.20.16.0"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -33,7 +33,7 @@ Name: "startupicon"; Description: "Run at Windows Startup"; GroupDescription: "A
 
 [Files]
 ; Main application; user data files are installed separately below.
-Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json,Conditions - Copy.json,mainconditions.json,clipboard_history.json,Uberpaste\.venv\*,Uberpaste\dist\*,Uberpaste\build\*,Uberpaste\__pycache__\*,.venv\*,__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\WYSIWYG\*"; DestDir: "{app}"; Excludes: "data.json,media_formats.json,Conditions.json,Conditions - Copy.json,mainconditions.json,clipboard_history.json,Uberpaste\.venv\*,Uberpaste\dist\*,Uberpaste\build\*,Uberpaste\__pycache__\*,.venv\*,__pycache__\*,*.pyc,_internal\Adds\discogs_*,_internal\Adds\Discogs ADD*.txt,_internal\Adds\__pycache__\discogs_add*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Root Configuration & Assets (data/media/conditions ship with the build so
 ; every install gets the latest versions; clipboard history is never touched)
@@ -91,8 +91,16 @@ Source: "WysiChat\dist\Wysichat.exe"; DestDir: "C:\FYRTOOLS\WysiChat"; Flags: ig
 ; main.py and scanner_server.py read those assets from the bundle, not from on-disk
 ; folders, and the scanner self-creates its writable data dirs (WysiScan\scans,
 ; WysiScan\temp, config.json) next to the EXE on first launch. So we deliberately do
-; NOT copy these source folders to {app} â€” that keeps client installs clean (no raw
+; NOT copy these source folders to {app} — that keeps client installs clean (no raw
 ; source code visible under C:\FYRTOOLS\WYSIWYG).
+
+; Discogs Adds is no longer shipped (not working, no menu entry, no hotkey), so the
+; build strips it from the bundle. Older installs still have these files from
+; previous builds; delete them on upgrade rather than leaving them behind.
+[InstallDelete]
+Type: files; Name: "{app}\_internal\Adds\discogs_*"
+Type: files; Name: "{app}\_internal\Adds\Discogs ADD*.txt"
+Type: files; Name: "{app}\_internal\Adds\__pycache__\discogs_add*"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

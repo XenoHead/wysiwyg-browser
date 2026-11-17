@@ -8935,5 +8935,268 @@
       "source": "cli",
       "timestamp": "2026-11-17T15:36:40.415Z"
     }
+  },
+  {
+    "id": "37bb4141-433e-4143-b61a-9fc36759c060",
+    "question": "Why do the condition multiselects keep their scroll position now?",
+    "answer": "Clicking a row in the inline Media/Sleeve Condition listboxes made Chrome scroll the listbox to its active option, which the mousedown preventDefault did not stop; the handler now records scrollTop and restores it on the next frame. renderConditionMultiselects also rebuilds both lists with innerHTML='' and reset the scroll on every re-render, so renderSelect now saves and restores scrollTop per list. Modal pickers already preserved scroll.",
+    "timestamp": "2026-11-17T15:39:21.409Z",
+    "tags": [
+      "ui conditions",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:39:21.409Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "rest"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:39:21.405Z"
+    }
+  },
+  {
+    "id": "6f5201d2-bb09-4384-8e40-aad323912a6c",
+    "question": "Why did the heartbeat watchdog kill the app on a coworker's machine?",
+    "answer": "LAST_HEARTBEAT is set at import and the watchdog exited once now-LAST_HEARTBEAT > 12s, but the first heartbeat cannot arrive until the page parses past the parser-blocking unpkg htmx scripts. A cold machine missed the window and the process terminated itself, which looks like a crash (tab shows connection refused). The same 12s killed the server after a slow reload (pagehide pops the tab) and after laptop sleep/resume (stale tab pruned, exit check raced the next 3s ping). Now nothing is killed until a tab has registered once (60s startup allowance), no-tab grace is 30s, hidden tabs last 4h, and a prune counts as activity so a waking machine can re-register.",
+    "timestamp": "2026-11-17T15:43:30.018Z",
+    "tags": [
+      "heartbeat shutdown reliability",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:43:30.019Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:43:30.015Z"
+    }
+  },
+  {
+    "id": "8bcac259-7b77-4104-ac8c-acbb5395e29e",
+    "question": "Why was the Adds submenu replaced by a top-level Amazon Adds button?",
+    "answer": "Scott asked for Amazon to move up one level and be renamed Amazon Adds, with the Adds menu item removed - a submenu whose only visible entry was Amazon cost a click for nothing. Adds and addsToggleBtn markup, toggleAddsSubmenu, its close-drawer exception and the addsDiscogsBtn wiring were removed. Discogs Adds stays reachable via its Ctrl+Shift+D hotkey. The drawer-submenu CSS is left in place, and the 2026-10-12 decision to keep the hidden Discogs button for restore is superseded.",
+    "timestamp": "2026-11-17T15:44:52.100Z",
+    "tags": [
+      "ui menu",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:44:52.101Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "rest"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:44:52.096Z"
+    }
+  },
+  {
+    "id": "f150ce67-036a-4923-99ea-6737c50d9c23",
+    "question": "Why was the Discogs Adds hotkey removed?",
+    "answer": "Scott asked for it to be removed 'for now' because the feature is a long way from working. discogsAdds was dropped from HOTKEY_ACTIONS and HOTKEY_DEFAULTS so it no longer shows in Hot Keys and cannot be bound; openAddsDiscogs() and the /adds/discogs route are left intact so it can be re-added when the feature works. A stale discogsAdds binding may remain in localStorage but nothing reads it.",
+    "timestamp": "2026-11-17T15:46:40.842Z",
+    "tags": [
+      "ui hotkeys discogs",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:46:40.842Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "storage"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:46:40.838Z"
+    }
+  },
+  {
+    "id": "aeaff580-1307-431a-bb55-c1ff6059ef6a",
+    "question": "Why is Discogs Adds stripped from the build and installer?",
+    "answer": "The feature is a long way from working and is no longer reachable (menu entry, button and hotkey removed), so Scott asked for it out of the build. build.bat deletes the Discogs files from dist\\WYSIWYG\\_internal\\Adds after PyInstaller, and the ISS excludes the same paths plus an [InstallDelete] section that removes them from older installs on upgrade. Source files stay in Adds\\; the /adds/discogs route and its prompt file are left in place, unreachable.",
+    "timestamp": "2026-11-17T15:49:17.196Z",
+    "tags": [
+      "build installer discogs",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:49:17.197Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:49:17.193Z"
+    }
+  },
+  {
+    "id": "42f78388-3e51-44b6-be8f-03abf8f31fd4",
+    "question": "Why was this release built as 1.20.16.0 with its own changelog section?",
+    "answer": "The app's update check (/api/server-version) only reports update_available when the server's version.json is strictly greater than the bundled copy, so rebuilding at 1.20.15.0 would install but never prompt any machine. version.json and MyAppVersion are now 1.20.16.0, and this batch's six fixes sit under a new v1.20.16.0 - 2026-11-17 heading instead of being appended to the already-shipped 1.20.15.0 section. Nothing was copied to the FYRShare folder yet.",
+    "timestamp": "2026-11-17T16:18:44.166Z",
+    "tags": [
+      "api",
+      "build release versioning",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T16:18:44.167Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T16:18:44.163Z"
+    }
   }
 ]

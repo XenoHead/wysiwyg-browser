@@ -1922,6 +1922,118 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
 - Verified: `node --check app.js`. Browser behaviour is Scott's to test. `app.js` is served no-cache, so
   Ctrl+F5 is enough - no app restart.
 
+### 101. Condition multiselects - the list stays where it was clicked
+**Files:** `app.js` (`enableClickToggle`, `renderConditionMultiselects`)
+- Symptom: clicking an entry far down the inline Media Condition or Sleeve Condition list threw the list
+  back to the top.
+- Cause 1: Chrome scrolls a listbox to its "active option" when a row is clicked. `preventDefault()` in
+  the click-toggle `mousedown` handler stops the browser replacing the selection but not that scroll. The
+  handler now records `scrollTop` before the toggle and restores it in `requestAnimationFrame`, i.e. after
+  mouseup/click, which is where the scroll happens.
+- Cause 2: `renderConditionMultiselects()` rebuilds both lists with `innerHTML = ''`, which resets the
+  scroll whenever anything triggers a re-render (media type change, sleeve packaging, the window-focus
+  refresh that reloads Conditions.json). `renderSelect()` now captures `scrollTop` per list and restores
+  it once the options are back.
+- Not touched: the modal pickers already preserve scroll (`captureConditionPickerScroll`); the ✕ clear
+  buttons and Reset All still go to the top, which is correct for a full clear.
+- Verified: `node --check app.js`. Browser behaviour is Scott's to test. Ctrl+F5 only - `app.js` is no-cache.
+
+### 102. Heartbeat watchdog - no more self-shutdown on a slow machine
+**Files:** `main.py` (`/heartbeat`, `monitor_heartbeat`)
+- Symptom (coworker's own install, 17 Nov): the tab drops to "connection refused" with no error. That is
+  not a crash - the app terminated itself, and the old log line would read
+  `All browser tabs closed. Shutting down WYSIWYG.`
+- Cause: `LAST_HEARTBEAT` is initialised at import and the watchdog killed the process once
+  `now - LAST_HEARTBEAT > 12`. The first heartbeat cannot arrive until the page finishes parsing, and
+  parsing waits on the two parser-blocking htmx scripts from unpkg - a cold machine (300 MB install, cold
+  browser, slow DNS) can miss 12 s. The same 12 s killed the server after a reload slower than 12 s
+  (`pagehide` pops the tab), and after a laptop sleep/resume: the stale tab was pruned and the exit check
+  ran before the browser's next 3 s ping arrived.
+- Fix: `TAB_REGISTERED_ONCE` is set in `/heartbeat` - nothing is killed until a browser has connected at
+  least once, with a 60 s startup allowance (`STARTUP_GRACE`). `NO_TAB_GRACE` is 30 s instead of 12 s.
+  A hidden/backgrounded tab survives 4 hours instead of 30 minutes (`HIDDEN_STALE`). A prune now counts as
+  activity (`last_prune`) so a waking laptop gets its 30 s to re-register. The exit log line names the rule
+  that fired and the registered-tab count.
+- Not changed: closing the browser still ends the app (that is the point); `os.kill(SIGTERM)` is still a
+  hard TerminateProcess on Windows, so there is no uvicorn shutdown log; `--host` mode still runs the
+  watchdog, so a shared server exits when the last client tab goes - revisit if more machines use it.
+- Verified: `py_compile main.py`. **`main.py` ships inside the exe, so coworker machines only get this with a
+  rebuild + install** - running from source here does not update them.
+
+### 103. Main menu - Amazon promoted to the top level, Adds submenu removed
+**Files:** `index.html` (drawer), `app.js` (wiring)
+- Before: `Adds ▸ Amazon / Discogs (hidden)` - a collapsible submenu whose only visible entry was Amazon.
+- After: one top-level `📦 Amazon Adds` button in the same position (after WysiScan, before Cost Calculator).
+  The submenu markup, the `toggleAddsSubmenu()` function, its click wiring and the drawer-close exception for
+  the toggle are gone.
+- `addsDiscogsBtn` lived inside the submenu, so its click wiring went with it. Discogs Adds is still reachable
+  through its `Ctrl+Shift+D` hotkey (`discogsAdds`) and `openAddsDiscogs()` is untouched. This supersedes the
+  12 Oct decision that kept the hidden button and wiring so the item could be restored - the hotkey is the
+  restore path now.
+- Left alone: the `.drawer-submenu*` rules in index.html's inline style block are unused after this; kept so a
+  rebuild of the submenu from git history does not need re-styling.
+- Verified: `node --check app.js`. UI is Scott's to test. Ctrl+F5 is enough - both files are served per request.
+
+### 104. Condition multiselects - the click really pins now
+**Files:** `app.js` (`pinSelectScroll`, `enableClickToggle`)
+- Report: still jumping, but only when an entry higher up was already selected, the list was then scrolled,
+  and a lower entry was clicked.
+- Cause: the previous fix restored `scrollTop` in one `requestAnimationFrame`. Blink applies its
+  scroll-to-selection-anchor pass during the frame's layout, i.e. after the rAF callbacks, so the restore
+  was overwritten. The anchor only exists once something higher up is selected, which is exactly when it
+  showed.
+- Fix: `pinSelectScroll(select, top)` holds the position for 250 ms (16 ms interval), correcting any later
+  scroll pass in those frames. Wheel, keydown or the next mousedown releases the pin immediately, so normal
+  scrolling and the following click are never fought.
+- Verified: `node --check app.js`. Behaviour is Scott's to test; Ctrl+F5.
+
+### 105. Discogs Adds hotkey removed ("for now")
+**Files:** `app.js` (`HOTKEY_ACTIONS`, `HOTKEY_DEFAULTS`)
+- `discogsAdds` ("Discogs Adds", `Ctrl+Shift+D`) removed from the action list and the defaults, so it no
+  longer appears in Hot Keys and cannot be bound. `openAddsDiscogs()` and the `/adds/discogs` route are left
+  untouched - the feature is a long way from working and this was asked as a temporary removal.
+- A saved `discogsAdds` binding may still sit in localStorage; nothing reads it.
+- Verified: `node --check app.js`. Ctrl+F5.
+
+### 106. Discogs Adds removed from the build and installer
+**Files:** `!build.bat`, `wysiWyg-installer.iss`
+- `!build.bat`: new block after the scanner trim strips the Discogs payload from
+  `dist\WYSIWYG\_internal\Adds` - `discogs_add.py`, `discogs_add_page.html`, `discogs_add_rules.json`,
+  `discogs_last_extract.json`, the three `Discogs ADD ...` text files, and `__pycache__\discogs_add*.pyc`.
+  The source files stay in `Adds\`: `--add-data "Adds;Adds"` still copies the whole folder, and the build
+  deletes the Discogs part from the copy.
+- `wysiWyg-installer.iss`: the main `[Files]` Source gained matching `Excludes`
+  (`_internal\Adds\discogs_*`, `_internal\Adds\Discogs ADD*.txt`, `_internal\Adds\__pycache__\discogs_add*`),
+  and a new `[InstallDelete]` section removes those paths on upgrade so existing installs do not keep the
+  old files.
+- Left alone: the `/adds/discogs` route and `/api/adds/discogs` handler in `main.py` still reference
+  `Adds/discogs_add.py`. With the file gone they fail if called, but nothing reaches them - the menu entry,
+  button and hotkey are all gone. `WysiScan/discogs_extract_prompt.txt` still ships for the same reason.
+- Verified: the FOR/DEL pattern was run against a scratch folder with the same filenames (Discogs files
+  removed, Amazon files kept). The Inno script has not been compiled here - `ISCC` is the build step.
+
+### 107. Release build - v1.20.16.0
+**Files:** `version.json`, `wysiWyg-installer.iss`, `changelog.txt`, built artifacts
+- `version.json` = 1.20.16.0; `#define MyAppVersion "1.20.16.0"`. The bump matters: `/api/server-version`
+  only reports `update_available` when the share's version is strictly greater than the bundled one, so a
+  rebuild carrying 1.20.15.0 would install over the old build but never raise the banner.
+- `changelog.txt`: new `### v1.20.16.0 - 2026-11-17` section holding this batch's six bullets (Reset All
+  timing, heartbeat watchdog, condition-list scroll, Amazon Adds menu, Discogs hotkey, Discogs build
+  removal). 1.20.15.0 keeps its original section.
+- Build order (no exes were running):
+  1. `WysiScan\` -> `PyInstaller --noconfirm --clean WysiScan.spec` -> `WysiScan\dist\WysiScan.exe` 83.3 MB;
+  2. `!build.bat` -> `dist\WYSIWYG\WYSIWYG.exe` 11.6 MB + `WysiChat\dist\Wysichat.exe` 23.8 MB, scanner
+     payload trimmed, Discogs payload removed, `dist_install\run_me_Installer.bat` refreshed;
+  3. `ISCC.exe wysiWyg-installer.iss` -> `dist_install\INSTALL_WYSIWYG.exe` 310.9 MB (162 s).
+- The Discogs prune worked in the real bundle: `_internal\Adds` now holds only the Amazon files (and the two
+  Amazon `.pyc` files). No `discogs_*` and no `Discogs ADD*.txt`.
+- Build warnings, both pre-existing and harmless: `Hidden import 'Xeno_ui.about' / 'Xeno_ui.theme' not
+  found` (imported lazily by `main.py`, package ships via `--add-data`), and Inno's `UsedUserAreasWarning`
+  (`PrivilegesRequired=admin` plus a `userstartup` icon).
+- Not done: nothing was copied to `\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG`. Clients only see the
+  update banner once that folder holds `version.json` (1.20.16.0) and the new `INSTALL_WYSIWYG.exe`.
+- Verified as a build only; behaviour is Scott's to test.
+
 ---
 
 ## Notes / gotchas

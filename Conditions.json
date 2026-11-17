@@ -1,10 +1,6 @@
 {
     "lp": [
         {
-            "title": "Discoloration (Art)",
-            "text": "discoloration to Artwork"
-        },
-        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
@@ -81,6 +77,10 @@
         {
             "title": "Cut-Mark (Spine)",
             "text": "cut-mark to Spine"
+        },
+        {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
         },
         {
             "title": "Discoloration (Label)",
@@ -430,6 +430,10 @@
             "text": "hole-punch through Inlay"
         },
         {
+            "title": "Indentations",
+            "text": "indentations"
+        },
+        {
             "title": "Indentations (Light)",
             "text": "light indentations",
             "media_type": "cd"
@@ -455,8 +459,20 @@
             "text": "shelf-wear"
         },
         {
+            "title": "Shelf-Wear (Heavy)",
+            "text": "heavy shelf-wear"
+        },
+        {
             "title": "Shelf-Wear (Light)",
             "text": "light shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Mild)",
+            "text": "mild shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Moderate)",
+            "text": "moderate shelf-wear"
         },
         {
             "title": "Shelf-Wear (Overall)",
@@ -467,13 +483,53 @@
             "text": "shelf-wear to Box"
         },
         {
+            "title": "Shelf-Wear Box (Heavy)",
+            "text": "heavy shelf-wear to Box"
+        },
+        {
             "title": "Shelf-Wear Box (Light)",
             "text": "light shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Mild)",
+            "text": "mild shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Moderate)",
+            "text": "moderate shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Overall)",
+            "text": "overall shelf-wear to Box"
         },
         {
             "title": "Shelf-Wear O-Card",
             "text": "shelf-wear to O-Card",
             "media_type": "cd"
+        },
+        {
+            "title": "Shelf-Wear Slipcase",
+            "text": "shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Heavy)",
+            "text": "heavy shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Light)",
+            "text": "light shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Mild)",
+            "text": "mild shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Moderate)",
+            "text": "moderate shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Overall)",
+            "text": "overall shelf-wear to Slipcase"
         },
         {
             "title": "Sticker-Mark",
@@ -538,12 +594,28 @@
             "text": "tearing to Inlay"
         },
         {
-            "title": "Tearing Box Set",
+            "title": "Tearing Box",
             "text": "tearing to Box"
         },
         {
-            "title": "Tearing Box Set (Light)",
+            "title": "Tearing Box (Heavy)",
+            "text": "heavy tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Light)",
             "text": "light tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Mild)",
+            "text": "mild tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Moderate)",
+            "text": "moderate tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Substantial)",
+            "text": "substantial tearing to Box"
         },
         {
             "title": "Water Damage (Art)",
@@ -554,12 +626,12 @@
             "text": "water damage to Booklet"
         },
         {
-            "title": "Water Damage (Box)",
-            "text": "water damage to Box"
-        },
-        {
             "title": "Water Damage (Inlay)",
             "text": "water damage to Inlay"
+        },
+        {
+            "title": "Water Damage Box",
+            "text": "water damage to Box"
         },
         {
             "title": "Waviness/Bending (Booklet)",
@@ -576,6 +648,11 @@
         {
             "title": "Writing/Ink",
             "text": "writing on Artwork"
+        },
+        {
+            "title": "Writing/Ink Booklet",
+            "text": "writing on Booklet",
+            "media_type": "cd"
         }
     ],
     "cassette": [
@@ -776,11 +853,6 @@
     ],
     "mediaCondition": [
         {
-            "title": "Cracking (Shell)",
-            "text": "cracking to Shell",
-            "media_type": "cassette"
-        },
-        {
             "title": "Cloudiness (Disc)",
             "text": "cloudiness to Disc",
             "media_type": "cd"
@@ -789,6 +861,11 @@
             "title": "Cracking (Hub)",
             "text": "cracking to Hub",
             "media_type": "cd"
+        },
+        {
+            "title": "Cracking (Shell)",
+            "text": "cracking to Shell",
+            "media_type": "cassette"
         },
         {
             "title": "Cracking (Timing Window)",
@@ -922,11 +999,6 @@
         },
         {
             "title": "Scratching",
-            "text": "scratching to Disc",
-            "media_type": "cd"
-        },
-        {
-            "title": "Scratching",
             "text": "scratching to Shell",
             "media_type": "cassette"
         },
@@ -954,6 +1026,11 @@
             "title": "Scratching (Light)",
             "text": "light scratching to Shell",
             "media_type": "cassette"
+        },
+        {
+            "title": "Scratching (Outer Edge)",
+            "text": "scratching to outer edge of Disc",
+            "media_type": "cd"
         },
         {
             "title": "Scratching (Substantial)",
@@ -1093,9 +1170,268 @@
     ],
     "boxSleeve": [
         {
-            "title": "Edge Wear",
-            "text": "edge wear to Box Set",
-            "media_type": "boxSleeve"
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode"
+        },
+        {
+            "title": "Booklet (Light Play)",
+            "text": "light play to Booklet"
+        },
+        {
+            "title": "Booklet (Whitening)",
+            "text": "edge whitening to Booklet"
+        },
+        {
+            "title": "Booklet Wear",
+            "text": "wear to Booklet"
+        },
+        {
+            "title": "Booklet Wear (Heavy)",
+            "text": "heavy wear to Booklet"
+        },
+        {
+            "title": "Booklet Wear (Light)",
+            "text": "light wear to Booklet"
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Small Tears)",
+            "text": "small tears in Cellophane"
+        },
+        {
+            "title": "Cellophane (Substantial Tearing)",
+            "text": "substantial Cellophane tearing"
+        },
+        {
+            "title": "Cellophane (Tearing)",
+            "text": "Cellophane tearing"
+        },
+        {
+            "title": "Corner Creasing Box",
+            "text": "Corner creasing to Box"
+        },
+        {
+            "title": "Corner Dent Box (Small)",
+            "text": "Corner denting to Box"
+        },
+        {
+            "title": "Corner Denting Box (Light)",
+            "text": "light Corner denting to Box"
+        },
+        {
+            "title": "Corner-Wear",
+            "text": "Corner-wear to Box"
+        },
+        {
+            "title": "Corner-Wear (Light)",
+            "text": "light Corner-wear to Box"
+        },
+        {
+            "title": "Creasing (Edge)",
+            "text": "Edge creasing to Box"
+        },
+        {
+            "title": "Creasing (Spine Light)",
+            "text": "light Spine-creasing to Box"
+        },
+        {
+            "title": "Creasing (Spine)",
+            "text": "Spine-creasing to Box"
+        },
+        {
+            "title": "Cut-Mark Box",
+            "text": "cut-mark to Box"
+        },
+        {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
+        },
+        {
+            "title": "Discoloration (Book)",
+            "text": "discoloration to Booklet"
+        },
+        {
+            "title": "Drill-Hole (Art)",
+            "text": "drill-hole through Artwork"
+        },
+        {
+            "title": "Drill-Hole (Box)",
+            "text": "drill-hole through Box"
+        },
+        {
+            "title": "Edge Whitening (Box)",
+            "text": "Edge whitening to Box"
+        },
+        {
+            "title": "Edge-Wear",
+            "text": "Edge-wear"
+        },
+        {
+            "title": "Final Sale",
+            "text": "( final sale - can't verify matrix/pressing/label variant due to seal )"
+        },
+        {
+            "title": "Hole-Punch (Barcode)",
+            "text": "hole-punch through Barcode"
+        },
+        {
+            "title": "Indentations",
+            "text": "indentations"
+        },
+        {
+            "title": "Indentations (Light)",
+            "text": "light indentations to Box"
+        },
+        {
+            "title": "Promo Stamp (Art)",
+            "text": "Promo Stamp on Artwork"
+        },
+        {
+            "title": "Promo Stamp (Box)",
+            "text": "Promo Stamp on Box"
+        },
+        {
+            "title": "Shelf-Wear",
+            "text": "shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Light)",
+            "text": "light shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Overall)",
+            "text": "overall shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear Box",
+            "text": "shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Heavy)",
+            "text": "heavy shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Light)",
+            "text": "light shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Mild)",
+            "text": "mild shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Moderate)",
+            "text": "moderate shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Box (Overall)",
+            "text": "overall shelf-wear to Box"
+        },
+        {
+            "title": "Shelf-Wear Slipcase",
+            "text": "shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Heavy)",
+            "text": "heavy shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Light)",
+            "text": "light shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Mild)",
+            "text": "mild shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Moderate)",
+            "text": "moderate shelf-wear to Slipcase"
+        },
+        {
+            "title": "Shelf-Wear Slipcase (Overall)",
+            "text": "overall shelf-wear to Slipcase"
+        },
+        {
+            "title": "Sticker Residue",
+            "text": "sticker residue"
+        },
+        {
+            "title": "Sticker Residue (Light)",
+            "text": "light sticker residue"
+        },
+        {
+            "title": "Sticker Residue Box",
+            "text": "sticker residue on Box"
+        },
+        {
+            "title": "Sticker Residue Box (Light)",
+            "text": "light sticker residue on Box"
+        },
+        {
+            "title": "Sticker-Mark",
+            "text": "sticker-mark"
+        },
+        {
+            "title": "Sticker-Mark (Light)",
+            "text": "light sticker-mark"
+        },
+        {
+            "title": "Sticker-Mark Box",
+            "text": "sticker-mark on Box"
+        },
+        {
+            "title": "Sticker-Mark Box (Light)",
+            "text": "light sticker-mark on Box"
+        },
+        {
+            "title": "Tearing (Art)",
+            "text": "tearing to Artwork"
+        },
+        {
+            "title": "Tearing Box",
+            "text": "tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Heavy)",
+            "text": "heavy tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Light)",
+            "text": "light tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Mild)",
+            "text": "mild tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Moderate)",
+            "text": "moderate tearing to Box"
+        },
+        {
+            "title": "Tearing Box (Substantial)",
+            "text": "substantial tearing to Box"
+        },
+        {
+            "title": "Water Damage (Art)",
+            "text": "tearing to Artwork"
+        },
+        {
+            "title": "Water Damage Box",
+            "text": "water damage to Box"
+        },
+        {
+            "title": "Water Damage Box (Heavy)",
+            "text": "heavy water damage to Box"
+        },
+        {
+            "title": "Water Damage Box (Light)",
+            "text": "light water damage to Box"
+        },
+        {
+            "title": "Water Damage Box (Substantial)",
+            "text": "substantial water damage to Box"
         }
     ]
 }

@@ -71,6 +71,17 @@ FOR %%L IN (wysiscan_debug.log wysiscan_debug.log.1 _onefile_err.txt) DO (
 )
 ECHO Scanner payload trimmed.
 
+rem ---- Drop Discogs Adds from the bundle ---------------------------------
+rem Discogs Adds is not working and has no menu entry or hotkey any more, so its
+rem files do not ship. Adds\ keeps the source; only the bundled copy is stripped.
+SET "ADB=%CD%\dist\WYSIWYG\_internal\Adds"
+FOR %%F IN (discogs_add.py discogs_add_page.html discogs_add_rules.json discogs_last_extract.json) DO (
+    IF EXIST "%ADB%\%%F" DEL /Q "%ADB%\%%F"
+)
+FOR %%F IN ("%ADB%\Discogs ADD*.txt") DO @IF EXIST "%%~F" DEL /Q "%%~F"
+FOR %%F IN ("%ADB%\__pycache__\discogs_add*.pyc") DO @IF EXIST "%%~F" DEL /Q "%%~F"
+ECHO Discogs Adds payload removed.
+
 ECHO.
 ECHO [3/3] Building WysiChat (Wysichat.exe)...
 rem Uses the chat's own venv when present (FreeSimpleGUI / cryptography live there),

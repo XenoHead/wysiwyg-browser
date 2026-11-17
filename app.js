@@ -152,9 +152,7 @@ function setupEventListeners() {
     // --- Top Nav ---
     addClickListener('runUberPasteBtn', runUberPaste);
     addClickListener('runWysiScanBtn', runWysiScan);
-    addClickListener('addsToggleBtn', toggleAddsSubmenu);
     addClickListener('addsAmazonBtn', openAddsAmazon);
-    addClickListener('addsDiscogsBtn', openAddsDiscogs);
     addClickListener('hotkeysBtn', openHotkeysModal);
     addClickListener('themeBtn', toggleTheme);
     addClickListener('refreshBtn', () => location.reload(true));
@@ -245,7 +243,6 @@ function setupEventListeners() {
         // drawer open so you can tap multiple times / edit without reopening.
         drawer.querySelectorAll('button').forEach((btn) => {
             if (btn.classList.contains('counter-button') || btn.id === 'editCountersBtn') return;
-            if (btn.id === 'addsToggleBtn') return; // keep drawer open while expanding the Adds submenu
             btn.addEventListener('click', () => {
                 // Defer so the action's own handler runs first
                 setTimeout(closeDrawer, 0);
@@ -467,16 +464,6 @@ async function runUberPaste() {
     } catch (e) {
         customAlert('Failed to connect to server to run UberPaste: ' + e);
     }
-}
-
-function toggleAddsSubmenu() {
-    const items = document.getElementById('addsSubmenuItems');
-    const toggle = document.getElementById('addsToggleBtn');
-    if (!items || !toggle) return;
-    const willShow = items.style.display === 'none';
-    items.style.display = willShow ? 'block' : 'none';
-    const ico = toggle.querySelector('.drawer-ico');
-    if (ico) ico.textContent = willShow ? '➖' : '➕';
 }
 
 let _addsAmazonWindow = null;
@@ -1155,7 +1142,6 @@ const HOTKEY_ACTIONS = [
     { id: 'menu', label: 'Open Menu', run: () => { const b = document.getElementById('hamburgerBtn'); if (b) b.click(); } },
     { id: 'wysiscan', label: 'WysiScan', run: () => runWysiScan() },
     { id: 'amazonAdds', label: 'Amazon Adds', run: () => openAddsAmazon() },
-    { id: 'discogsAdds', label: 'Discogs Adds', run: () => openAddsDiscogs() },
     { id: 'calc', label: 'Cost Calculator', run: () => openCalcModal() },
     { id: 'conditionsBoth', label: 'Conditions (Both, Current Type)', run: () => openConditionsBothCurrentType() },
     { id: 'refresh', label: 'Refresh', run: () => location.reload(true) },
@@ -1166,7 +1152,6 @@ const HOTKEY_DEFAULTS = {
     menu: 'Ctrl+Shift+M',
     wysiscan: 'Ctrl+Shift+W',
     amazonAdds: 'Ctrl+Shift+A',
-    discogsAdds: 'Ctrl+Shift+D',
     calc: 'Ctrl+Shift+C',
     conditionsBoth: 'Ctrl+Shift+K',
     refresh: 'F5',
@@ -3895,6 +3880,39 @@ function renderConditionMultiselects() {
     syncConditionMultiselectsToLegacy();
 }
 
+// Chrome scrolls a listbox to its selection anchor while the frame is being laid
+// out, which happens *after* a requestAnimationFrame callback has run - a single
+// restore gets overwritten, which is why the list still jumped when something
+// higher up was selected. So the position is pinned for a few frames instead. Any
+// real scroll (wheel, keyboard, the next click) releases the pin immediately.
+const _scrollPins = new WeakMap();
+function pinSelectScroll(select, top) {
+    const previous = _scrollPins.get(select);
+    if (previous) previous.stop();
+
+    const pin = () => {
+        if (select.scrollTop !== top) select.scrollTop = top;
+    };
+    pin();
+
+    let released = false;
+    const timer = setInterval(pin, 16);
+    const stop = () => {
+        if (released) return;
+        released = true;
+        clearInterval(timer);
+        select.removeEventListener('wheel', stop);
+        select.removeEventListener('keydown', stop);
+        select.removeEventListener('mousedown', stop);
+        _scrollPins.delete(select);
+    };
+    select.addEventListener('wheel', stop, { passive: true });
+    select.addEventListener('keydown', stop);
+    select.addEventListener('mousedown', stop);
+    setTimeout(stop, 250);
+    _scrollPins.set(select, { stop });
+}
+
 // A <select multiple> normally needs Ctrl+click to pick more than one row. For
 // the condition boxes a plain click should toggle the row instead, which is what
 // people expect from a tick list. Delegated on the <select> itself, which stays
@@ -3908,12 +3926,9 @@ function enableClickToggle(select) {
         const option = (e.target && e.target.tagName === 'OPTION') ? e.target : null;
         if (!option || option.disabled) return;
         e.preventDefault();              // stop the browser resetting the selection
-        // Chrome also scrolls a listbox to its active option on click, which yanks
-        // a long list back to the top. The click finishes after this handler, so
-        // the scroll position is put back on the next frame.
         const scrollTop = select.scrollTop;
         option.selected = !option.selected;
-        requestAnimationFrame(() => { select.scrollTop = scrollTop; });
+        pinSelectScroll(select, scrollTop);
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 

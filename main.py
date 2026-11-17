@@ -289,6 +289,7 @@ HISTORY_FILE = "wysiwyg_history.json"
 LAST_HEARTBEAT = time.time()
 PAGE_HIDDEN = False
 ACTIVE_TABS = {}  # tab_id -> {"last": epoch, "hidden": bool}
+TAB_REGISTERED_ONCE = False  # a browser has connected at least once since launch
 
 def init_conditions():
     local_path = get_local_path("Conditions.json")
@@ -1329,7 +1330,7 @@ async def merge_conditions(merge: bool = False):
 
 @app.api_route("/heartbeat", methods=["GET", "POST"])
 async def heartbeat(request: Request):
-    global LAST_HEARTBEAT, PAGE_HIDDEN
+    global LAST_HEARTBEAT, PAGE_HIDDEN, TAB_REGISTERED_ONCE
     now = time.time()
     LAST_HEARTBEAT = now
     try:
@@ -1341,6 +1342,7 @@ async def heartbeat(request: Request):
                     ACTIVE_TABS.pop(tab_id, None)
                 else:
                     ACTIVE_TABS[tab_id] = {"last": now, "hidden": bool(data.get("hidden"))}
+                    TAB_REGISTERED_ONCE = True
             PAGE_HIDDEN = bool(data.get("hidden"))
     except Exception:
         PAGE_HIDDEN = False
@@ -2966,23 +2968,57 @@ if __name__ == "__main__":
         # Exit automatically once every browser tab has closed. Tabs register on
         # load and send a keepalive "closed" beacon on pagehide, so a reload
         # re-registers within the grace period and does not kill the server.
+        #
+        # The timings are deliberately generous. The old version killed the app
+        # when `now - LAST_HEARTBEAT > 12`, and LAST_HEARTBEAT is set at import, so
+        # the first page load had 12 s - a cold machine (300 MB install, cold
+        # browser, slow DNS for the htmx CDN) missed it and the server vanished
+        # while the tab was still opening. The same 12 s also killed the server
+        # after a reload slower than 12 s, and after a laptop sleep/resume, when
+        # the stale tab was pruned before the browser's next 3 s ping arrived.
+        STARTUP_GRACE = 60        # seconds to wait for the first browser connection
+        NO_TAB_GRACE = 30         # seconds with no tabs before shutting down
+        VISIBLE_STALE = 120       # a visible tab that stops pinging is really gone
+        HIDDEN_STALE = 4 * 3600   # a backgrounded / frozen tab can sit for hours
+
+        def exit_after(reason):
+            logging.info(reason)
+            try:
+                os.kill(os.getpid(), signal.SIGTERM)
+            except Exception:
+                os._exit(0)
+
         def monitor_heartbeat():
+            started = time.time()
+            last_prune = 0.0
             time.sleep(8)  # allow the browser to load and send the first heartbeat
             while True:
                 time.sleep(2)
                 now = time.time()
+                pruned = False
                 for tid, info in list(ACTIVE_TABS.items()):
-                    limit = 1800 if info.get("hidden") else 120
+                    limit = HIDDEN_STALE if info.get("hidden") else VISIBLE_STALE
                     if now - info.get("last", 0) > limit:
                         ACTIVE_TABS.pop(tid, None)
+                        pruned = True
+                # A tab that was just pruned may be a sleeping laptop waking up:
+                # count the prune itself as activity, so the browser's next ping
+                # (3 s later) can re-register before the app decides to exit.
+                if pruned:
+                    last_prune = now
+                # Nothing is killed before a browser has shown up at all: the
+                # startup allowance covers a slow first load, and a browser that
+                # never opens still gets cleaned up after it expires.
+                if not TAB_REGISTERED_ONCE:
+                    if now - started > STARTUP_GRACE:
+                        exit_after(f"No browser connected within {STARTUP_GRACE}s. Shutting down WYSIWYG.")
+                        break
+                    continue
                 if ACTIVE_TABS:
                     continue
-                if now - LAST_HEARTBEAT > 12:
-                    logging.info("All browser tabs closed. Shutting down WYSIWYG.")
-                    try:
-                        os.kill(os.getpid(), signal.SIGTERM)
-                    except Exception:
-                        os._exit(0)
+                if now - max(LAST_HEARTBEAT, last_prune) > NO_TAB_GRACE:
+                    exit_after(f"No browser tab heartbeat for {NO_TAB_GRACE}s "
+                               f"({len(ACTIVE_TABS)} tabs registered). Shutting down WYSIWYG.")
                     break
 
         threading.Thread(target=monitor_heartbeat, daemon=True).start()
