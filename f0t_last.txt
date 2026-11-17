@@ -1,0 +1,13 @@
+[F0T]
+
+[F0T MAPS]
+Blue
+[FORMATS]
+[{"name":"CD","qty":"6","descriptions":["AVCD","Album","Remastered"]},{"name":"DVD","qty":"2","descriptions":["DVD-Video","NTSC"]},{"name":"Vinyl","qty":"1","descriptions":["7\"","45 RPM","Single","Promo"],"text":"Blue"},{"name":"Box Set","qty":"1","descriptions":["Compilation"]}]
+[NOTES]
+title: The Moody Blues - The Polydor Years 1986-1992
+formats[0].name: CD
+formats[0].descriptions: AVCD, Album, Remastered
+vinyl entries: 1
+country: Europe
+released: 2014

@@ -1,6 +1,10 @@
 {
     "lp": [
         {
+            "title": "Discoloration (Art)",
+            "text": "discoloration to Artwork"
+        },
+        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
@@ -77,10 +81,6 @@
         {
             "title": "Cut-Mark (Spine)",
             "text": "cut-mark to Spine"
-        },
-        {
-            "title": "Discoloration (Art)",
-            "text": "discoloration to Artwork"
         },
         {
             "title": "Discoloration (Label)",
@@ -776,6 +776,11 @@
     ],
     "mediaCondition": [
         {
+            "title": "Cracking (Shell)",
+            "text": "cracking to Shell",
+            "media_type": "cassette"
+        },
+        {
             "title": "Cloudiness (Disc)",
             "text": "cloudiness to Disc",
             "media_type": "cd"
@@ -784,11 +789,6 @@
             "title": "Cracking (Hub)",
             "text": "cracking to Hub",
             "media_type": "cd"
-        },
-        {
-            "title": "Cracking (Shell)",
-            "text": "cracking to Shell",
-            "media_type": "cassette"
         },
         {
             "title": "Cracking (Timing Window)",
@@ -852,13 +852,13 @@
         },
         {
             "title": "Label (Discoloration)",
-            "text": "label discoloration",
-            "media_type": "cassette"
+            "text": "Label discoloration",
+            "media_type": "lp"
         },
         {
             "title": "Label (Discoloration)",
-            "text": "Label discoloration",
-            "media_type": "lp"
+            "text": "label discoloration",
+            "media_type": "cassette"
         },
         {
             "title": "Label (Peeling)",
@@ -1093,8 +1093,9 @@
     ],
     "boxSleeve": [
         {
-            "title": "aaaaaa",
-            "text": "aaaaaaaa"
+            "title": "Edge Wear",
+            "text": "edge wear to Box Set",
+            "media_type": "boxSleeve"
         }
     ]
 }

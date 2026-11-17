@@ -1,0 +1,38 @@
+{
+    "_notes": "Colour-engine rules for the vinyl Colored (...) template. 'noise' is dropped from inside the bracket only. 'stops' fences the colour phrase: the scan ends at these product words. Terms are matched case-insensitively on word boundaries; longer phrases win. Edit freely - the app reads this file on every scrape.",
+    "noise": [
+        "180g",
+        "180 gram",
+        "gatefold",
+        "numbered",
+        "stereo",
+        "mono",
+        "remastered",
+        "club edition",
+        "white label"
+    ],
+    "stops": [
+        "vinyl",
+        "lp",
+        "cd",
+        "cassette",
+        "dvd",
+        "blu-ray",
+        "box set",
+        "all media",
+        "gatefold",
+        "insert",
+        "poster",
+        "edition",
+        "album",
+        "compilation",
+        "single",
+        "ep",
+        "reissue",
+        "repress",
+        "remastered",
+        "limited edition",
+        "pressed on",
+        "pressed"
+    ]
+}

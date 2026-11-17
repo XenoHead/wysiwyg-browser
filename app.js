@@ -2,14 +2,16 @@ let data = {};
 let mediaFormats = {};
 
 // --- INITIALIZATION & EVENT LISTENERS ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Force hard reload once on start to ensure latest version (same as Refresh button)
     if (!sessionStorage.getItem('force_refreshed')) {
         sessionStorage.setItem('force_refreshed', 'true');
         location.reload(true);
         return;
     }
-    initializeDropdowns();
+    // Awaited so the selects really are populated before the load-time Reset All
+    // below clears them (it used to run alongside this fetch).
+    await initializeDropdowns();
     loadAppVersion();
     loadProfile();
     loadMediaFormats();
@@ -22,6 +24,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup Event Listeners
     setupEventListeners();
     initHotkeys();
+
+    // A page refresh - F5, the Refresh button or the drawer's Refresh - counts as
+    // Reset All. Chromium re-applies the old form state just AFTER DOMContentLoaded,
+    // so clearing here would simply be undone: wait for the load event (with a
+    // backstop in case a resource never finishes) and clear once, there.
+    let resetOnLoadDone = false;
+    const resetOnLoad = () => {
+        if (resetOnLoadDone) return;
+        resetOnLoadDone = true;
+        fullReset().catch(e => console.error('Reset All on load failed:', e));
+    };
+    window.addEventListener('load', () => setTimeout(resetOnLoad, 0), { once: true });
+    setTimeout(resetOnLoad, 3000);
 
     // Hide the "Settings Editor" menu option if the admin file (allpass.json)
     // is not present in the working directory.
@@ -39,6 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const payload = JSON.parse(e.data);
                     const targetUrl = payload && payload.url;
                     if (!targetUrl) return;
+                    // The load-time Reset All is still pending for a moment after
+                    // the page opens: do not let it wipe the URL we are about to
+                    // scrape (the scrape's own reset keeps the URL anyway).
+                    resetOnLoadDone = true;
                     const urlInput = document.getElementById('discogsUrlInput');
                     const scrapeBtn = document.getElementById('scrapeBtn');
                     if (urlInput && scrapeBtn) {
@@ -1656,6 +1675,22 @@ function toggleTheme() {
     }
 }
 
+// Include a value once even when the list holds case variants ("180 Gram" and
+// "180 gram" both live in Weight/Speed) and both match the scraped line. The
+// first spelling wins, matching the order of the settings list.
+function dedupeCaseInsensitive(values) {
+    const seen = new Set();
+    const out = [];
+    (values || []).forEach(value => {
+        const text = String(value || '').trim();
+        const key = text.toLowerCase();
+        if (!text || seen.has(key)) return;
+        seen.add(key);
+        out.push(value);
+    });
+    return out;
+}
+
 function getVal(id) {
     const el = document.getElementById(id);
     if (!el) return "";
@@ -1678,7 +1713,10 @@ function getVal(id) {
             return parts.join(" ");
         } else if (id === 'packagingFeature') joiner = ' & ';
         else if (id === 'sleevePackaging') joiner = ' / ';
-        return Array.from(el.selectedOptions).map(o => o.value).filter(v => v).join(joiner);
+        // "180 Gram" and "180 gram" are both selected for the same scraped
+        // line, so the same weight would be written twice without this.
+        const values = dedupeCaseInsensitive(Array.from(el.selectedOptions).map(o => o.value).filter(v => v));
+        return values.join(joiner);
     }
     if (id === 'conditionOfMedia') {
         const mod = document.querySelector('input[name="media_modifier"]:checked')?.value || "";
@@ -1706,6 +1744,11 @@ async function fullReset(opts) {
             opt.selected = (opt.value === "");
         });
     });
+    // The media type is a mode rather than a selection, and it has no blank
+    // option: clearing it would leave every condition row hidden. Put it back on
+    // its default (LP, the first option) instead of blank.
+    const resetMediaType = document.getElementById('conditionMediaType');
+    if (resetMediaType) resetMediaType.selectedIndex = 0;
     document.querySelectorAll('input[type="radio"][value=""]').forEach(rad => rad.checked = true);
     document.getElementById('oopToggle').checked = false;
     const customOpts = document.getElementById('customOptions');
@@ -1755,6 +1798,335 @@ window.loadHistoryItem = function (rawText) {
     document.querySelector('[data-tab="listingTool"]').click();
     setTimeout(() => { parsePastedData(rawText.replace(/\\n/g, '\n')); }, 150);
 }
+
+// ============================================================================
+// COLOUR ENGINE (vinyl / F0T) -- start   [see docs/WORK_LOG.md entry 93]
+// Colour for a Vinyl release comes ONLY from formats[0].text, which the server
+// writes to f0t_last.txt on every scrape. Everything else (CD, cassette, ...)
+// keeps the old data.json colour list further down. Deleting from this marker
+// to the matching "end" marker removes the whole feature.
+// ============================================================================
+let lastF0T = '';
+let lastF0TMaps = [];
+let lastFormats = [];
+let colourMapData = { colour: [], textmod: [] };
+let colourRulesData = { noise: [], stops: [] };
+
+function colourEscapeRe(s) {
+    return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Flatten the dictionary into lowercase terms. Slash entries ("Gold / Golden")
+// are split so either spelling matches.
+function colourTerms(list) {
+    const out = [];
+    (Array.isArray(list) ? list : []).forEach(item => {
+        String(item || '').split('/').forEach(part => {
+            const term = part.trim().toLowerCase();
+            if (term && !out.includes(term)) out.push(term);
+        });
+    });
+    return out.sort((a, b) => b.length - a.length);
+}
+
+function colourMatches(term, text) {
+    const re = new RegExp('(^|[^a-z0-9])' + colourEscapeRe(term) + '(?![a-z0-9])', 'i');
+    return re.test(text);
+}
+
+async function loadColourAssets() {
+    try {
+        const [mapResp, rulesResp] = await Promise.all([
+            fetch('/api/colourmap?t=' + Date.now(), { cache: 'no-store' }),
+            fetch('/api/colourrules?t=' + Date.now(), { cache: 'no-store' })
+        ]);
+        if (mapResp.ok) {
+            const m = await mapResp.json();
+            colourMapData = {
+                colour: Array.isArray(m.colour) ? m.colour : [],
+                textmod: Array.isArray(m.textmod) ? m.textmod : (Array.isArray(m.texture) ? m.texture : [])
+            };
+        }
+        if (rulesResp.ok) {
+            const r = await rulesResp.json();
+            colourRulesData = {
+                noise: Array.isArray(r.noise) ? r.noise : [],
+                stops: Array.isArray(r.stops) ? r.stops : []
+            };
+        }
+    } catch (e) {
+        console.error('Colour dictionaries failed to load:', e);
+    }
+}
+
+async function loadF0T() {
+    try {
+        const resp = await fetch('/api/f0t?t=' + Date.now(), { cache: 'no-store' });
+        if (!resp.ok) { lastF0T = ''; lastF0TMaps = []; return; }
+        const text = await resp.text();
+        const primary = text.match(/\[F0T\]([\s\S]*?)(?:\[F0T MAPS\]|\[NOTES\]|$)/i);
+        lastF0T = primary ? primary[1].trim() : '';
+        const maps = text.match(/\[F0T MAPS\]([\s\S]*?)(?:\[FORMATS\]|\[NOTES\]|$)/i);
+        lastF0TMaps = maps
+            ? maps[1].split('\n').map(line => line.trim()).filter(Boolean)
+            : [];
+        // Older files (or a scrape with no vinyl free text) only have [F0T].
+        if (!lastF0TMaps.length && lastF0T) lastF0TMaps = [lastF0T];
+        const formats = text.match(/\[FORMATS\]([\s\S]*?)(?:\[NOTES\]|$)/i);
+        lastFormats = [];
+        if (formats) {
+            try { lastFormats = JSON.parse(formats[1].trim()); } catch (e) { lastFormats = []; }
+            if (!Array.isArray(lastFormats)) lastFormats = [];
+        }
+    } catch (e) {
+        console.error('F0T load failed:', e);
+        lastF0T = '';
+        lastF0TMaps = [];
+        lastFormats = [];
+    }
+}
+
+// Called by the scrape response before parsePastedData() runs.
+async function prepareColourAssets() {
+    await loadColourAssets();
+    await loadF0T();
+}
+
+// The colour engine engages for Vinyl, including a box set that contains vinyl.
+function colourEngineApplies(mediaFormatValue, formatLine) {
+    if (String(mediaFormatValue || '').trim().toLowerCase() === 'vinyl') return true;
+    // The format line writes quantities as "2xVinyl", and "x" is a word
+    // character, so \bvinyl\b does not match there. Allow the count prefix.
+    return /(?:^|\d+x|[^a-z0-9])vinyl(?:$|[^a-z0-9])/i.test(String(formatLine || ''));
+}
+
+// "Colored (Blue)" -> "Blue"; "Coloured Blue" -> "Blue"; a bare "Colored" -> "".
+// Dictionary terms such as Color-in-Color are left alone.
+function colourStripPrefix(raw) {
+    let s = String(raw || '').trim();
+    let m = s.match(/^colou?red\s*\(([\s\S]*)\)\s*$/i);
+    if (m) return m[1].trim();
+    m = s.match(/^colou?red\b\s*[:\-–—]?\s*/i);
+    if (m) return s.slice(m[0].length).trim();
+    m = s.match(/^color\b(?!-in-color)\s*[:\-–—]?\s*/i);
+    if (m) return s.slice(m[0].length).trim();
+    return s;
+}
+
+function colourRemovePhrases(text, phrases) {
+    let out = text;
+    phrases.forEach(p => {
+        if (!p) return;
+        const re = new RegExp('(^|[^A-Za-z0-9])' + colourEscapeRe(p) + '(?![A-Za-z0-9])', 'gi');
+        out = out.replace(re, ' ');
+    });
+    return out.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',');
+}
+
+function colourTidy(s) {
+    return String(s || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s+,/g, ',')
+        .replace(/,\s*/g, ', ')
+        .replace(/^[\s,;:&+\-–—]+/, '')
+        .replace(/[\s,;:&+\-–—]+$/, '')
+        .trim();
+}
+
+// A segment is "basic" when every word is a dictionary colour (bridges aside)
+// and no textmod appears - e.g. "Red", "Blue and Green", "Blue/Grey Clear".
+function colourIsBasic(segment, colours, textmods) {
+    const lower = segment.toLowerCase();
+    if (textmods.some(t => colourMatches(t, lower))) return false;
+    const bridgeWords = ['and', 'with', 'w', 'of', 'the', 'x', 'by'];
+    const tokens = lower.split(/[^a-z0-9']+/).filter(Boolean);
+    let found = 0;
+    for (const token of tokens) {
+        if (bridgeWords.includes(token)) continue;
+        if (colours.includes(token)) { found++; continue; }
+        // Multi-word colours ("coke bottle") and unknown adjectives make the
+        // segment wholesale rather than a basic list.
+        if (colours.some(c => colourMatches(c, token))) { found++; continue; }
+        return false;
+    }
+    return found > 0;
+}
+
+function colourPhraseFromF0T(raw) {
+    const colours = colourTerms(colourMapData.colour);
+    const textmods = colourTerms(colourMapData.textmod);
+    const noise = colourTerms(colourRulesData.noise);
+    const stops = colourTerms(colourRulesData.stops);
+
+    let text = colourStripPrefix(raw);
+    if (!text) return '';
+
+    // Noise is dropped before anchors are read, so "White Label" can never
+    // become Colored (White).
+    text = colourRemovePhrases(text, noise);
+
+    // Fence: cut the string at product words, then at list punctuation. Only
+    // segments that actually contain a colour/textmod anchor survive.
+    const stopRe = stops.length
+        ? new RegExp('\\b(?:' + stops.map(colourEscapeRe).join('|') + ')\\b', 'gi')
+        : null;
+    const segments = (stopRe ? text.split(stopRe) : [text])
+        .flatMap(part => String(part).split(/[,;]/))
+        .map(part => part.trim())
+        .filter(part => part && (colours.some(c => colourMatches(c, part)) || textmods.some(t => colourMatches(t, part))));
+
+    if (!segments.length) return '';
+
+    const allBasic = segments.every(seg => colourIsBasic(seg, colours, textmods));
+    const phrases = segments.map(seg => {
+        // Basic lists normalise every spoken conjunction to a slash; complex
+        // phrases keep the submitter's wording with "and" written as "&".
+        const bridged = allBasic
+            ? seg.replace(/\s+and\s+/gi, ' / ')
+            : seg.replace(/\s+and\s+/gi, ' & ');
+        return colourTidy(bridged);
+    }).filter(Boolean);
+
+    return phrases.join(' / ');
+}
+
+// One release can carry several vinyl colour maps (a differently coloured disc
+// per entry). Each map is read wholesale on its own, then the results are
+// stitched together inside the single group with " + ".
+function colourPhraseFromMaps(maps) {
+    const phrases = [];
+    (Array.isArray(maps) ? maps : []).forEach(map => {
+        const phrase = colourPhraseFromF0T(map);
+        if (phrase && !phrases.some(existing => existing.toLowerCase() === phrase.toLowerCase())) {
+            phrases.push(phrase);
+        }
+    });
+    return phrases.join(' + ');
+}
+
+// --- BOX SETS ---------------------------------------------------------------
+// A box set lists every medium as its own format entry (2xCD, DVD, three LPs,
+// a 7"...). The old one-line join mashed those into "LP 7\" 2xDVD-Video", so
+// for a Box Set the media portion is rebuilt from the raw formats array, in
+// Discogs order, with a count whenever a medium appears more than once.
+// Returns "" for anything that is not a box set, so every other release keeps
+// the existing behaviour.
+function isBoxSetFormats(formats) {
+    return Array.isArray(formats)
+        && formats.some(f => String((f && f.name) || '').trim().toLowerCase() === 'box set');
+}
+
+// Descriptions that belong in front of their medium rather than with the
+// edition words: "Promo 45 RPM 7\"", "NTSC DVD-Video", "Multichannel Blu-ray".
+// The order here is the order they are written in.
+const MEDIA_MODIFIERS = ['promo', 'ntsc', 'pal', 'secam', 'multichannel', 'quadraphonic',
+                         '45 rpm', '33 rpm', '33⅓ rpm', '33 ⅓ rpm', '78 rpm', '16 rpm'];
+// Format kinds that may be written after a medium ("7\" Single"), but only when
+// every entry that merged into the block agrees on it.
+const MEDIA_KIND_SUFFIXES = ['single', 'ep', 'maxi-single', 'mini-album'];
+
+function mediaModifierWords(formats) {
+    const words = new Set();
+    (Array.isArray(formats) ? formats : []).forEach(f => {
+        (f && f.descriptions || []).forEach(d => {
+            const text = String(d || '').trim().toLowerCase();
+            if (MEDIA_MODIFIERS.includes(text)) words.add(text);
+        });
+    });
+    return words;
+}
+
+function buildBoxSetMediaString(formats, colourPhrase) {
+    if (!isBoxSetFormats(formats)) return '';
+
+    const groups = [];
+    let hasBoxSet = false;
+
+    formats.forEach(f => {
+        const name = String((f && f.name) || '').trim();
+        if (!name) return;
+        const lower = name.toLowerCase();
+        if (lower === 'box set') { hasBoxSet = true; return; }
+        if (lower === 'all media') return;
+
+        let qty = parseInt(f.qty, 10);
+        if (!qty || qty < 1) qty = 1;
+        const descriptions = (f.descriptions || []).map(d => String(d || '').trim());
+
+        let label = name;
+        let vinyl = false;
+        if (lower === 'vinyl') {
+            vinyl = true;
+            const size = descriptions.find(d => /^\d{1,2}"$/.test(d));
+            if (descriptions.some(d => d.toLowerCase() === 'lp')) label = 'LP';
+            else if (size) label = size;
+            else label = 'Vinyl';
+        } else if (lower === 'dvd') {
+            // A DVD-Video/DVD-Audio description replaces the bare name.
+            const video = descriptions.find(d => /^dvd/i.test(d));
+            label = video || name;
+        }
+
+        // "Promo" / "NTSC" / "45 RPM" belong in front of this medium, in the
+        // canonical order above rather than the order Discogs lists them.
+        const modifiers = descriptions
+            .filter(d => MEDIA_MODIFIERS.includes(d.toLowerCase()))
+            .sort((a, b) => MEDIA_MODIFIERS.indexOf(a.toLowerCase()) - MEDIA_MODIFIERS.indexOf(b.toLowerCase()));
+        const key = ((modifiers.join(' ') + ' ' + label).trim()).toLowerCase();
+
+        let group = groups.find(g => g.key === key && g.vinyl === vinyl);
+        if (!group) { group = { key, label, modifiers, vinyl, qty: 0, descs: [] }; groups.push(group); }
+        group.qty += qty;
+        group.descs.push(descriptions);
+    });
+
+    if (!groups.length && !hasBoxSet) return '';
+
+    const blocks = [];
+    let colourPlaced = false;
+    const colourBlock = colourPhrase ? `Colored (${colourPhrase})` : '';
+    // A modifier is written once: "45 RPM 4x12" + 7\"", not repeated on the 7".
+    const printedModifiers = new Set();
+
+    // A format kind ("Single", "EP") is only written when every entry that
+    // merged into the block carries it.
+    const commonKind = (descSets) => {
+        if (!descSets.length) return '';
+        const eligible = descSets[0].filter(d => MEDIA_KIND_SUFFIXES.includes(d.toLowerCase()));
+        const shared = eligible.filter(d => descSets.every(set =>
+            set.some(x => x.toLowerCase() === d.toLowerCase())));
+        return shared.length ? shared[0] : '';
+    };
+
+    groups.forEach(group => {
+        const count = group.qty > 1 ? group.qty + 'x' : '';
+        const fresh = (group.modifiers || []).filter(m => !printedModifiers.has(m.toLowerCase()));
+        fresh.forEach(m => printedModifiers.add(m.toLowerCase()));
+        const prefix = fresh.length ? fresh.join(' ') + ' ' : '';
+        // "LP" reads as "LP Vinyl" / "7xLP Vinyl", the same way a single-disc
+        // vinyl release does; sizes such as 7" stay bare.
+        let labelText = prefix + count + group.label;
+        if (group.label === 'LP') labelText += ' Vinyl';
+        const kind = commonKind(group.descs || []);
+        if (kind) labelText += ' ' + kind;
+        if (group.vinyl && colourBlock && !colourPlaced) {
+            // The colour group sits immediately in front of the vinyl block it
+            // belongs to ("Colored (...) 3xLP Vinyl"), not as its own " + " segment.
+            blocks.push(colourBlock + ' ' + labelText);
+            colourPlaced = true;
+            return;
+        }
+        blocks.push(labelText);
+    });
+    if (colourBlock && !colourPlaced) blocks.push(colourBlock);
+
+    let media = blocks.join(' + ');
+    if (hasBoxSet) media = (media ? media + ' ' : '') + 'Box Set';
+    return media;
+}
+// ============================================================================
+// COLOUR ENGINE (vinyl / F0T) -- end
+// ============================================================================
 
 function parsePastedData(input) {
     if (!input) return;
@@ -1884,22 +2256,33 @@ function parsePastedData(input) {
             renderConditionMultiselects();
 
             // Extract Colors to Media Description
-            const colors = (data && data['Color']) ? data['Color'] : ["Gold", "Silver", "Clear", "Red", "Blue", "White", "Green", "Yellow", "Pink", "Orange", "Purple", "Splatter", "Swirl", "Marble", "Teal", "Turquoise", "Black", "Brown", "Grey", "Gray", "Coke Bottle", "Translucent", "Transparent", "Crystal", "Rainbow", "Glow In The Dark", "Glow-in-the-Dark", "Glow", "Beige", "Cream", "Tan", "Violet", "Burgundy", "Magenta", "Peach", "Lime", "Rose", "Amber", "Neon"];
+            // --- COLOUR ENGINE (vinyl / F0T) -- see docs/WORK_LOG.md entry 93 ---
+            // Vinyl reads formats[0].text (f0t_last.txt) through the new engine.
+            // Every other medium keeps the old data.json colour list untouched.
+            if (colourEngineApplies(mSel ? mSel.value : '', fStr)) {
+                const phrase = colourPhraseFromMaps(lastF0TMaps.length ? lastF0TMaps : [lastF0T]);
+                if (phrase) {
+                    document.getElementById('mediaColor').value = phrase;
+                }
+            } else {
+                const colors = (data && data['Color']) ? data['Color'] : ["Gold", "Silver", "Clear", "Red", "Blue", "White", "Green", "Yellow", "Pink", "Orange", "Purple", "Splatter", "Swirl", "Marble", "Teal", "Turquoise", "Black", "Brown", "Grey", "Gray", "Coke Bottle", "Translucent", "Transparent", "Crystal", "Rainbow", "Glow In The Dark", "Glow-in-the-Dark", "Glow", "Beige", "Cream", "Tan", "Violet", "Burgundy", "Magenta", "Peach", "Lime", "Rose", "Amber", "Neon"];
 
-            const parts = fStr.split(',').map(p => p.trim());
-            const foundColors = [];
+                const parts = fStr.split(',').map(p => p.trim());
+                const foundColors = [];
 
-            parts.forEach(part => {
-                colors.forEach(c => {
-                    if (new RegExp("\\b" + c + "\\b", "i").test(part)) {
-                        if (!foundColors.includes(c)) foundColors.push(c);
-                    }
+                parts.forEach(part => {
+                    colors.forEach(c => {
+                        if (new RegExp("\\b" + c + "\\b", "i").test(part)) {
+                            if (!foundColors.includes(c)) foundColors.push(c);
+                        }
+                    });
                 });
-            });
 
-            if (foundColors.length > 0) {
-                document.getElementById('mediaColor').value = foundColors.join(' & ');
+                if (foundColors.length > 0) {
+                    document.getElementById('mediaColor').value = foundColors.join(' & ');
+                }
             }
+            // --- end COLOUR ENGINE (vinyl / F0T) -------------------------------
         }
         if (lower.startsWith('country:')) {
             const c = clean.split(':')[1].trim();
@@ -2037,6 +2420,40 @@ function processFormatData(inputs) {
         sleeveDesc = withoutWith ? "with " + withoutWith : "with";
     }
 
+    // A box set's media string is rebuilt from the formats array, so the Format
+    // Tags selections have no home there ("Reissue" on the vinyl entry would be
+    // lost). Fold them into the edition words instead, before the year. If the
+    // select came back empty, read the tags straight from the raw descriptions
+    // so a tag can never disappear.
+    if (isBoxSetFormats(lastFormats)) {
+        const modifierWords = mediaModifierWords(lastFormats);
+        let boxTags = formatTags;
+        if (!boxTags) {
+            const known = (data && Array.isArray(data["Format Tags"]))
+                ? data["Format Tags"].map(t => String(t).toLowerCase())
+                : [];
+            const found = [];
+            lastFormats.forEach(f => (f.descriptions || []).forEach(d => {
+                const text = String(d || '').trim();
+                if (!text) return;
+                if (!known.includes(text.toLowerCase())) return;
+                if (modifierWords.has(text.toLowerCase())) return;
+                if (found.some(x => x.toLowerCase() === text.toLowerCase())) return;
+                found.push(text);
+            }));
+            boxTags = found.join(" ");
+        } else {
+            // Modifiers now ride in front of their medium ("Multichannel
+            // Blu-ray"), so keep them out of the edition words.
+            boxTags = boxTags.split(/\s+/)
+                .filter(word => word && !modifierWords.has(word.toLowerCase()))
+                .join(" ");
+        }
+        if (boxTags) {
+            edition = [edition, boxTags].filter(x => x && String(x).trim()).join(" ");
+        }
+    }
+
     // Color
     let colorPhrase = colorVal ? `Colored (${colorVal})` : "";
 
@@ -2121,7 +2538,13 @@ function processFormatData(inputs) {
 
     // Format String Construction
     let finalFormatString = "";
-    if (formatLineRaw.includes(" + ")) {
+    // A box set gets its media rebuilt from the raw formats array ("2xCD +
+    // NTSC DVD-Video + Colored (...) 3xLP + 7\" Box Set"). Every other release
+    // falls through to the logic below, unchanged.
+    const boxSetMedia = buildBoxSetMediaString(lastFormats, colorVal);
+    if (boxSetMedia) {
+        finalFormatString = boxSetMedia;
+    } else if (formatLineRaw.includes(" + ")) {
         let complex = formatLineRaw;
 
         let editions = [];
@@ -2140,14 +2563,28 @@ function processFormatData(inputs) {
         });
         complex = complex.replace(/,\s*,/g, ',').replace(/^[\s,]+|[\s,]+$/g, '').trim();
 
-        // Inject Color formatting in-place for complex formats
+        // --- COLOUR ENGINE (vinyl / F0T) -- see docs/WORK_LOG.md entry 93 ---
+        // One Colored (...) group, placed where the colour words sat. The old
+        // loop wrapped every colour word separately ("Colored (Blue) Colored
+        // (Pink)"), which rule 1.1 forbids. The phrase may have reached this
+        // line with its separators flattened (the format line splits free text
+        // on commas and slashes), so the words are matched in order with any
+        // separator between them.
         if (colorVal) {
-            const colors = colorVal.split(/[&,]/).map(c => c.trim()).filter(c => c);
-            colors.forEach(c => {
-                const regex = new RegExp(`(?<!Colored \\()\\b${c}\\b`, 'gi');
-                complex = complex.replace(regex, `Colored (${c})`);
-            });
+            complex = complex.replace(/Colored\s*\([^)]*\)/gi, ' ');   // drop any legacy group
+            const group = `Colored (${colorVal})`;
+            const words = colorVal.split(/\s*(?:\/|&|\+|,|\band\b)\s*/i).map(w => w.trim()).filter(Boolean);
+            if (words.length) {
+                const inOrder = new RegExp(words.map(colourEscapeRe).join('[\\s,\\/&+]*'), 'i');
+                if (inOrder.test(complex)) {
+                    complex = complex.replace(inOrder, group);
+                } else {
+                    const first = new RegExp('\\b' + colourEscapeRe(words[0]) + '\\b', 'i');
+                    if (first.test(complex)) complex = complex.replace(first, group);
+                }
+            }
         }
+        // --- end COLOUR ENGINE (vinyl / F0T) -------------------------------
         finalFormatString = complex;
     } else {
         finalFormatString = [formatTags, weightSpeed, colorPhrase, extractedPreFM, mFormatDisplay, postFM].filter(x => x).join(' ');
@@ -3436,6 +3873,29 @@ function renderConditionMultiselects() {
     syncConditionMultiselectsToLegacy();
 }
 
+// A <select multiple> normally needs Ctrl+click to pick more than one row. For
+// the condition boxes a plain click should toggle the row instead, which is what
+// people expect from a tick list. Delegated on the <select> itself, which stays
+// put while renderConditionMultiselects() rebuilds the options inside it.
+function enableClickToggle(select) {
+    if (!select || select.dataset.clickToggle === 'on') return;
+    select.dataset.clickToggle = 'on';
+
+    select.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const option = (e.target && e.target.tagName === 'OPTION') ? e.target : null;
+        if (!option || option.disabled) return;
+        e.preventDefault();              // stop the browser resetting the selection
+        option.selected = !option.selected;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // The click that follows must not undo the toggle we just made.
+    select.addEventListener('click', (e) => {
+        if (e.target && e.target.tagName === 'OPTION') e.preventDefault();
+    });
+}
+
 function syncConditionMultiselectsToLegacy() {
     const sleeveSelect = document.getElementById('sleeveConditionOptions');
     if (!sleeveSelect) return;
@@ -4012,6 +4472,9 @@ document.addEventListener('DOMContentLoaded', () => {
             select.addEventListener('change', () => {
                 syncConditionMultiselectsToLegacy();
             });
+            // Plain clicks toggle rows here instead of replacing the selection,
+            // so no Ctrl is needed to pick several conditions.
+            enableClickToggle(select);
         }
     });
 
@@ -4289,6 +4752,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Small ✕ beside each Open button: clears that one list only.
+    document.querySelectorAll('.condition-clear-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const which = btn.dataset.condition;
+            const select = document.getElementById(which === 'media' ? 'mediaConditionOptions' : 'sleeveConditionOptions');
+            if (!select) return;
+            Array.from(select.options).forEach(opt => { opt.selected = false; });
+            if (which === 'sleeve') {
+                // Mirror the empty selection into the legacy per-type lists.
+                syncConditionMultiselectsToLegacy();
+            }
+        });
+    });
+
     document.querySelectorAll('.list-picker-open-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -4423,11 +4902,20 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedOptions.forEach(opt => {
                 try {
                     const data = JSON.parse(opt.value);
-                    // Use the row's own type when it has one, so favouriting works
-                    // for whichever sleeve list is showing (including Box Set).
-                    const type = opt.dataset.mediaType || key;
-                    const item = (customOptionsData[type] || []).find(i => i.title === data.title && i.text === data.text &&
-                        (!data.media_type || i.media_type === data.media_type));
+                    let item;
+                    if (targetId === 'mediaConditionOptions') {
+                        // Media conditions live in one flat list, keyed by media_type.
+                        item = (customOptionsData.mediaCondition || []).find(i =>
+                            i.title === data.title && i.text === data.text &&
+                            (!data.media_type || i.media_type === data.media_type));
+                    } else {
+                        // Sleeve conditions: use the row's own type, so whichever
+                        // list is showing (including Box Set) is updated.
+                        const type = opt.dataset.mediaType || key;
+                        item = (customOptionsData[type] || []).find(i =>
+                            i.title === data.title && i.text === data.text &&
+                            (!data.media_type || i.media_type === data.media_type));
+                    }
                     if (item) {
                         item.favorite = !item.favorite;
                     }

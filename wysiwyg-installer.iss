@@ -1,8 +1,8 @@
-; Inno Setup Script for WYSIWYG
+﻿; Inno Setup Script for WYSIWYG
 ; Installs the compiled EXE, static assets, and sub-components.
 
 #define MyAppName "WYSIWYG"
-#define MyAppVersion "1.19.8.3"
+#define MyAppVersion "1.20.15.0"
 #define MyAppPublisher "XenoHead"
 #define MyAppExeName "WYSIWYG.exe"
 
@@ -47,6 +47,9 @@ Source: "fyrlogo.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "media_formats.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "dist\WYSIWYG\Conditions.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "colourmap.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+; Colour-engine noise/fencing rules (vinyl Colored (...) template). Shipped and
+; refreshed on upgrade; uninstall leaves it behind like colourmap.json.
+Source: "colourrules.json"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "changelog.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "styles.css"; DestDir: "{app}"; Flags: ignoreversion
@@ -88,7 +91,7 @@ Source: "WysiChat\dist\Wysichat.exe"; DestDir: "C:\FYRTOOLS\WysiChat"; Flags: ig
 ; main.py and scanner_server.py read those assets from the bundle, not from on-disk
 ; folders, and the scanner self-creates its writable data dirs (WysiScan\scans,
 ; WysiScan\temp, config.json) next to the EXE on first launch. So we deliberately do
-; NOT copy these source folders to {app} — that keeps client installs clean (no raw
+; NOT copy these source folders to {app} â€” that keeps client installs clean (no raw
 ; source code visible under C:\FYRTOOLS\WYSIWYG).
 
 [Icons]

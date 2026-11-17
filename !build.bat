@@ -32,7 +32,7 @@ ECHO [2/3] Building Main Application (WYSIWYG.exe)...
 :: Combined into single line to prevent batch file syntax errors
 :: NOTE: must use the Python 3.11.15 venv (.venv311). The default .venv is Python 3.14,
 :: which PyInstaller cannot freeze (pydantic_core fails to bundle on 3.14).
-.\.venv311\Scripts\python.exe -m PyInstaller --noconfirm --onedir --windowed --icon="fyrlogo.ico" --add-data "app.js;." --add-data "fyrlogo.png;." --add-data "index.html;." --add-data "editor.html;." --add-data "admin.html;." --add-data "search.html;." --add-data "style_guide.html;." --add-data "data.json;." --add-data "colourmap.json;." --add-data "media_formats.json;." --add-data "version.json;." --add-data "changelog.txt;." --add-data "styles.css;." --add-data "fyrlogo.ico;." --add-data "fyr-sign-front.png;." --add-data "Uberpaste;Uberpaste" --add-data "WysiScan;WysiScan" --add-data "Adds;Adds" --add-data "C:/Git/Xeno_ui;Xeno_ui" --name "WYSIWYG" --hidden-import=psutil --hidden-import=win32timezone --hidden-import=webview --hidden-import=cv2 --hidden-import=PIL --hidden-import=pyperclip --hidden-import=Xeno_ui.about --hidden-import=Xeno_ui.theme main.py
+.\.venv311\Scripts\python.exe -m PyInstaller --noconfirm --onedir --windowed --icon="fyrlogo.ico" --add-data "app.js;." --add-data "fyrlogo.png;." --add-data "index.html;." --add-data "editor.html;." --add-data "admin.html;." --add-data "search.html;." --add-data "style_guide.html;." --add-data "data.json;." --add-data "colourmap.json;." --add-data "media_formats.json;." --add-data "version.json;." --add-data "changelog.txt;." --add-data "styles.css;." --add-data "colourrules.json;." --add-data "fyrlogo.ico;." --add-data "fyr-sign-front.png;." --add-data "Uberpaste;Uberpaste" --add-data "WysiScan;WysiScan" --add-data "Adds;Adds" --add-data "C:/Git/Xeno_ui;Xeno_ui" --name "WYSIWYG" --hidden-import=psutil --hidden-import=win32timezone --hidden-import=webview --hidden-import=cv2 --hidden-import=PIL --hidden-import=pyperclip --hidden-import=Xeno_ui.about --hidden-import=Xeno_ui.theme main.py
 IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
 IF NOT EXIST "dist\WYSIWYG\WYSIWYG.exe" (
     ECHO ERROR: PyInstaller did not create dist\WYSIWYG\WYSIWYG.exe.
@@ -96,6 +96,12 @@ IF NOT EXIST "WysiChat\dist\Wysichat.exe" (
     EXIT /B 1
 )
 ECHO WysiChat build OK: WysiChat\dist\Wysichat.exe
+
+rem Ship the SAME run_me_Installer.bat next to INSTALL_WYSIWYG.exe, so the copy
+rem in dist_install can never drift from the repo's version.
+IF NOT EXIST "dist_install" MKDIR "dist_install"
+COPY /Y "run_me_Installer.bat" "dist_install\run_me_Installer.bat" >NUL
+ECHO run_me_Installer.bat refreshed in dist_install.
 
 rem IF EXIST ""%SERVER_SHARE%\WYSIWYG.exe" DEL /Q""
 rem copy /Y "dist\WYSIWYG.exe" "%SERVER_SHARE%\"

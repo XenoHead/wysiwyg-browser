@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('app.js', '.'), ('fyrlogo.png', '.'), ('index.html', '.'), ('editor.html', '.'), ('admin.html', '.'), ('search.html', '.'), ('style_guide.html', '.'), ('data.json', '.'), ('colourmap.json', '.'), ('media_formats.json', '.'), ('version.json', '.'), ('changelog.txt', '.'), ('styles.css', '.'), ('fyrlogo.ico', '.'), ('fyr-sign-front.png', '.'), ('Uberpaste', 'Uberpaste'), ('WysiScan', 'WysiScan'), ('Adds', 'Adds'), ('C:/Git/Xeno_ui', 'Xeno_ui')],
+    datas=[('app.js', '.'), ('fyrlogo.png', '.'), ('index.html', '.'), ('editor.html', '.'), ('admin.html', '.'), ('search.html', '.'), ('style_guide.html', '.'), ('data.json', '.'), ('colourmap.json', '.'), ('media_formats.json', '.'), ('version.json', '.'), ('changelog.txt', '.'), ('styles.css', '.'), ('colourrules.json', '.'), ('fyrlogo.ico', '.'), ('fyr-sign-front.png', '.'), ('Uberpaste', 'Uberpaste'), ('WysiScan', 'WysiScan'), ('Adds', 'Adds'), ('C:/Git/Xeno_ui', 'Xeno_ui')],
     hiddenimports=['psutil', 'win32timezone', 'webview', 'cv2', 'PIL', 'pyperclip', 'Xeno_ui.about', 'Xeno_ui.theme'],
     hookspath=[],
     hooksconfig={},

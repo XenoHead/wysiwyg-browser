@@ -244,9 +244,13 @@ select[multiple] { min-height: 60px; }
 .modal-content-wide { max-width: 500px; width: 90%; text-align: left; }
 .modal-content-narrow { width: 400px; text-align: left; }
 .modal-actions { text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
-/* Tiny icon-only button beside a form label that opens a list-picker modal */
+/* Tiny icon-only button beside a form label that opens a list-picker modal.
+   The clear ✕ beside the condition folders shares the exact same box, so the
+   pair always look alike (only the glyph size differs - an emoji folder is
+   visually larger than a text ✕ at the same font size). */
 .list-picker-open-btn,
-.condition-open-btn {
+.condition-open-btn,
+.condition-clear-btn {
     padding: 1px 4px;
     font-size: 10px;
     height: 16px;
@@ -256,7 +260,10 @@ select[multiple] { min-height: 60px; }
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
+
+.condition-clear-btn { font-size: 13px; }
 
 /* --- Hot Keys Modal --- */
 .hk-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 2px; border-bottom: 1px solid var(--border-color, #eee); }

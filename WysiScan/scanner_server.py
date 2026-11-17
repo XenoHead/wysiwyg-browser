@@ -1534,7 +1534,7 @@ def trigger_scan(data: dict = Body(...)):
                 # Never let the straighten step take a scan down with it.
                 try:
                     ok_s, msg_s = straighten_front_image(final_path, padding=crop_padding)
-                    if ok_s and msg_s and msg_s != "Already upright.":
+                    if ok_s and msg_s and msg_s != "Already level.":
                         straighten_note = msg_s
                 except Exception as e:
                     logging.error(f"CD/45 Front: straighten raised ({e}) - scan continues")
@@ -2361,12 +2361,12 @@ def tilt_image(data: dict = Body(...)):
         return {"status": "error", "message": str(e)}
 
 
-# --- CD/45 Front: make the printed text upright and level ---------------------
-# Split in two stages for good reasons:
-#   1. ORIENTATION (0/90/180/270) comes from one tiny Gemini call - no local
-#      heuristic can reliably tell an upright image from an upside-down one.
-#   2. LEVELLING (skew) is local: rotate candidate angles and keep the one whose
-#      horizontal ink projection has the sharpest text lines. No network, exact.
+# --- CD/45 Front: make the printed text level --------------------------------
+# Levelling only, and all of it local: no network call, so the result is the same
+# every time and a scan can never be left quarter-turned by a guess. Rotate
+# candidate angles and keep the one whose text rows line up best - word-blob
+# consensus first (works at any label angle), narrow projection sweep as the
+# fallback. When the evidence is ambiguous the scan is left exactly as scanned.
 def _front_small(gray, max_side=800):
     """Downscale for the orientation/skew maths - details do not matter there."""
     h, w = gray.shape[:2]
@@ -2402,109 +2402,6 @@ def _rotate_with_background(img, angle):
     M[0, 2] += new_w / 2.0 - center[0]
     M[1, 2] += new_h / 2.0 - center[1]
     return cv2.warpAffine(img, M, (new_w, new_h), borderValue=get_image_background_color(img))
-
-
-def _orientation_cache_key(image_path):
-    try:
-        st = os.stat(image_path)
-        return (os.path.abspath(image_path), int(st.st_mtime), st.st_size)
-    except OSError:
-        return None
-
-
-# Answer per file (path + mtime + size) so a re-scan or retry is instant.
-_AI_ORIENT_CACHE = {}
-
-
-def _ai_upright_degrees(image_path, budget_seconds=25.0):
-    """Clockwise degrees (0/90/180/270) that make the text upright, or None.
-
-    gemini_pool fails over across keys/models, and `timeout` is per attempt, so a
-    bad pool can take a minute. The scan is waiting on this: run it in a worker
-    thread and stop waiting after `budget_seconds` (the worker finishes harmlessly
-    in the background). Answers are cached per file.
-    """
-    key = _orientation_cache_key(image_path)
-    if key is not None and key in _AI_ORIENT_CACHE:
-        cached = _AI_ORIENT_CACHE[key]
-        logging.info(f"CD/45 Front: orientation {cached} from cache")
-        return cached
-
-    try:
-        import concurrent.futures as _cf
-        pool = _cf.ThreadPoolExecutor(max_workers=1)
-        future = pool.submit(_ai_upright_degrees_call, image_path)
-        try:
-            degrees = future.result(timeout=budget_seconds)
-        except _cf.TimeoutError:
-            logging.warning(f"CD/45 Front: AI orientation took longer than {budget_seconds:.0f}s - skipping it")
-            return None
-        finally:
-            pool.shutdown(wait=False)
-    except Exception as e:
-        logging.warning(f"CD/45 Front: AI orientation failed ({e})")
-        return None
-
-    if key is not None:
-        _AI_ORIENT_CACHE[key] = degrees
-    return degrees
-
-
-def _ai_upright_degrees_call(image_path):
-    """The actual Gemini request; see _ai_upright_degrees for the wrapper."""
-    temp_preview = None
-    try:
-        # The scanner process does NOT inherit the app's sys.path (it is spawned
-        # separately), so gemini_pool has to be made importable here - same
-        # bootstrap the other AI endpoints use.
-        import sys as _sys
-        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if _root not in _sys.path:
-            _sys.path.insert(0, _root)
-        import gemini_pool
-    except Exception as e:
-        logging.warning(f"CD/45 Front: gemini_pool unavailable ({e})")
-        return None
-    try:
-        img = cv2.imread(image_path)
-        if img is None:
-            return None
-        small = _front_small(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), max_side=900)
-        temp_preview = os.path.join(TEMP_DIR, f"orient_{time.time_ns()}.jpg")
-        cv2.imwrite(temp_preview, cv2.cvtColor(small, cv2.COLOR_GRAY2BGR))
-
-        prompt = (
-            "This is a scan of record/CD artwork. Which rotation makes the printed words "
-            "read normally (left to right - not sideways and not upside down)?\n"
-            "Reply with ONLY one number: 0, 90, 180 or 270, meaning the clockwise "
-            "rotation to apply."
-        )
-        started = time.time()
-        logging.info(f"CD/45 Front: asking AI for orientation ({small.shape[1]}x{small.shape[0]} preview)")
-        # Bounded: the scan is waiting on this, so never let it run for a minute.
-        text, info = gemini_pool.gemini_generate(
-            prompt_text=prompt, image_paths=[temp_preview], timeout=6,
-            extra_config_keys=_scanner_cfg_keys())
-        logging.info(f"CD/45 Front: AI replied in {time.time() - started:.1f}s")
-        if not text:
-            logging.info(f"CD/45 Front: no orientation from AI ({info.get('error', '')})")
-            return None
-        m = re.search(r'\b(0|90|180|270)\b', text)
-        if not m:
-            logging.info(f"CD/45 Front: unparseable orientation reply: {text[:60]!r}")
-            return None
-        degrees = int(m.group(1))
-        logging.info(f"CD/45 Front: AI orientation = {degrees}deg clockwise")
-        return degrees
-    except Exception as e:
-        logging.warning(f"CD/45 Front: AI orientation failed ({e})")
-        return None
-    finally:
-        if temp_preview and os.path.exists(temp_preview):
-            try:
-                os.remove(temp_preview)
-            except Exception:
-                pass
 
 
 def _word_like_blobs(gray):
@@ -2637,22 +2534,17 @@ def _detect_skew_from_projection(gray, search=10.0):
     return 0.0 if abs(fine) < 0.5 else fine
 
 
-def _detect_text_skew(img, base_cv_angle=0.0, orientation_known=False):
+def _detect_text_skew(img):
     """Angle (OpenCV convention) that levels the text; 0.0 when unsure.
 
     Word-blob consensus first (works at any label angle), narrow projection
-    sweep as the fallback.
-
-    `orientation_known` says the AI decided which way up the artwork is. Without
-    that, a line of text cannot be told from the same line upside down, so only
-    a small lean is corrected. With it, the AI owns the 90 deg turns and this
-    only removes the lean - beyond 45 deg the perpendicular reading is just as
-    likely, so that is still refused. Ambiguous means leave it alone.
+    sweep as the fallback. Without an orientation pass a line of text cannot be
+    told from the same line upside down, so only a modest lean is corrected -
+    a large angle is just as likely to be the perpendicular reading, and
+    leaving the scan alone beats guessing.
     """
     gray = _front_small(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), max_side=1400)
-    if base_cv_angle:
-        gray = _rotate_with_background(gray, base_cv_angle)
-    limit = 45.0 if orientation_known else 15.0
+    limit = 15.0
 
     # Word blobs need enough pixels per letter: a full bed at 800px has none,
     # so measure at the larger size too. If the two disagree the geometry is
@@ -2679,10 +2571,12 @@ def _detect_text_skew(img, base_cv_angle=0.0, orientation_known=False):
 
 
 def straighten_front_image(path, padding=5):
-    """Straighten a CD/45 front scan so its text is upright and level.
+    """Level a CD/45 front scan so its printed text sits straight.
 
-    Returns (bool, message). Backs the file up first, like every other edit, so
-    Undo still works. Never raises: a failure here must not break the scan.
+    Purely local - no AI call, so the outcome is repeatable and a scan can never
+    be left quarter-turned by a guess. Returns (bool, message). Backs the file up
+    first, like every other edit, so Undo still works. Never raises: a failure
+    here must not break the scan.
     """
     if not path or not os.path.exists(path):
         return False, "File not found"
@@ -2690,33 +2584,22 @@ def straighten_front_image(path, padding=5):
         img = cv2.imread(path)
         if img is None:
             return False, "Could not read image"
-        logging.info(f"CD/45 Front: straightening {os.path.basename(path)} ({img.shape[1]}x{img.shape[0]})")
+        logging.info(f"CD/45 Front: levelling {os.path.basename(path)} ({img.shape[1]}x{img.shape[0]})")
 
         try:
-            degrees_cw = _ai_upright_degrees(path)
-        except Exception as e:
-            logging.warning(f"CD/45 Front: orientation step failed ({e}) - continuing without it")
-            degrees_cw = None
-
-        base = -float(degrees_cw or 0)     # OpenCV rotates counter-clockwise
-        try:
-            skew = _detect_text_skew(img, base_cv_angle=base,
-                                     orientation_known=degrees_cw is not None)
+            skew = _detect_text_skew(img)
         except Exception as e:
             logging.warning(f"CD/45 Front: levelling step failed ({e}) - continuing without it")
             skew = 0.0
-        total = base + skew
 
-        if abs(total) < 0.5:
-            logging.info("CD/45 Front: text already upright and level.")
-            return True, "Already upright."
+        if abs(skew) < 0.5:
+            logging.info("CD/45 Front: text already level.")
+            return True, "Already level."
 
         create_backup(path)
-        _imwrite_image(path, _rotate_with_background(img, total))
-        message = f"Straightened {abs(degrees_cw or 0)}deg"
-        if abs(skew) >= 0.5:
-            message += f" + levelled {abs(skew):.1f}deg"
-        logging.info(f"CD/45 Front: {message} (total {total:.2f})")
+        _imwrite_image(path, _rotate_with_background(img, skew))
+        message = f"Levelled {abs(skew):.1f}deg"
+        logging.info(f"CD/45 Front: {message} (total {skew:.2f})")
         return True, message
     except Exception as e:
         logging.error(f"CD/45 Front straighten failed: {e}")

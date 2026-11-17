@@ -64,7 +64,8 @@
         "Deluxe Edition",
         "Limited Edition",
         "Special Edition",
-        "Club Edition"
+        "Club Edition",
+        "Collector's Edition"
     ],
     "Media Format": [
         "Vinyl",
@@ -184,7 +185,8 @@
         "EP",
         "Mini",
         "Minimax",
-        "Shape"
+        "Shape",
+        "Interview"
     ],
     "Post FM": [
         "Maxi-Single",
@@ -251,7 +253,6 @@
         "200 gram",
         "140g",
         "140 Gram",
-        "140 gram",
-        "Gold"
+        "140 gram"
     ]
 }

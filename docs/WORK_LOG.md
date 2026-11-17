@@ -1478,6 +1478,402 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
   requests from 8 threads** complete with zero errors, the file still decodes, and a reset afterwards is
   byte-exact.
 
+### 76. WysiChat — selectable tray bubble size
+**Files:** `WysiChat/main.py`
+- The bubble rendered the artwork at whatever size PIL produced, which after the icon work landed at 22 px and
+  read as a dot. Size is now a setting: **Small 48 / Medium 72 (default) / Large 96 / Extra Large 128 px**,
+  chosen from the bubble's own right-click menu (**Bubble Size**) or the main window's **File → Bubble Size**,
+  and remembered as `-TRAY-ICON-SIZE-` in the app's user settings.
+- `apply_bubble_size()` re-renders both the normal and the alert artwork, saves the choice, then closes and
+  rebuilds the tiny always-on-top window in place (screen position kept) and re-shows it.
+- A saved value from an older build snaps to the nearest new size, so upgrading never leaves the old 22/32 px
+  bubble behind.
+- Verified: `ast.parse`, plus `load_tray_icon_bytes()` renders 48×36 / 72×55 / 96×73 / 128×97 (aspect kept).
+
+### 77. Main app — plain click toggles condition multiselects
+**Files:** `app.js`
+- A `<select multiple>` normally needs Ctrl+click; the condition lists are tick lists now.
+- `enableClickToggle(select)` intercepts `mousedown`, cancels the browser's selection reset, flips
+  `option.selected` and fires `change` (so the legacy sync still runs); the following `click` is neutralised so
+  it cannot undo the toggle.
+- Delegated on the `<select>` itself, so it survives `renderConditionMultiselects()` rebuilding the options
+  (media-type change, load, Box Set switch). Right-click is untouched, so favourites still work.
+
+### 78. Main app — ✕ clear buttons, matching size, media-condition favouriting
+**Files:** `index.html`, `app.js`, `styles.css`
+- **✕ beside each 📂:** `.condition-clear-btn` clears only its own list — Media empties
+  `#mediaConditionOptions`; Sleeve empties `#sleeveConditionOptions` and pushes the empty result back through
+  `syncConditionMultiselectsToLegacy()`, so no stale sleeve flaw survives in the description.
+- **Same box as the folder:** both buttons share the tiny-icon rule
+  (`.list-picker-open-btn, .condition-open-btn, .condition-clear-btn` — 22×16 px, `inline-flex` centred). The
+  folder already had that rule further down the sheet, which is why the pair rendered mismatched at first. Only
+  the glyph size differs (✕ 13 px) because a text ✕ reads smaller than the 📂 emoji.
+- **Favouriting a media condition did nothing:** the handler resolved the array from the row's
+  `data-media-type` (`cd`/`lp`/`cassette`), i.e. it searched the *sleeve* lists. It now branches — media
+  conditions match `customOptionsData.mediaCondition` on title + text + `media_type`; sleeve conditions keep
+  using the row's own type, so Box Set still works.
+- Verified: `node --check` on `app.js` and on the scripts extracted from `index.html`; CSS brace balance checked.
+
+### 79. WysiScan — Autoscan tick persists
+**Files:** `WysiScan/scanner_test.html`
+- Same pattern as Auto Delete Original: `config.auto_scan` restores `#autoScanCheckbox` on load, and each change
+  posts `{ auto_scan }` to `/update-config`, which saves it in the scanner's `config.json`. Per-install, so it
+  travels with that copy of the scanner.
+- Needs a scanner restart (the page HTML is held in `_INDEX_HTML_CACHE`).
+
+### 80. WysiScan — "Remove All" keeps the selected preset's values
+**Files:** `WysiScan/scanner_test.html`
+- ✕ (Remove All) still restores the untouched pixels (rotation / tilt / crop kept), but it no longer zeroes the
+  sliders: it re-loads the selected radio's preset via `selectAdjustPreset(adjustPresetName)`, then marks those
+  same values as already baked in with `setAdjustApplied(presetValues)`.
+- Net effect: the sliders always show what the selected preset holds (the Default values stay visible instead of
+  reading as zeros), and because the sliders equal "already applied" every delta is zero, so the preview stays
+  the plain scan — nothing is re-applied on top of it.
+- Fresh scans already behaved this way (`selectAdjustPreset('default')` + `setAdjustApplied(default)` when a scan
+  lands). The gallery/restore path still zeroes the sliders on purpose, because a restored item's colour state is
+  unknown.
+- Verified: extract-and-`node --check` of the page's script blocks.
+
+### 81. WysiScan — editable value boxes + Reset Default / Zero Out buttons
+**Files:** `WysiScan/scanner_test.html`
+- Each adjustment value (`adjBrightnessVal` … `adjTintVal`) is now an `<input type="number">` instead of a
+  `<span>`: it can be typed into, and it has the native up/down spinner arrows (Chromium shows them on hover /
+  focus). Ranges match the sliders — ±100 except Hue at ±180.
+- `wireAdjustValueBoxes()` keeps the pair in step: typing or spinning the box moves its slider (which clamps to
+  the slider's min/max) and re-previews; blur / Enter snaps the text to what the slider accepted. A cleared or
+  half-typed box (`""`, `"-"`) is left alone rather than being forced to 0 mid-edit.
+- `adjustCssFilter()` writes the slider value back as `out.value` and skips the box while it has focus, so the
+  keyboard cursor is never yanked out from under the user.
+- **The old underlined "Reset Default" text link is a proper button now**, sitting in a two-up row with the new
+  **Zero Out**: `resetDefaultPreset()` still always targets the Default slot, while `zeroOutAdjustPreset()` zeroes
+  *whichever radio is selected* and stores that in its slot. Both clear the pending auto-save timer first, so the
+  zeroing is what gets written, and both toast a confirmation.
+- Verified: extract-and-`node --check` of the page scripts; CSS brace balance.
+- To test: restart the scanner (`_INDEX_HTML_CACHE` holds the page).
+
+### 82. WysiScan — tighter preset buttons, narrower value boxes, docked Menu button
+**Files:** `WysiScan/scanner_test.html`
+- **Reset Default / Zero Out:** 10 px bold → **8 px normal**, height **13 px** (`line-height: 11px`, 3 px side padding,
+  `white-space: nowrap` + ellipsis). They now sit on one line instead of wrapping to two.
+- **Value boxes:** text aligned **left** instead of right, font 11 → 10 px and width 52 → **40 px** — enough for
+  `-100` plus the spinner arrows, and no wider.
+- **Menu button is docked, not scrolled:** `.menu-btn` is now `position: fixed; top: 8px; left: 8px; z-index: 900`,
+  which parks it in the empty gutter to the left of the centred 1200 px `.container` and keeps it in exactly the
+  same spot whatever the page scroll is. `.app-topbar` keeps `min-height: 26px` so taking the button out of flow
+  does not pull the layout up. z-index 900 keeps it under the modals (1000/1001/2000) and under the drawer
+  (9990/9991), which are all higher.
+- The gutter only exists when the window is wider than the 1200 px content column (the container is centred);
+  below that the button overlaps the container's empty top row, which is harmless.
+- Verified: extract-and-`node --check` of the page scripts; CSS brace balance.
+
+### 83. WysiScan — right-click rename for the Crop Mode radios
+**Files:** `WysiScan/scanner_test.html`
+- The visible name of each Crop Mode radio is now a `<span class="crop-mode-name" data-mode="…">`, so the wording can
+  change without touching the `value` that drives processing and `padding_by_mode`.
+- **Right-click a radio that is selected** (not Auto) → a small Rename Crop Mode modal. It opens with the current name
+  preselected; Enter or **Rename** applies it, Escape/Cancel/✕ cancels, and an empty name is refused (it would leave an
+  unlabelled option).
+- The three names are saved as `crop_mode_names` (`{cd, tape, lp}`) through `/update-config` and re-applied on load, next
+  to `auto_scan` and `auto_delete_original`. Defaults live in `CROP_MODE_DEFAULT_NAMES`, so a missing or partial config
+  falls back to Auto / CD Matrix / CD/45 Front / Custom One.
+- Auto has no `contextmenu` listener at all, and right-clicking an unselected radio does nothing (that is what "when
+  they are selected" means here).
+- **Hot Keys also closes the menu:** `openHelpModal()` calls `closeWysiScanDrawer()` first, so the drawer and its overlay
+  are gone before the Hot Keys window appears instead of sitting behind it.
+- Verified: extract-and-`node --check` of the page scripts.
+
+### 84. WysiScan — the AI pass is gone from CD/45 Front
+**Files:** `WysiScan/scanner_server.py`
+- Removed outright: `_orientation_cache_key`, `_AI_ORIENT_CACHE`, `_ai_upright_degrees` and
+  `_ai_upright_degrees_call` (103 lines). No Gemini call, no worker thread, no 25 s budget, no temp preview file.
+- `straighten_front_image()` is levelling only: `_detect_text_skew(img)` → rotate by the found skew, backup first, and
+  "Already level." when the skew is under 0.5°. The call-site sentinel that checks for that message was updated to match.
+- `_detect_text_skew()` lost `base_cv_angle` / `orientation_known` (nothing else called it) and is back to the
+  conservative **15°** limit, i.e. exactly the old no-AI path: word-blob consensus, two scales must agree within 3°,
+  projection sweep as the fallback, otherwise the scan is left alone.
+- Consequence, by design: a scan that comes off the bed quarter-turned is **no longer turned upright** — it is only
+  levelled. A wrong 90° turn was worse than a sideways scan, and the AI almost never got it right.
+- **Extract Text is untouched** — the two `gemini_pool.gemini_generate(...)` endpoints and `_scanner_cfg_keys()` are
+  unchanged; `git diff` hunks are confined to the CD/45 Front section plus the one sentinel line.
+- Verified: `ast.parse` of `scanner_server.py`.
+
+### 85. WysiScan — Adjust Pad aligns first
+**Files:** `WysiScan/scanner_test.html`
+- `recropLast()` (the **Adjust Pad** button) now runs `/auto-deskew` on the original before it re-crops, because the crop
+  is taken from that file - padding a tilted scan just bakes the tilt into the new crop.
+- The align fetch was hoisted into `deskewFile(path, padding)`, shared with `autoDeskew()` (Auto-Align), which now returns
+  the server's message (`"Already aligned."`, `"Aligned."`, …) instead of a bare true/false.
+- Tilt is only reset when the image was really replaced: `"Already aligned."` leaves the pixels alone, so the tilt baked
+  into them keeps its on-screen value. Auto-Align still always resets it, as before.
+- The "Crop" button (`recropLast(true)`, back to the original) is untouched — it is not a padding change.
+- An align failure only toasts; the padding step still runs.
+- Adjust Pad's tooltip now reads "Auto-align the scan, then apply the new padding".
+- Verified: extract-and-`node --check` of the page scripts.
+
+### 86. WysiScan Extract Text — Discogs search scope, barcode box, clean UPC
+**Files:** `WysiScan/scanner_test.html`
+- **Right-click the Discogs button** for a small menu: *Cat# + Artist/Title*, *UPC + Artist/Title*, *Both (Cat# + UPC)*
+  (the current choice is ticked). Kept in `discogsSearchParts`, saved as `discogs_search_parts` through
+  `/update-config`, and applied from `/config` by `initDiscogsUi()`. A blank click elsewhere closes the menu; it flips
+  above the button when there is no room below.
+- **Every identifier is always trimmed off the query when the mode excludes it** — `discogsQueryText()` builds
+  `[artist, title] + chosen parts`, so "Cat#" searches without the barcode and vice versa. Artist/Title are always
+  included; the mode only decides which numbers narrow the result.
+- **UPC is normalised before it is searched:** `cliNormBarcode()` drops everything that is not a letter or digit
+  (`"0 08817 00414 3"` → `008817004143`, hyphens and stray whitespace too) and upper-cases it. This was the reported
+  bug — the spaced form was being sent to `?q=` verbatim. Verified with a throwaway Node harness against
+  space/hyphen/padded/empty inputs and all three modes.
+- **New "Barcode (no spaces)" text box** under the Extracted Text panel, read-only, showing exactly what a search will
+  use. It refreshes from `updateCliDiscogsBtn()` (every render) and on `input` in `#cliResultBox`, so hand-editing an
+  extracted field updates it immediately.
+- `body.extract-mode`'s "hide everything except the panel" rule had to learn about `#discogsSearchMenu`, otherwise the
+  menu would have been `display: none !important` in the extract window.
+- Verified: extract-and-`node --check`, CSS brace balance, plus the barcode/query test harness above.
+
+### 87. Main app — HTML tab now mirrors the Discogs release page
+**Files:** `main.py` (`scrape_url` route)
+- The Format line is built from Discogs' own `formats` payload, in Discogs' order: name, then `descriptions`, then
+  `text` (split on `,` / `/`), first occurrence wins, **"Album" dropped**. For release 5610215 that is
+  `Vinyl, LP, Compilation, Limited Edition, Pink Marbled` — exactly what the page shows. Verified against the live API
+  payload *and* with an offline harness over 2xLP / CD / CD+DVD / repeated-block / multi-colour cases.
+- The two duplicates came from the old formatter, not the payload: `found_space_tags` was appended twice (once as the
+  full list, once as "everything except Out-of-Print"), which is where `Compilation Compilation` came from, and the
+  Vinyl block re-added the colour word (`Pink`) that was already inside `text` (`Pink Marbled`). The whole
+  "Advanced Format Logic" section (~420 lines: edition grouping, CD/tape/video blocks, data.json tag ordering) is gone;
+  nothing after it referenced any of its variables (checked before deleting), and `_discogs_format_parts()` replaces it.
+- **Genre and Style lines added**, straight from `genres` / `styles`, in Discogs' order, after Released (skipped when
+  empty). `app.js`'s paste parser only looks at known prefixes, so the extra lines are ignored there.
+- Multi-disc quantity is kept as `2xVinyl` (not `2 x Vinyl`) because `generateListingData()` matches `/(\d+x)/` for its
+  quantity prefix and `/(\d+xLP)/` for the size.
+- Not changed, still as before: the Label line (`Kanine Records KR107`, space rather than the page's " – ") and the
+  ISO date (`2014-04-19` rather than `Apr 19, 2014`).
+- Verified: `ast.parse` plus the harness above.
+
+### 88. run_me_Installer.bat — reports what it stops, kills UberPaste, narrates the backup
+**Files:** `run_me_Installer.bat`, `dist_install/run_me_Installer.bat`, `!build.bat`
+- Rewritten in the style of `kill_wysiwyg.bat`: every step prints a `stopped` / `skipped` / `FAILED` line instead of
+  swallowing the result in `>nul`.
+  - Calls `kill-wysiwyg.ps1` when it sits next to the script (that is the repo copy), so the process list stays in one
+    place; otherwise a built-in fallback does the same jobs with the same wording (that is the `dist_install` copy).
+  - `:stopexe` checks with `tasklist` first, kills with `taskkill /F /T`, then re-checks: a process that survives is
+    reported as `FAILED … try running this as administrator` rather than a silent success.
+  - `:stopsource` stops `python.exe ...\scanner_server.py` / `...\main.py` / `...\UberPaste.py`, verifying each pid
+    afterwards, so a venv launcher that takes its child with it is reported once instead of "stopped" + "FAILED".
+- **UberPaste is now shut down** — both `UberPaste.exe` and a copy started from source. `kill-wysiwyg.ps1` leaves it
+  alone on purpose (it reports other Python as "left alone, e.g. UberPaste"), but the installer replaces its files.
+- **Backup step narrates itself:** "Deleting the previous backup: C:\FYRTOOLS\wysiwyg.old", then "Copying … to …", then
+  either "Backup complete." or a WARNING when `xcopy` fails (the old script printed "Backup complete." unconditionally),
+  and "nothing to back up" when there is no current install.
+- Also: refuses to run when `INSTALL_WYSIWYG.exe` is missing, reports the installer's exit code, and `pause`s so the
+  summary stays on screen after a double-click.
+- `!build.bat` now copies the repo's batch into `dist_install\` at the end of every build, so the copy that ships next to
+  `INSTALL_WYSIWYG.exe` can never drift again (it was a stale copy that still killed "XDevHubX" and nothing else).
+- **Gotcha:** labels used inside `if ( … )` blocks must not contain parentheses. `"WysiScan (scanner)"` closed the block
+  early and produced `- was unexpected at this time`; the labels are now plain words.
+- Verified: the helper subroutines were run against a live dummy exe and a live dummy Python process (both stopped and
+  reported), a dry run against names that do not exist (both `skipped`), and a syntax run in an empty folder (banner +
+  "INSTALL_WYSIWYG.exe is not in this folder" + exit 1). The full install path was not executed - that is the user's.
+- Not changed: the installer's own [Code] kill list (compiled into `INSTALL_WYSIWYG.exe`) still does not stop UberPaste,
+  so running the exe directly, without the batch, can still hit a locked UberPaste file.
+
+### 89. Main app — "Name - CAT#" label line and "Apr 19, 2014" release date
+**Files:** `main.py` (`scrape_url` route, `_format_discogs_date`)
+- **Label:** the catalogue number is now joined to the label name(s) with `" - "` instead of a space, in every branch:
+  one label → `Label: Kanine Records - KR107`; several labels → `Label One - CAT1 / Label Two - CAT2`; labels sharing
+  one cat# → `Shared A / Shared B - X1`; a label with no cat# keeps just its name (no dangling dash).
+  Verified by running the extracted labelling block against those four shapes.
+- **Released:** Discogs sends ISO (`2014-04-19`) and the page shows `Apr 19, 2014`, so `_format_discogs_date()` renders it
+  the same way — day not zero-padded (`Apr 9, 2014`), month names from a fixed tuple so the machine's locale cannot change
+  them, partial dates kept (`2014-04` → `Apr 2014`, `2014` → `2014`), a `-00` day treated as unknown (`Apr 2014`), and
+  anything that is not an ISO date passed through untouched. `app.js` still reads the year with `/\d{4}/`, so the Year
+  field keeps filling itself.
+- Verified: `ast.parse` plus a harness over eight date shapes and the four label shapes.
+
+### 90. Version 1.19.12.66 + changelog section
+**Files:** `version.json`, `wysiWyg-installer.iss`, `changelog.txt`
+- `version.json` is now `{major: 1, minor: 19, patch: 12, build: 66}` and `#define MyAppVersion` in the installer matches
+  `1.19.12.66`. `get_current_version_str()` prints the raw parts, so the window title and User-Agent read `1.19.12.66`.
+- New `### v1.19.12.66 - 2026-11-16` section at the top of `changelog.txt` (17 entries, newest-first as the file expects -
+  `/api/changelog` sorts by header date then version tuple). The old `v1.19.8.3` header is untouched history.
+- The file is UTF-8 like the rest of the changelog (it already carried em dashes and arrows), so the `✕` in the Conditions
+  entry decodes fine even though a cp1252 console shows it as garbage.
+- Nothing else hardcodes the old number: the only remaining `1.19.8.3` strings are the previous changelog header and the
+  Continuity decision log.
+
+### 91. Main app — a page refresh is a Reset All
+**Files:** `app.js` (`DOMContentLoaded` init, `fullReset`)
+- F5, the Refresh button (`refreshBtn`), and the drawer's Refresh all reload the page, so hooking the load covers all
+  three: the init now schedules `fullReset()` once the page has finished loading.
+  - **It must run after `load`, not at DOMContentLoaded** - Chromium re-applies the previous form state *after*
+    DOMContentLoaded, so clearing earlier is silently undone. A `resetOnLoadDone` guard means the `load` handler and the
+    3 s backstop can both fire without resetting twice.
+  - `initializeDropdowns()` is now awaited in the init, so the selects are populated before the reset clears them (it used
+    to race the /settings fetch).
+- The Chrome extension's SSE hand-off cancels a pending load-reset (`resetOnLoadDone = true`) before it fills the URL box
+  and clicks Scrape, so a push that lands in the first second cannot be wiped by the reset.
+- **Fix found on the way:** `fullReset()` cleared every `select:not(#skuFlag)` to the empty option, and
+  `#conditionMediaType` has no empty option — so Reset All left it blank, and `renderConditionMultiselects()` then hid
+  every condition row. It is now put back to `selectedIndex = 0` (LP), so the lists always show something.
+- Verified: `node --check app.js`; the ordering (reset before the SSE bridge, after the awaited dropdowns) is visible in
+  the init block. Browser behaviour is the user's to test.
+
+### 92. `docs/DISCOGS-FIELD-PROVENANCE.md` — which scraped fields are typed vs picked
+**Files:** `docs/DISCOGS-FIELD-PROVENANCE.md`
+- Keeps the two live-API checks together: the closed-vocabulary probe (`format=Compilation` returns 2.4M items,
+  `format=Pink Marbled` returns 0; `genre=Rok`, `style=Indierock`, `country=U.S.A.` all return 0) and the 30-release
+  sample (`format name` 2 distinct, 17 descriptions, 7 genres, 30 styles, 12 countries, 42/42 label rows carrying an id).
+- Includes the release 5610215 test case in full: API payload, the output of the real `/scrape` formatting code, and a
+  per-token provenance table (only the title, the catno and the format free text were typed).
+- Records the rules that follow - match on `name` + `descriptions` rather than the whole Format line (because "Box Set"
+  can be typed into the free-text box), pass `text` through as display text, treat `catno` defensively, keep partial
+  dates - plus the caveats (the API cannot report the widget; the Discogs page 403s a scripted request) and the exact
+  probe URLs for re-running it.
+- No code changed: verification and documentation only.
+
+### 93. Colour engine (1/3) — F0T capture and its endpoints
+**Files:** `main.py`
+- New constant `F0T_FILE = "f0t_last.txt"` (next to the exe, same as `config.json`), plus `COLOUR_RULES_FILE` and
+  `DEFAULT_COLOUR_RULES`.
+- `write_f0t_file(f0t_text, colour_map_texts, formats_data, note_lines)` writes **`formats[0].text` verbatim** in a `[F0T]`
+  section, then `[F0T MAPS]` (the free text of **every Vinyl entry**, one per line, in Discogs order), then `[FORMATS]`
+  (the raw formats array as one-line JSON, used to group a box set's media), then `[NOTES]` (title, formats[0]
+  name/descriptions, number of vinyl entries, country, released). Overwritten on every scrape. `[F0T]` stays pristine for
+  reference; the engine reads `[F0T MAPS]` and falls back to `[F0T]` when that section is absent or empty.
+- `/scrape` calls it just before `raw_text_tool` is assembled, using the raw API fields (not the built format line, which
+  splits free text on commas/slashes and would corrupt `Blue/Grey Clear`).
+- Why the maps section: release 14655692 has two `Vinyl` entries, each with its own text (`Red & White Marble, 180 Gram`
+  and `White & Black Marble, 180 Gram`). Only reading formats[0] lost the second colour entirely. Each map is parsed on
+  its own and the phrases are stitched inside the single group with `" + "` (rule from the user), duplicates removed.
+- New `GET /api/f0t` (text/plain, no-store) returns that file; if it is missing it returns an empty `[F0T]` block.
+- New `GET /api/colourrules` returns `colourrules.json`, or `DEFAULT_COLOUR_RULES` when the file is absent.
+- The response script that runs after a scrape now calls `prepareColourAssets()` before `parsePastedData()`, so the
+  dictionaries and F0T are loaded first; Auto Generate is chained after that instead of a blind 50 ms timer.
+- **Undo:** delete the `F0T_FILE`/`COLOUR_RULES_FILE`/`DEFAULT_COLOUR_RULES`/`write_f0t_file` block (marked
+  `COLOUR ENGINE (vinyl / F0T)`), the two endpoints (same markers), the `write_f0t_file(...)` call in `/scrape`, and
+  restore the injected script to its previous `parsePastedData(rawText)` + separate auto-gen timer.
+
+### 94. Colour engine (2/3) — the vinyl parser in the app
+**Files:** `app.js`
+- A self-contained block between the markers `// COLOUR ENGINE (vinyl / F0T) -- start` and `-- end` (just above
+  `parsePastedData`) holds everything: `lastF0T`, `lastF0TMaps`, the two dictionary caches, `loadColourAssets()`,
+  `loadF0T()`, `prepareColourAssets()`, `colourEngineApplies()`, `colourStripPrefix()`, `colourRemovePhrases()`,
+  `colourTidy()`, `colourIsBasic()`, `colourPhraseFromF0T()` and `colourPhraseFromMaps()`.
+- **Multiple colour maps:** `colourPhraseFromMaps()` runs each vinyl entry's free text through the engine separately and
+  stitches the results inside one group with `" + "` (duplicates dropped). `loadF0T()` reads `[F0T MAPS]` and falls back
+  to `[F0T]` for older files.
+- **Gate:** `colourEngineApplies(mediaFormatValue, formatLine)` — true when the Media Format select reads `Vinyl`, **or**
+  the Format line contains `vinyl` (a box set with another type selected). Everything else falls through to the old
+  `data.json['Color']` scan, which is untouched.
+- **Engine order:** strip a leading `Colored`/`Coloured`/`Color` (unless it is a dictionary term such as `Color-in-Color`)
+  → drop `noise` phrases (so `White Label` cannot become `Colored (White)`) → fence at `stops` and at `,`/`;` → keep only
+  segments containing a colour or textmod anchor → tidy → one group. Basic-only segments normalise `and` to `/`;
+  complex segments (any textmod or unknown word) keep the source wholesale with `and` → `&`.
+- Slash entries in `colourmap.json` (`Gold / Golden`) are split when the dictionaries are built, so either spelling
+  matches.
+- **Wiring:** inside the existing `format:` branch of `parsePastedData`, the old colour scan is now the `else` arm of the
+  new gate. The result is still written to `#mediaColor`, so the rest of the builder is unchanged.
+- **Bug #1 fix (gate):** the first version tested `/\bvinyl\b/i` against the format line, which never matched our own
+  `2xVinyl` (there is no word boundary between `x` and `V`). On release 12644069 the Media Format select had also latched
+  onto `All Media` (longest match wins), so the gate fell through to the old scan and produced `Colored (Blue & Clear &
+  Grey)` instead of `Colored (Blue/Grey Clear)`. The test is now `/(?:^|\d+x|[^a-z0-9])vinyl(?:$|[^a-z0-9])/i`, which
+  accepts the quantity prefix; verified against that release's real format line
+  (`2xVinyl, LP, Limited Edition, Blue, Grey Clear, CD, All Media` → gate true) and against CD/cassette lines (false).
+- Separate, pre-existing quirk seen in the same output: the Media Format select picks `All Media` over `Vinyl` because
+  the longest option wins, so the description reads `LP 2xAll Media`. Not part of the colour work - flagged, untouched.
+- **Complex-format path** (`generateListingData`, `formatLineRaw` contains `" + "`): the old loop that wrapped every
+  colour word separately is replaced by a single in-place `Colored (<phrase>)`, matching the phrase words in order with
+  any separator between them (the format line may have flattened `/` and `,`). This is what removes the
+  `Colored (Blue) Colored (Pink)` output.
+- **Undo:** delete the marked block, change the `if (colourEngineApplies(...))` arm back to the bare old colour code
+  (i.e. remove the gate and the `else` wrapper), and restore the old colour-injection loop in `generateListingData`.
+
+### 95. Colour engine (3/3) — rules file and packaging
+**Files:** `colourrules.json` (new), `!build.bat`, `WYSIWYG.spec`, `wysiWyg-installer.iss`
+- `colourrules.json` holds `noise` (dropped inside the bracket only: 180g, 180 Gram, Gatefold, Numbered, Stereo, Mono,
+  Remastered, Club Edition, White Label) and `stops` (fences the phrase: Vinyl, LP, CD, Cassette, DVD, Blu-ray, Box Set,
+  All Media, Gatefold, Insert, Poster, Edition, Album, Compilation, Single, EP, Reissue, Repress, Remastered, Limited
+  Edition, Pressed On, Pressed). `_notes` explains the file for whoever edits it next.
+- Shipped three ways: `--add-data "colourrules.json;."` in `!build.bat`, `('colourrules.json', '.')` in
+  `WYSIWYG.spec`, and a `[Files]` entry in the installer (`ignoreversion uninsneveruninstall`, like `colourmap.json`).
+- `f0t_last.txt` is generated at runtime and is deliberately **not** shipped.
+- **Undo:** delete `colourrules.json` and remove the three packaging lines.
+
+**Change manifest (for review/removal)**
+
+| File | Area | Kind |
+|---|---|---|
+| `main.py` | constants + `write_f0t_file()` | new, marked block |
+| `main.py` | `/api/f0t`, `/api/colourrules` | new endpoints, marked |
+| `main.py` | `/scrape` | new `write_f0t_file(...)` call, marked |
+| `main.py` | scrape response script | auto-gen/parse re-ordered around `prepareColourAssets()` |
+| `app.js` | above `parsePastedData` | new marked block (whole engine) |
+| `app.js` | `parsePastedData` colour scan | old code kept as the non-vinyl `else` |
+| `app.js` | `generateListingData` complex branch | old multi-wrapper loop replaced |
+| `colourrules.json` | — | new file |
+| `!build.bat`, `WYSIWYG.spec`, `wysiWyg-installer.iss` | — | one line each |
+
+### 96. Weight/Speed written twice — "180 Gram 180 gram"
+**Files:** `app.js`
+- Cause: `data.json` → `Weight/Speed` contains **both** `"180 Gram"` and `"180 gram"` as separate entries. The scrape parser matches options
+  case-insensitively, so both get selected, and `getVal('weightSpeed')` joins them, giving `180 Gram 180 gram` in the description.
+  Not caused by the two vinyl entries - it happens on any release whose line says `180 Gram` (the twin entry in the release just
+  made it obvious).
+- Fix: new `dedupeCaseInsensitive(values)` helper, used for the generic multi-select join in `getVal()` (Weight/Speed, Format Tags,
+  Pre/Post FM, Packaging Feature, Sleeve Packaging). The first selected spelling wins, so the list order decides: `180 Gram`
+  beats `180 gram`. Single-value selects and the special `edition` branch are untouched.
+- Verified with a harness: `["180 Gram","180 gram"]` → `["180 Gram"]`, `["180g","180 Gram","180 gram"]` → `["180g","180 Gram"]`,
+  `["180 gram","180 Gram"]` → `["180 gram"]` (first wins), unrelated values unaffected.
+- **Undo:** delete `dedupeCaseInsensitive()` and change the join in `getVal()`'s multi-select branch back to
+  `Array.from(el.selectedOptions).map(o => o.value).filter(v => v).join(joiner)`.
+
+### 97. Box sets — rebuild the media portion from the formats array
+**Files:** `main.py`, `app.js`
+- Symptom (release 2853111, Soundgarden – Telephantasm): `NTSC Colored (…) LP 7" 2xDVD-Video Box Set` instead of
+  `2xCD + NTSC DVD-Video + Colored (…) 3xLP + 7" Box Set`. The old media string was assembled from the tag/format-tag
+  selects, which have no concept of per-entry grouping or quantity, so a box set lost the CD/DVD blocks entirely.
+- Fix: the server now also writes the raw formats array to `f0t_last.txt` as `[FORMATS]` (one-line JSON), and
+  `buildBoxSetMediaString(formats, colourPhrase)` rebuilds the media portion from it. **Gated on a `Box Set` format
+  entry** - every other release keeps the existing assembly, unchanged (Cypress Hill's accepted `LP 2xAll Media` output
+  is untouched).
+- Rules implemented, in Discogs order:
+  - each medium becomes its own block, joined with ` + `;
+  - a count is added whenever a medium totals more than one (`2xCD`, `3xLP`, `2x7"`), summed across entries;
+  - `Vinyl` with `LP` in its descriptions becomes `LP`; a bare size description (`7"`, `12"`) is used as the label; other
+    vinyl falls back to `Vinyl`;
+  - an `LP` block carries the word **Vinyl** the same way a single-disc release does - `LP Vinyl`, `3xLP Vinyl`,
+    `7xLP Vinyl` (sizes such as `7"` stay bare, matching the earlier accepted Telephantasm output);
+  - `DVD` takes `DVD-Video` / `DVD-Audio` from its descriptions, and media modifiers - `Promo`, `NTSC`, `PAL`, `SECAM`,
+    `Multichannel`, `Quadraphonic`, plus speeds (`45 RPM`, `33 RPM`, `33⅓ RPM`, `78 RPM`, `16 RPM`) - are placed **in
+    front** of their own medium (`Promo 45 RPM 7"`, `NTSC DVD-Video`, `Multichannel Blu-ray`, `45 RPM 4x12"`); they are
+    written in the order of that list, not the order Discogs happens to list them, and they are kept out of the edition
+    fold so they never appear twice or in the wrong place (a `Promo` that belongs to the 7" no longer shows with the
+    editions);
+  - **a modifier is written once**: after `45 RPM 4x12"` the following `7"` does not repeat it, because the speed was
+    already stated for the run of formats;
+  - **kind suffixes** (`Single`, `EP`, `Maxi-Single`, `Mini-Album`) are appended when *every* entry merged into that block
+    carries the same one - `7" Single` yes, while the four 12" entries (Mini-Album / EP / EP / Single Sided+Single) agree
+    on nothing, so nothing is appended;
+  - the single `Colored (…)` group is placed immediately in front of the first vinyl block (`… Colored (…) 3xLP …`), not as
+    its own ` + ` segment;
+  - `Box Set` is appended as a word at the end (not ` + Box Set`);
+  - `All Media` entries are skipped and `Box Set` entries contribute only the trailing word.
+- **Format Tags on a box set (bug #2):** because the media string is now built only from media entries, a tag that lives
+  on a media entry was lost - release 22212301 (Ramones) has `Reissue` on the 6×Vinyl entry, so it vanished from the output.
+  `processFormatData()` now folds `formatTags` into the `edition` string when `isBoxSetFormats(lastFormats)` is true, which
+  puts it exactly where the user's correction wants it: `… Numbered Record Store Day Reissue 2022 Worldwide …`. If the
+  Format Tags select comes back empty, the tags are read straight from the raw descriptions (filtered against
+  `data.json` → `Format Tags`) so a tag cannot silently disappear. Non-box releases are untouched (their tags still ride
+  in the media string).
+- Verified with harnesses: Telephantasm produces exactly
+  `2xCD + NTSC DVD-Video + Colored (Green Starburst + Red/Orange Starburst + Blue-Green with Black Smoke + Purple Marble) 3xLP + 7" Box Set`;
+  Ramones produces `Colored (Pink & Black Splatter On Clear (Neon Pink)) 7xLP Box Set` (6+1 LP entries); a CD+DVD-Audio box
+  gives `CD + DVD-Audio Box Set`; a non-box release returns `""` (old path); the `[FORMATS]` JSON round-trips and the
+  section regexes were re-checked after the new section was added (the maps regex had to stop at `[FORMATS]` as well,
+  otherwise the JSON would have been read as colour maps).
+- **Undo:** remove `isBoxSetFormats()` / `buildBoxSetMediaString()` and the `const boxSetMedia = …` branch in
+  `generateListingData()`, remove the format-tag fold in `processFormatData()`, drop `[FORMATS]` from `write_f0t_file()`,
+  and delete `lastFormats` from `loadF0T()`.
+
 ---
 
 ## Notes / gotchas

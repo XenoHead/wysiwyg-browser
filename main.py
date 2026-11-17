@@ -229,6 +229,62 @@ DISCOGS_TOKEN = os.environ.get("DISCOGS_TOKEN", "")
 # Load version dynamically for User-Agent
 HEADERS = {"User-Agent": f"WYSIWYG/{get_current_version_str()}", "Authorization": f"Discogs token={DISCOGS_TOKEN}"}
 CHANGELOG_FILE = "changelog.txt"
+# --- COLOUR ENGINE (vinyl / F0T) -- see docs/WORK_LOG.md entry 93 ------------
+# The pristine italic free text of formats[0].text for the current listing. It
+# is overwritten on every scrape and read by the colour engine in app.js. The
+# colour rules for noise/fencing live in colourrules.json.
+F0T_FILE = "f0t_last.txt"
+COLOUR_RULES_FILE = "colourrules.json"
+# Used when colourrules.json is missing so the engine still behaves sensibly.
+DEFAULT_COLOUR_RULES = {
+    "noise": ["180g", "180 gram", "gatefold", "numbered", "stereo", "mono",
+              "remastered", "club edition", "white label"],
+    "stops": ["vinyl", "lp", "cd", "cassette", "dvd", "blu-ray", "box set",
+              "all media", "gatefold", "insert", "poster", "edition", "album",
+              "compilation", "single", "ep", "reissue", "repress", "remastered",
+              "limited edition"],
+}
+
+
+def write_f0t_file(f0t_text, colour_map_texts, formats_data, note_lines):
+    """Store formats[0].text for the current listing, verbatim.
+
+    `[F0T]` is always the pristine formats[0].text. `[F0T MAPS]` lists the free
+    text of every Vinyl entry (one per line, in Discogs order) so a release with
+    two coloured discs yields two colour maps that the engine stitches together
+    with " + ". `[FORMATS]` is the raw formats array as JSON, used to group a box
+    set's media ("2xCD + DVD-Video + 3xLP ...") - colour still comes only from
+    the maps above. `[NOTES]` is reference material.
+
+    The file is overwritten on every scrape so it always describes the current
+    listing.
+    """
+    try:
+        path = get_local_path(F0T_FILE)
+        body = str(f0t_text or "").strip("\r\n")
+        maps = []
+        for text in (colour_map_texts or []):
+            clean = str(text or "").strip()
+            if clean:
+                maps.append(clean.replace("\r", " ").replace("\n", " "))
+        formats_json = json.dumps(formats_data or [], ensure_ascii=False, separators=(",", ":"))
+        notes = "\n".join(str(x) for x in (note_lines or []))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("[F0T]\n")
+            f.write(body + "\n")
+            f.write("[F0T MAPS]\n")
+            for text in maps:
+                f.write(text + "\n")
+            f.write("[FORMATS]\n")
+            f.write(formats_json + "\n")
+            f.write("[NOTES]\n")
+            f.write(notes + "\n")
+        return True
+    except Exception as e:
+        logging.warning(f"Could not write {F0T_FILE}: {e}")
+        return False
+# --- end COLOUR ENGINE (vinyl / F0T) ----------------------------------------
+
 HISTORY_FILE = "wysiwyg_history.json"
 LAST_HEARTBEAT = time.time()
 PAGE_HIDDEN = False
@@ -1175,6 +1231,29 @@ async def sync_colourmap(data: dict = Body(...)):
     except Exception as e:
         return {"status": "error", "message": f"Server update failed: {e}"}
 
+
+# --- COLOUR ENGINE (vinyl / F0T) -- see docs/WORK_LOG.md entry 93 ------------
+@app.get("/api/f0t")
+async def get_f0t():
+    """The formats[0].text of the last scrape, as written by write_f0t_file()."""
+    no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+    path = get_local_path(F0T_FILE)
+    if os.path.exists(path):
+        return FileResponse(path, media_type="text/plain", headers=no_cache)
+    return Response(content="[F0T]\n\n[NOTES]\n", media_type="text/plain", headers=no_cache)
+
+
+@app.get("/api/colourrules")
+async def get_colour_rules():
+    """Noise / fencing rules for the colour engine (colourrules.json)."""
+    no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+    path = get_local_path(COLOUR_RULES_FILE)
+    if os.path.exists(path):
+        return FileResponse(path, headers=no_cache)
+    return JSONResponse(content=DEFAULT_COLOUR_RULES, headers=no_cache)
+# --- end COLOUR ENGINE (vinyl / F0T) ----------------------------------------
+
+
 @app.post("/api/merge-conditions")
 async def merge_conditions(merge: bool = False):
     local_path = get_local_path("Conditions.json")
@@ -1335,9 +1414,34 @@ async def format_html_route(raw_text: str = Form(None)):
         return Response(content=f"Error: {str(e)}", media_type="text/plain")
         
 
+_MONTH_ABBR = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _format_discogs_date(value):
+    """Turn Discogs' ISO date into the form its page shows.
+
+    "2014-04-19" -> "Apr 19, 2014". Partial dates keep what is known
+    ("2014-04" -> "Apr 2014", "2014" -> "2014"); anything that is not an ISO
+    date is returned untouched. Month names are fixed here rather than taken
+    from strftime, so the output does not depend on the machine's locale.
+    """
+    text = str(value or "").strip()
+    match = re.fullmatch(r"(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?", text)
+    if not match:
+        return text
+    year, month, day = match.group(1), match.group(2), match.group(3)
+    if month and 1 <= int(month) <= 12:
+        month_name = _MONTH_ABBR[int(month) - 1]
+        if day and 1 <= int(day) <= 31:
+            return f"{month_name} {int(day)}, {year}"     # "Apr 19, 2014"
+        return f"{month_name} {year}"                      # "Apr 2014"
+    return year                                            # "2014"
+
+
 @app.post("/scrape")
 async def scrape_discogs(url: str = Form(...)):
-    release_id = None 
+    release_id = None  
     is_master = False
     from_marketplace = False
     match = re.search(r'release/(\d+)', url)
@@ -1455,7 +1559,7 @@ async def scrape_discogs(url: str = Form(...)):
                     if cat == 'N/A':
                         parts.append(names_str)
                     else:
-                        parts.append(f"{names_str} {cat}".strip())
+                        parts.append(f"{names_str} - {cat}".strip())
                 
                 label_str = f"Label: {' - '.join(parts)}"
             else:
@@ -1497,7 +1601,7 @@ async def scrape_discogs(url: str = Form(...)):
 
                     if is_shared:
                         names = " / ".join([g['name'] for g in grouped_labels])
-                        label_str = f"Label: {names} {shared_cats_str}".strip()
+                        label_str = f"Label: {names} - {shared_cats_str}".strip()
                     else:
                         has_multi_cats = any(len(g['cats']) > 1 for g in grouped_labels)
                         sep = " - " if has_multi_cats else " / "
@@ -1506,429 +1610,44 @@ async def scrape_discogs(url: str = Form(...)):
                         for group in grouped_labels:
                             if group['cats']:
                                 cat_str = " / ".join(group['cats'])
-                                parts.append(f"{group['name']} {cat_str}".strip())
+                                # Name and catalogue number read as "Name - CAT#".
+                                parts.append(f"{group['name']} - {cat_str}".strip())
                             else:
                                 parts.append(group['name'])
                         label_str = f"Label: {sep.join(parts)}"
             
-            # --- 4. Advanced Format Logic (Tiered Metadata & Blocks) ---
-            raw_formats = data.get('formats', [])
-            
-
-            def get_fmt_text_blob(fmt_list):
-                blob = ""
-                for f in fmt_list:
-                    blob += f.get('name', '') + " "
-                    blob += " ".join(f.get('descriptions', [])) + " "
-                    blob += (f.get('text', '') or "") + " "
-                return blob
-
-
-            all_blob = get_fmt_text_blob(raw_formats)
-
-            # 1. The "Edition Splitter" (Global Tags)
-            slash_group_tags = []
-            space_group_tags = []
-            
-            settings_data = load_json_data("data.json")
-            
-            # Load Format Tags order for sorting
-            format_tags_order = []
-            if settings_data and "Format Tags" in settings_data:
-                format_tags_order = settings_data["Format Tags"]
-
-            def sort_tags_by_settings(tags_list):
-                if not format_tags_order: return tags_list
-                def sort_key(t):
-                    if t in format_tags_order: return format_tags_order.index(t)
-                    for i, ft in enumerate(format_tags_order):
-                        if ft.lower() == t.lower(): return i
-                    return 9999
-                return sorted(tags_list, key=sort_key)
-
-            # Default whitelist
-
-            slash_whitelist = ["Deluxe Edition", "Limited Edition", "Special Edition", "Club Edition"]
-
-            if settings_data is not None:
-                if "Slash Separated Editions" in settings_data:
-                    slash_whitelist = settings_data["Slash Separated Editions"]
-
-                for tag in settings_data.get("Edition", []):
-                    if tag in slash_whitelist:
-                        slash_group_tags.append(tag)
-                    else:
-                        space_group_tags.append(tag)
-            else:
-                # Fallback if file read fails
-                slash_group_tags = slash_whitelist
-                space_group_tags = ["Numbered", "Record Store Day", "Compilation", "Anniversary", "Alternate Cover", "Clean Version", "RSD", "Autographed"]
-            
-            found_slash_tags = []
-            for tag in slash_group_tags:
-                if tag in all_blob and tag not in found_slash_tags:
-                    found_slash_tags.append(tag)
-            
-            found_space_tags = []
-            for tag in space_group_tags:
-                if tag in all_blob and tag not in found_space_tags:
-                    found_space_tags.append(tag)
-
-
-            # Construct the display string
-            edition_display_parts = []
-            
-            # Handle Slash Group
-            if found_slash_tags:
-                # "Deluxe / Limited / Special / Club Edition"
-                prefixes = [t.replace(" Edition", "") for t in found_slash_tags]
-                edition_display_parts.append(" / ".join(prefixes) + " Edition")
-            
-            # Handle Space Group
-            if found_space_tags:
-                edition_display_parts.append(" ".join(found_space_tags))
-                # Don't include Out-of-Print here, let it be handled as a normal tag.
-                # This is a workaround for a potential client-side issue where edition tags
-                # are not included in the generated description.
-                space_group_for_display = [t for t in found_space_tags if t != "Out-of-Print"]
-                if space_group_for_display:
-                    edition_display_parts.append(" ".join(space_group_for_display))
-            
-            # Combine into one string for the Format line
-            global_editions_str = " ".join(edition_display_parts)
-            
-            # List for exclusions (original tags)
-            detected_global_editions = found_slash_tags + found_space_tags
-            
-            # Extract any other stray format tags (like Misprint) from global format elements
-            # (e.g. "All Media" or "Box Set") that are otherwise skipped by the format block processors
-            # We want to capture Edition tags, Format Tags, and Packaging features from global blocks
-            global_tag_whitelist = ["Remastered", "Reissue", "Repress", "Mispress", "Misprint", "Promo", "NTSC", "Enhanced", "PAL", "SECAM", "Multichannel", "Quadraphonic", "Mono", "Remixed", "Digipak", "Gatefold", "Numbered"]
-            if settings_data:
-                for cat in ["Format Tags", "Sleeve Packaging", "Packaging Feature", "Edition"]:
-                    if cat in settings_data:
-                        global_tag_whitelist.extend(settings_data[cat])
-            
-            global_formats = [f for f in raw_formats if f.get('name') in ['All Media', 'Box Set']]
-            for f in global_formats:
-                g_tags = list(f.get('descriptions', []))
-                if f.get('text'):
-                    g_tags.extend([t.strip() for t in re.split(r'[/,;]', f.get('text'))])
-                for tag in g_tags:
-                    tag = tag.strip()
-                    # If tag is in our expanded whitelist, and not already in our global editions
-                    if tag and tag in global_tag_whitelist and tag not in detected_global_editions:
-                        detected_global_editions.append(tag)
-                        if global_editions_str:
-                            global_editions_str += " " + tag
-                        else:
-                            global_editions_str = tag
-            
-            # Exclude Out-of-Print from the edition tags so it can be picked up by format blocks.
-            detected_global_editions = [t for t in detected_global_editions if t != "Out-of-Print"]
-
-
-            # 2. Format Blocks
-            blocks = []
-
-            # [CD Multiplier]
-            # Capture CD, CDr, SACD, etc.
-            cd_formats = [f for f in raw_formats if f.get('name') in ['CD', 'CDr', 'SACD', 'Hybrid']]
-
-            if cd_formats:
-                cd_blob = get_fmt_text_blob(cd_formats)
-                total_qty = 0
-                for f in cd_formats: 
+            # --- 4. Format line: mirror Discogs' own list --------------------
+            # The release page lists these parts in Discogs' order, e.g.
+            # "Vinyl, LP, Compilation, Limited Edition, Pink Marbled", so keep that
+            # order instead of re-sorting into editions + media blocks. "Album" is
+            # dropped (it says nothing for a listing) and anything repeated is kept
+            # once. Multi-disc quantities stay in the 2xLP / 2xCD shape the
+            # description builder looks for (\d+x).
+            def _discogs_format_parts(fmt_list):
+                parts = []
+                seen = set()
+                for f in fmt_list or []:
+                    name = (f.get('name') or '').strip()
                     try:
-                        total_qty += int(f.get('qty', 1))
-                    except (ValueError, TypeError):
-                        total_qty += 1
-                
+                        qty = int(f.get('qty') or 1)
+                    except (TypeError, ValueError):
+                        qty = 1
+                    items = [f"{qty}x{name}" if (name and qty > 1) else name]
+                    items += [str(x).strip() for x in (f.get('descriptions') or [])]
+                    text = (f.get('text') or '').strip()
+                    if text:
+                        items += [x.strip() for x in re.split(r'[,/]', text)]
+                    for item in items:
+                        if not item or item.lower() == 'album':
+                            continue
+                        key = item.lower()
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        parts.append(item)
+                return parts
 
-                # Fallback: If qty is 1 but text says "2 x" or "3 x", trust the text
-                if total_qty <= 1:
-                    if "2 x" in cd_blob or "2x" in cd_blob: total_qty = 2
-                    elif "3 x" in cd_blob or "3x" in cd_blob: total_qty = 3
-                    elif "4 x" in cd_blob or "4x" in cd_blob: total_qty = 4
-                
-
-                qty_str = f"{total_qty}x" if total_qty > 1 else ""
-                
-                cd_tags = []
-                # Added CDr, SACD to exclusions so they don't duplicate in the tag list
-                exclusions = detected_global_editions + ["CD", "CDr", "SACD", "Hybrid", "Album", "Box Set"]
-                exclusions = detected_global_editions + ["CD", "CDr", "SACD", "Hybrid", "Album", "Box Set", "Stereo"]
-                for f in cd_formats:
-                    raw_tags = list(f.get('descriptions', []))
-                    if f.get('text'):
-                        raw_tags.extend([t.strip() for t in re.split(r'[/,;]', f.get('text'))])
-                    
-                    for tag in raw_tags:
-                        tag = tag.strip()
-                        if tag and tag not in exclusions and tag not in cd_tags:
-                            cd_tags.append(tag)
-
-                
-                # Determine base name (CD vs CDr etc) - Default to CD if mixed
-                base_name = "CD"
-                if all(f.get('name') == 'CDr' for f in cd_formats): base_name = "CDr"
-                elif all(f.get('name') == 'SACD' for f in cd_formats): base_name = "SACD"
-                
-                if any(t.lower() in ['maxi-single', 'maxi single'] for t in cd_tags):
-
-                    cd_tags = [t for t in cd_tags if t.lower() != 'single']
-
-                cd_tags = sort_tags_by_settings(cd_tags)
-                blocks.append(f"{' '.join(cd_tags)} {qty_str}{base_name}".strip().replace("  ", " "))
-
-
-            # [LP & Weight Logic]
-            vinyl_formats = [f for f in raw_formats if f.get('name') in ['Vinyl', 'LP']]
-            # Discogs sometimes puts "LP" in text, not descriptions, so check both
-            lp_formats = [f for f in vinyl_formats if "LP" in f.get('descriptions', []) or "LP" in f.get('text', '')]
-            
-            if lp_formats:
-                lp_blob = get_fmt_text_blob(lp_formats)
-                # Calculate total quantity from API 'qty' field
-                total_qty = 0
-                for f in lp_formats:
-                    try:
-                        total_qty += int(f.get('qty', 1))
-                    except (ValueError, TypeError):
-                        total_qty += 1
-                
-                # Fallback: If qty is 1 but text says "2 x" or "3 x", trust the text
-                if total_qty <= 1:
-                    if "2 x" in lp_blob or "2x" in lp_blob: total_qty = 2
-                    elif "3 x" in lp_blob or "3x" in lp_blob: total_qty = 3
-                    elif "4 x" in lp_blob or "4x" in lp_blob: total_qty = 4
-
-                lp_qty = f"{total_qty}x" if total_qty > 1 else ""
-
-                lp_tags = []
-                if "Reissue" in lp_blob: lp_tags.append("Reissue")
-                if "Remastered" in lp_blob: lp_tags.append("Remastered")
-                if re.search(r'\b180\s*g(ram)?s?\b', lp_blob, re.IGNORECASE): lp_tags.append("180g")
-                if re.search(r'\b200\s*g(ram)?s?\b', lp_blob, re.IGNORECASE): lp_tags.append("200g")
-                if re.search(r'\b140\s*g(ram)?s?\b', lp_blob, re.IGNORECASE): lp_tags.append("140g")
-                if "Picture Disc" in lp_blob: lp_tags.append("Picture Disc")
-                
-                # Add RPMs to tags so they can be multi-selected with weight
-                if "45 RPM" in lp_blob: lp_tags.append("45 RPM")
-                if "33 ⅓ RPM" in lp_blob: lp_tags.append("33 ⅓ RPM")
-                if "78 RPM" in lp_blob: lp_tags.append("78 RPM")
-                
-                # Color Detection
-                known_colors = ["Gold", "Silver", "Clear", "Red", "Blue", "White", "Green", "Yellow", "Pink", "Orange", "Purple", "Splatter", "Swirl", "Marble", "Teal", "Turquoise", "Black", "Brown", "Grey", "Gray", "Coke Bottle", "Translucent", "Transparent", "Crystal", "Rainbow", "Glow In The Dark", "Glow-in-the-Dark", "Glow", "Beige", "Cream", "Tan", "Violet", "Burgundy", "Magenta", "Peach", "Lime", "Rose", "Amber", "Neon"]
-                
-                # Try to load custom colors from data.json
-                settings = load_json_data("data.json")
-                if settings and "Color" in settings and isinstance(settings["Color"], list):
-                    known_colors = settings["Color"]
-
-                for color in known_colors:
-                    # Check for color as a whole word (case-insensitive)
-                    if re.search(r'\b' + re.escape(color) + r'\b', lp_blob, re.IGNORECASE):
-                        lp_tags.append(color)
-                
-                # Catch-all for other tags (descriptions & free text)
-                exclusions = detected_global_editions + ["Vinyl", "LP", "Album", "Box Set", "12\"", "33 ⅓ RPM", "45 RPM", "Stereo", "Mono"]
-                exclusions = detected_global_editions + ["Vinyl", "LP", "Album", "Box Set", "12\"", "33 ⅓ RPM", "45 RPM", "Stereo"]
-                for f in lp_formats:
-                    raw_tags = list(f.get('descriptions', []))
-                    if f.get('text'):
-                        raw_tags.extend([t.strip() for t in re.split(r'[/,;]', f.get('text'))])
-                    
-                    for tag in raw_tags:
-                        tag = tag.strip()
-                        if not tag or tag in exclusions: continue
-                        if re.match(r'^180\s*g(ram)?s?$', tag, re.IGNORECASE) and "180g" in lp_tags: continue
-                        if re.match(r'^200\s*g(ram)?s?$', tag, re.IGNORECASE) and "200g" in lp_tags: continue
-                        if re.match(r'^140\s*g(ram)?s?$', tag, re.IGNORECASE) and "140g" in lp_tags: continue
-                        if tag == "Picture Disc" and "Picture Disc" in lp_tags: continue
-                        if tag not in lp_tags:
-                            lp_tags.append(tag)
-
-                # Deduplicate tags while preserving order (Case Insensitive)
-                seen_lower = set()
-                deduped_lp = []
-                for t in lp_tags:
-                    if t.lower() not in seen_lower:
-                        seen_lower.add(t.lower())
-                        deduped_lp.append(t)
-                lp_tags = deduped_lp
-
-                lp_tags = sort_tags_by_settings(lp_tags)
-                if any(t.lower() in ['maxi-single', 'maxi single'] for t in lp_tags):
-                    lp_tags = [t for t in lp_tags if t.lower() != 'single']
-
-                blocks.append(f"{' '.join(lp_tags)} {lp_qty}LP Vinyl".strip())
-
-            # [Singles & Speed Rule]
-
-            # Filter out formats already processed as LPs to prevent duplication (e.g. "Album" + "12"")
-            non_lp_formats = [f for f in vinyl_formats if f not in lp_formats]
-            
-            if non_lp_formats:
-                vinyl_blob = get_fmt_text_blob(non_lp_formats)
-                has_7 = '7"' in vinyl_blob
-                has_10 = '10"' in vinyl_blob
-                has_12 = '12"' in vinyl_blob
-                has_album = "Album" in vinyl_blob
-                
-                if has_7 or has_10 or has_12 or has_album:
-                    # Calculate Qty for non-LP vinyl (e.g. 2x12")
-                    total_qty = 0
-                    for f in non_lp_formats:
-                        try:
-                            total_qty += int(f.get('qty', 1))
-                        except (ValueError, TypeError):
-                            total_qty += 1
-                    
-                    # Fallback check in text blob
-                    if total_qty <= 1:
-                        if "2 x" in vinyl_blob or "2x" in vinyl_blob: total_qty = 2
-                        elif "3 x" in vinyl_blob or "3x" in vinyl_blob: total_qty = 3
-                    
-                    qty_str = f"{total_qty}x" if total_qty > 1 else ""
-
-                    speed = "45 RPM" if "45 RPM" in vinyl_blob else ""
-                    sizes = [s for s in ['7"', '10"', '12"'] if s in vinyl_blob]
-                    if not sizes and has_album: sizes = ['12"']
-                    
-                    # Extract tags (Reissue, etc) for non-LP vinyl
-                    other_tags = []
-                    post_fm_tags = []
-
-                    if "Reissue" in vinyl_blob: other_tags.append("Reissue")
-                    if "Remastered" in vinyl_blob: other_tags.append("Remastered")
-                    if "Picture Disc" in vinyl_blob: post_fm_tags.append("Picture Disc")
-                    if "Promo" in vinyl_blob: other_tags.append("Promo")
-                    if "Maxi-Single" in vinyl_blob: post_fm_tags.append("Maxi-Single")
-                    elif "Single" in vinyl_blob: post_fm_tags.append("Single")
-                    if "Mini-Album" in vinyl_blob: other_tags.append("Mini-Album")
-                    if re.search(r'\b180\s*g(ram)?s?\b', vinyl_blob, re.IGNORECASE): other_tags.append("180g")
-                    if re.search(r'\b200\s*g(ram)?s?\b', vinyl_blob, re.IGNORECASE): other_tags.append("200g")
-                    if re.search(r'\b140\s*g(ram)?s?\b', vinyl_blob, re.IGNORECASE): other_tags.append("140g")
-                    
-                    # Color Detection for Singles
-                    known_colors = ["Gold", "Silver", "Clear", "Red", "Blue", "White", "Green", "Yellow", "Pink", "Orange", "Purple", "Splatter", "Swirl", "Marble", "Teal", "Turquoise", "Black", "Brown", "Grey", "Gray", "Coke Bottle", "Translucent", "Transparent", "Crystal", "Rainbow", "Glow In The Dark", "Glow-in-the-Dark", "Glow", "Beige", "Cream", "Tan", "Violet", "Burgundy", "Magenta", "Peach", "Lime", "Rose", "Amber", "Neon"]
-                    
-                    settings = load_json_data("data.json")
-                    if settings and "Color" in settings and isinstance(settings["Color"], list):
-                        known_colors = settings["Color"]
-
-                    for color in known_colors:
-                        if re.search(r'\b' + re.escape(color) + r'\b', vinyl_blob, re.IGNORECASE):
-                            other_tags.append(color)
-                    
-
-                    ep_str = " EP" if re.search(r'\bEP\b', vinyl_blob, re.IGNORECASE) else ""
-
-                    if sizes:
-                        other_tags = sort_tags_by_settings(other_tags)
-                        size_str = ' & '.join(sizes)
-                        post_fm_str = " " + " ".join(post_fm_tags) if post_fm_tags else ""
-                        blocks.append(f"{' '.join(other_tags)} {speed} {qty_str}{size_str}{ep_str} Vinyl{post_fm_str}".strip())
-
-            # [Cassette Block]
-
-            cassette_formats = [f for f in raw_formats if f.get('name') == 'Cassette']
-            if cassette_formats:
-                total_qty = 0
-                for f in cassette_formats:
-                    try:
-                        total_qty += int(f.get('qty', 1))
-                    except (ValueError, TypeError):
-                        total_qty += 1
-                qty_str = f"{total_qty}x" if total_qty > 1 else ""
-                
-                cass_tags = []
-                exclusions = detected_global_editions + ["Cassette", "Album", "Box Set"]
-                exclusions = detected_global_editions + ["Cassette", "Album", "Box Set", "Stereo"]
-                for f in cassette_formats:
-                    raw_tags = list(f.get('descriptions', []))
-                    if f.get('text'):
-                        raw_tags.extend([t.strip() for t in re.split(r'[/,;]', f.get('text'))])
-                    
-                    for tag in raw_tags:
-                        tag = tag.strip()
-                        if tag and tag not in exclusions and tag not in cass_tags:
-                            cass_tags.append(tag)
-
-                if any(t.lower() in ['maxi-single', 'maxi single'] for t in cass_tags):
-                    cass_tags = [t for t in cass_tags if t.lower() != 'single']
-
-                cass_tags = sort_tags_by_settings(cass_tags)
-                blocks.append(f"{' '.join(cass_tags)} {qty_str}Cassette".strip().replace("  ", " "))
-
-            # [Video & Other Media Block]
-
-            target_others = ["DVD", "Blu-ray", "Blu-ray Audio", "DVD-Audio", "VHS", "Laserdisc", "Betamax", "HD DVD", "Minidisc"]
-            other_formats = [f for f in raw_formats if f.get('name') in target_others]
-            
-            other_groups = {}
-            for f in other_formats:
-                fname = f.get('name')
-                if fname not in other_groups: 
-                    other_groups[fname] = {'qty': 0, 'tags': []}
-                
-                try:
-                    other_groups[fname]['qty'] += int(f.get('qty', 1))
-                except:
-                    other_groups[fname]['qty'] += 1
-                
-                # Collect descriptions and text
-                raw_tags = list(f.get('descriptions', []))
-                if f.get('text'):
-                    raw_tags.extend([t.strip() for t in re.split(r'[/,;]', f.get('text'))])
-                
-                for tag in raw_tags:
-                    tag = tag.strip()
-                    if tag and tag not in other_groups[fname]['tags']:
-                        other_groups[fname]['tags'].append(tag)
-            
-            for fname, group_data in other_groups.items():
-                q = group_data['qty']
-                q_str = f"{q}x" if q > 1 else ""
-                
-                # Filter tags
-                tags = [t for t in group_data['tags'] if t not in detected_global_editions and t != fname and t not in ["Stereo", "Album", "Box Set"]]
-                
-                if any(t.lower() in ['maxi-single', 'maxi single'] for t in tags):
-                    tags = [t for t in tags if t.lower() != 'single']
-                if any(t.lower() in ['mini-album', 'mini album'] for t in tags):
-                    tags = [t for t in tags if t.lower() != 'album']
-
-                # Check for specific format overrides in tags (e.g. DVD-Video replacing DVD)
-                # If a tag starts with the format name (e.g. "DVD-Video" starts with "DVD"), use the tag as the format
-                override_fmt = None
-                for t in tags:
-                    if t.lower().startswith(fname.lower()) and len(t) > len(fname):
-                        override_fmt = t
-                        break
-                
-                if override_fmt:
-                    fname = override_fmt
-                    tags.remove(override_fmt)
-                
-                tags = sort_tags_by_settings(tags)
-
-                tag_str = " ".join(tags)
-                
-                blocks.append(f"{tag_str} {q_str}{fname}".strip().replace("  ", " "))
-
-            # [Box Set Assembly]
-
-            if "Box Set" in all_blob and blocks:
-                blocks[-1] = blocks[-1] + " Box Set"
-            
-            # Final String Construction
-            # Format: [Global Editions], [Format Blocks joined by +]
-            fmt_parts = ([global_editions_str] if global_editions_str else []) + [" + ".join([b for b in blocks if b])]
-            formats_str = ", ".join([p for p in fmt_parts if p])
-
-            
+            formats_str = ", ".join(_discogs_format_parts(data.get('formats')))
             if not formats_str: formats_str = "Unknown Format"
 
             tracks = data.get('tracklist', [])
@@ -1942,8 +1661,40 @@ async def scrape_discogs(url: str = Form(...)):
             
             released = data.get('released') or ""
             if released == "N/A": released = ""
+            # Discogs sends an ISO date ("2014-04-19"); the page shows
+            # "Apr 19, 2014", so match that.
+            released = _format_discogs_date(released)
 
-            raw_text_tool = f"{artist} - {album}\n{label_str}\nFormat: {formats_str}\nCountry: {country}\nReleased: {released}\nTrack Count: {track_count}\n\nTracklist\n{tracklist_str}"
+            # Genre and Style come straight from Discogs, in its own order.
+            genres = ", ".join([g for g in (data.get('genres') or []) if g])
+            styles = ", ".join([s for s in (data.get('styles') or []) if s])
+
+            # --- COLOUR ENGINE (vinyl / F0T) -- see docs/WORK_LOG.md entry 93 ---
+            # Store the pristine formats[0].text for this listing, plus the free
+            # text of every other Vinyl entry (a two-disc coloured release has
+            # one colour map per disc). Colour logic reads those and nothing else.
+            fmt_list = data.get('formats') or []
+            first_fmt = fmt_list[0] if fmt_list else {}
+            vinyl_texts = [f.get('text') for f in fmt_list
+                           if str(f.get('name') or '').strip().lower() == 'vinyl'
+                           and str(f.get('text') or '').strip()]
+            write_f0t_file(first_fmt.get('text') or "", vinyl_texts, fmt_list, [
+                f"title: {artist} - {album}",
+                f"formats[0].name: {first_fmt.get('name', '')}",
+                f"formats[0].descriptions: {', '.join(first_fmt.get('descriptions') or [])}",
+                f"vinyl entries: {len(vinyl_texts)}",
+                f"country: {country}",
+                f"released: {released}",
+            ])
+            # --- end COLOUR ENGINE (vinyl / F0T) -------------------------------
+
+
+            meta_lines = [label_str, f"Format: {formats_str}", f"Country: {country}", f"Released: {released}"]
+            if genres: meta_lines.append(f"Genre: {genres}")
+            if styles: meta_lines.append(f"Style: {styles}")
+            meta_lines.append(f"Track Count: {track_count}")
+
+            raw_text_tool = f"{artist} - {album}\n" + "\n".join(meta_lines) + f"\n\nTracklist\n{tracklist_str}"
 
             if is_master:
                 raw_text_tool = "--- Scraped via Master Release ---\n" + raw_text_tool
@@ -2017,23 +1768,30 @@ async def scrape_discogs(url: str = Form(...)):
                     if (typeof setCurrentItem === 'function') {{
                         setCurrentItem({json_item_title});
                     }}
-                    if (rawText) {{
-                        // Populate builder tab
-                        if (typeof parsePastedData === 'function') {{
+                    // COLOUR ENGINE: the vinyl colour phrase comes from
+                    // f0t_last.txt, so load it (and the dictionaries) before the
+                    // builder parses. Everything else runs as it always did.
+                    const finishScrape = function () {{
+                        const autoGen = document.getElementById('autoGenerateToggle');
+                        if (autoGen && autoGen.checked && typeof generateListingData === 'function') {{
+                            setTimeout(function () {{ generateListingData(); }}, 50);
+                        }}
+                    }};
+                    const runParse = function () {{
+                        if (rawText && typeof parsePastedData === 'function') {{
                             parsePastedData(rawText);
                         }}
+                        finishScrape();
+                    }};
+                    if (typeof prepareColourAssets === 'function') {{
+                        prepareColourAssets().then(runParse, runParse);
+                    }} else {{
+                        runParse();
                     }}
 
                     // Also refresh the history list automatically
                     if (window.htmx) htmx.trigger('#historyList', 'load');
 
-                    // Automatically generate listing data if Auto Generate is checked
-                    const autoGen = document.getElementById('autoGenerateToggle');
-                    if (autoGen && autoGen.checked && typeof generateListingData === 'function') {{
-                        setTimeout(() => {{
-                            generateListingData();
-                        }}, 50);
-                    }}
                 }})();
             </script>
             """

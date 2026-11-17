@@ -1,4 +1,5 @@
 import sys
+import io
 import socket
 import threading
 import sqlite3
@@ -43,6 +44,13 @@ PORT = args.port
 MY_NAME = args.name
 APP_VERSION = "2.0.0"
 
+# Tray bubble sizes: (label, pixels). The bubble once rendered the raw 574px
+# artwork at full size, so this is user-selectable now. All four are deliberately
+# generous - the bubble needs to be readable at a glance.
+TRAY_SIZE_OPTIONS = [('Small', 48), ('Medium', 72), ('Large', 96), ('Extra Large', 128)]
+TRAY_SIZE_LABELS = [label for label, _ in TRAY_SIZE_OPTIONS]
+TRAY_SIZE_BY_LABEL = dict(TRAY_SIZE_OPTIONS)
+TRAY_SIZE_DEFAULT = 72
 # --- USER & SETTINGS MANAGEMENT ---
 # Determine the actual folder where the app/script is running
 if getattr(sys, 'frozen', False):
@@ -638,6 +646,19 @@ def create_alert_icon(path):
             # is cosmetic, so never let this abort startup.
             pass
 
+def load_tray_icon_bytes(path, max_side=22):
+    """Tray-sized PNG bytes for the floating bubble.
+
+    The artwork in the bundle is ~574px wide; handing it to sg.Image made the
+    bubble enormous. Scale it down to something tray-like, keeping the aspect.
+    """
+    with Image.open(path) as im:
+        im = im.convert('RGBA')
+        im.thumbnail((max_side, max_side), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format='PNG')
+        return buf.getvalue()
+
 def load_global_groups():
     path = os.path.join(SHARED_PATH, "global_groups.json")
     if os.path.exists(path):
@@ -794,7 +815,7 @@ def get_menu_def(size):
     admin_opt = 'Manage Groups'
 
     return [
-        ['File', ['Minimize to Tray', 'Open Shared Files', 'Switch User', 'Exit']],
+        ['File', ['Minimize to Tray', 'Open Shared Files', ['Bubble Size', TRAY_SIZE_LABELS], 'Switch User', 'Exit']],
         ['Settings', ['Sent Color', 'Recv Color', 'App Theme Color',
                       'Font Size', [check(x, size) for x in size_opts]]],
         ['History', ['View History', 'Clear View']],
@@ -961,10 +982,21 @@ def main():
     alert_icon_path = resource_path("fyrlogo_alert.png")
     create_alert_icon(alert_icon_path)
 
+    # Bubble size: remembered between runs, chosen from File > Bubble Size or the
+    # bubble's own right-click menu.
+    try:
+        tray_icon_size = int(sg.user_settings_get_entry('-TRAY-ICON-SIZE-', TRAY_SIZE_DEFAULT) or TRAY_SIZE_DEFAULT)
+    except Exception:
+        tray_icon_size = TRAY_SIZE_DEFAULT
+    # Snap old or odd saved values onto one of the available sizes, so upgrades
+    # always land on the new (larger) set.
+    allowed_sizes = [px for _, px in TRAY_SIZE_OPTIONS]
+    if tray_icon_size not in allowed_sizes:
+        tray_icon_size = min(allowed_sizes, key=lambda px: abs(px - tray_icon_size))
+
     tray_icon_bytes = None
     try:
-        with open(window_icon_path, 'rb') as f:
-            tray_icon_bytes = f.read()
+        tray_icon_bytes = load_tray_icon_bytes(window_icon_path, tray_icon_size)
     except Exception as e:
         logging.error(f"Fatal: Could not load tray icon from {window_icon_path}: {e}")
         sg.popup_error(f"Fatal: Could not load tray icon.\n{e}", keep_on_top=True)
@@ -972,8 +1004,7 @@ def main():
 
     alert_icon_bytes = None
     try:
-        with open(alert_icon_path, 'rb') as f:
-            alert_icon_bytes = f.read()
+        alert_icon_bytes = load_tray_icon_bytes(alert_icon_path, tray_icon_size)
     except Exception as e:
         logging.warning(f"Could not load alert icon from {alert_icon_path}: {e}")
     
@@ -1074,7 +1105,8 @@ def main():
     # --- TRAY REPLACEMENT (Floating Window) ---
     def create_tray_window():
         loc = sg.user_settings_get_entry('-TRAY-LOC-', (None, None))
-        menu = ['', ['Restore', 'Run Wysiwyg', 'WysiScan', 'Update Apps', 'Exit']]
+        menu = ['', ['Restore', 'Run Wysiwyg', 'WysiScan', 'Update Apps', '---',
+                     ['Bubble Size', TRAY_SIZE_LABELS], '---', 'Exit']]
         
         # Use Magenta as transparency key to hide the window background
         bg_col = '#ff00ff'
@@ -1084,6 +1116,31 @@ def main():
         return w
 
     tray_window = create_tray_window()
+
+    def apply_bubble_size(px):
+        """Re-render the bubble icons at `px` and rebuild the little window."""
+        nonlocal tray_icon_bytes, alert_icon_bytes, tray_window, tray_icon_size
+        px = int(px)
+        tray_icon_size = px
+        try:
+            sg.user_settings_set_entry('-TRAY-ICON-SIZE-', px)
+        except Exception:
+            pass
+        try:
+            was_visible = bool(tray_window.TKroot.winfo_viewable())
+        except Exception:
+            was_visible = True
+        try:
+            tray_window.close()
+        except Exception:
+            pass
+        tray_icon_bytes = load_tray_icon_bytes(window_icon_path, px)
+        alert_icon_bytes = load_tray_icon_bytes(alert_icon_path, px)
+        tray_window = create_tray_window()
+        if was_visible:
+            tray_window.un_hide()
+        else:
+            tray_window.hide()
     if start_minimized:
         window.hide()
         tray_window.un_hide()
@@ -1183,6 +1240,11 @@ def main():
         
         if event not in (sg.TIMEOUT_EVENT, '__TIMEOUT__'):
             logging.debug(f"Event Fired: {event}")
+
+        # File > Bubble Size
+        if event in TRAY_SIZE_BY_LABEL:
+            apply_bubble_size(TRAY_SIZE_BY_LABEL[event])
+            continue
         
         # --- Handle Drag & Drop Event ---
         # if event == '-DROP-':
@@ -1252,6 +1314,8 @@ def main():
 
         # Check Tray Window Events
         tray_event, tray_values = tray_window.read(timeout=0)
+        if tray_event in TRAY_SIZE_BY_LABEL:
+            apply_bubble_size(TRAY_SIZE_BY_LABEL[tray_event])
         if tray_event == 'Exit':
             save_loc()
             break

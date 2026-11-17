@@ -1,3 +1,31 @@
+### v1.20.15.0 - 2026-11-16
+-- Details/HTML tab: the Format line now follows the Discogs page exactly - every item in Discogs' own order, repeats shown once and the word "Album" dropped. "Limited Edition Compilation Compilation, Pink Pink Marbled LP Vinyl" becomes "Vinyl, LP, Compilation, Limited Edition, Pink Marbled".
+-- Details/HTML tab: new Genre and Style lines, straight from the release page, so both show in LIVE PREVIEW and in the scraped text the builder pre-fills.
+-- Details/HTML tab: the label line now reads "Name - CAT#" ("Kanine Records - KR107"), and the release date is written the way Discogs shows it ("Apr 19, 2014" instead of "2014-04-19"). Partial dates keep what is known ("Apr 2014", "2014").
+-- Conditions: a plain click now toggles an item in the Media Condition and Sleeve Condition lists - no Ctrl needed. Right-click still opens the favourite menu.
+-- Conditions: a small ✕ beside each folder button clears that one list only; the sleeve ✕ also empties the LP/CD/Cassette/Box Set sleeve lists behind it, so no stale sleeve flaw is left in the description.
+-- Conditions: favouriting a Media Condition from its right-click menu now works - it was looking the entry up in the CD/LP/Cassette sleeve lists and quietly finding nothing.
+-- App: a page refresh - F5, the Refresh button or the menu's Refresh - now runs Reset All automatically, so the previous item's menus, conditions, SKU and description no longer come back with the reloaded page. Saved conditions and the box/lister profile are restored as usual.
+-- Conditions: Reset All now puts the Media Type back on LP instead of leaving it blank, which used to hide every condition row until a type was picked again.
+-- WysiScan: the Autoscan tick is remembered between runs.
+-- WysiScan: the slider values in Image Adjust are editable boxes with up/down arrows - type a number or spin it and the slider follows.
+-- WysiScan: Remove All takes the colour off without wiping the sliders - they show the selected preset's values (the Default ones) while the picture itself goes back to untouched.
+-- WysiScan: Reset Default is a proper button now, next to a new Zero Out that sets whichever preset is selected back to 0.
+-- WysiScan: Crop Mode names are renameable - right-click the radio that is currently selected and type a new name. Auto keeps its name, and renamed modes are remembered.
+-- WysiScan: the Menu button no longer scrolls away - it is docked in the empty strip on the left edge and stays in the same place, and opening Hot Keys closes the menu behind it.
+-- WysiScan: "CD/45 Front" no longer asks AI which way up the artwork is - it only levels the printed text, locally. A scan that comes off the bed quarter-turned is left that way rather than risked on a wrong 90-degree turn, which is what kept happening.
+-- WysiScan: Adjust Pad now auto-aligns before it applies the padding, so a tilted scan no longer gets its tilt baked into the new crop.
+-- WysiScan: Extract Text - right-click the Discogs button to search with Cat#, UPC or both. The UPC/barcode is sent without its spaces ("0 08817 00414 3" is searched as "008817004143"), and a new Barcode (no spaces) box shows exactly what the search uses, updating as the extracted fields are edited.
+-- Colour: on vinyl, the Colored (...) text is now built only from the Discogs italic free text (the format's free-text field), parsed against colourmap.json - colours, text mods and implied colours. Noise such as 180g, Gatefold, Stereo, Mono, Remastered, Club Edition and White Label is dropped from the bracket, and the phrase is taken wholesale: "Pink Marbled", "Red Translucent", "Blue/Grey Clear", "Sea Blue and Baby Pink Swirl + Splatter" (the word "and" becomes "&").
+-- Colour: multiple colours in a list are separated with "/" and no longer joined with "&" ("Red / Blue / Green"), while a complex phrase keeps the submitter's own "&", "+" or "with". A pre-existing "Colored" in the text is stripped so it can never nest.
+-- Colour: a release whose several vinyl discs each carry their own colour now stitches them inside one bracket with " + " - "Colored (Red & White Marble + White & Black Marble)" instead of only the first disc's colour.
+-- Colour: CD, cassette and every other medium keep exactly the old colour behaviour - the new engine is vinyl only, and it does nothing at all when the release contains no vinyl.
+-- Box sets: the media part of the description is rebuilt from the release's own format entries, in Discogs order, with a count whenever a medium repeats - "2xCD + NTSC DVD-Video + Colored (Green Starburst + ...) 3xLP Vinyl + 7" Box Set". Media modifiers such as Promo, NTSC, PAL, Multichannel and 45 RPM are written in front of their own medium, a format kind (Single, EP) is added after it, and Box Set closes the line.
+-- Box sets: a Format Tag that belongs to one medium is no longer lost or misplaced - "Reissue", "Remastered" and friends stay with the edition words, while "Promo" now appears with the 7" it belongs to instead of with the editions.
+-- Weight/Speed: "180 Gram 180 gram" no longer appears twice - the same weight was in the list with two capitalisations and both were selected.
+-- WysiChat: the bubble can be resized - Small, Medium, Large or Extra Large from the bubble's right-click menu or File > Bubble Size, remembered between runs.
+-- Installer: run_me_Installer.bat now reports every process it stopped or skipped (like kill_wysiwyg.bat), shuts down UberPaste as well, and says when it is deleting the old WYSIWYG backup - with a warning if that backup copy fails.
+
 ### v1.19.8.3 - 2026-11-13
 -- Chrome extension: on a Discogs marketplace listing page (/shop/item/...) the right-click menu reads "Send to Amazon Add" and opens the Adds > Amazon page in its own popup window, pre-loaded with that listing and scraped automatically; all other Discogs pages keep "Send Page to WYSIWYG Scraper".
 -- Chrome extension: sending a page or link to the scraper brings the WYSIWYG tab to the front (browser mode - the desktop app already raised itself).

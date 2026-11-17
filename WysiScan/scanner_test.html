@@ -36,14 +36,21 @@
             /* Keep high contrast buttons in dark mode too */
         }
 
-        /* Top bar: Menu button on the left (matches main app styling) */
+        /* Top bar: the Menu button is docked in the empty left gutter of the
+           window and never scrolls away. The topbar keeps its height so the
+           rest of the layout does not shift. */
         .app-topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            min-height: 26px;
             margin-bottom: 12px;
         }
         .menu-btn {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            z-index: 900;
             background: var(--accent-color, #FFFF00);
             color: var(--primary-color, #0000FF);
             border: 1px solid var(--primary-color, #0000FF);
@@ -508,7 +515,7 @@
             margin: 0;
             overflow: hidden;
         }
-        body.extract-mode > *:not(#cliModal):not(#toast-container) {
+        body.extract-mode > *:not(#cliModal):not(#toast-container):not(#discogsSearchMenu) {
             display: none !important;
         }
         body.extract-mode #cliModal {
@@ -633,6 +640,31 @@
             color: var(--accent, #6f42c1);
         }
 
+        /* The value is a real number box now: type in it, or use the little
+           spinner arrows (they appear on hover/focus). The global number-input
+           rule is a full-width form field, so it is overridden here. Width fits
+           three digits plus the sign and the arrows - no wider. */
+        #adjust-ui .adj-row input.adj-val {
+            width: 40px;
+            height: 15px;
+            margin: 0;
+            padding: 0 1px 0 2px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 10px;
+            line-height: 13px;
+            text-align: left;
+            background: var(--input-bg);
+            color: var(--accent, #6f42c1);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+
+        #adjust-ui .adj-row input.adj-val:focus {
+            outline: 1px solid var(--accent, #6f42c1);
+            outline-offset: -1px;
+        }
+
         /* Compact slider: 10px tall so the whole rail fits without scrolling. */
         #adjust-ui .adj-row input[type="range"] {
             -webkit-appearance: none;
@@ -692,22 +724,34 @@
             margin: 0;
         }
 
-        /* Low-key text button: it edits a preset, it is not a normal action. */
-        #adjust-ui .adj-presets .adj-reset-default {
-            align-self: flex-start;
-            margin: 2px 0 0 0;
-            padding: 0;
+        /* Two small buttons under the radios: they edit a preset, so they look
+           like the action row rather than a full-width nav button. */
+        #adjust-ui .adj-presets .adj-preset-actions {
+            display: flex;
+            gap: 3px;
+            margin-top: 2px;
+        }
+
+        #adjust-ui .adj-presets .adj-preset-btn {
+            flex: 1 1 0;
             min-width: 0;
-            background: none;
-            border: none;
-            color: var(--text-muted, #888);
-            font-size: 10px;
-            text-decoration: underline;
+            height: 13px;
+            padding: 0 3px;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--accent-color);
+            border-radius: 3px;
+            font-size: 8px;
+            font-weight: normal;
+            line-height: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             cursor: pointer;
         }
 
-        #adjust-ui .adj-presets .adj-reset-default:hover {
-            color: var(--accent, #6f42c1);
+        #adjust-ui .adj-presets .adj-preset-btn:hover {
+            border-color: var(--accent, #6f42c1);
         }
 
         /* ==== COMPACT TOP AREA (2026-10-27) ====
@@ -937,7 +981,7 @@
                 title="Pixels to pad (can be negative)">
             <button onclick="openPaddingModal()" title="Edit Padding Options"
                 style="padding: 6px 10px; background-color: #6c757d; color: white; border: none; min-width: auto; margin-right: 0;">⚙️</button>
-            <button id="recropBtn" onclick="recropLast(false)" title="Apply new padding to the active cropped image"
+            <button id="recropBtn" onclick="recropLast(false)" title="Auto-align the scan, then apply the new padding"
                 disabled>Adjust Pad</button>
             <label
                 style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 14px;">
@@ -954,13 +998,17 @@
                 style="display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; width: fit-content; font-size: 14px;">
                 <strong>Crop Mode:</strong>
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="auto" checked onchange="handleCropModeChange()"> Auto</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="cd" onchange="handleCropModeChange()"> CD Matrix</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="tape" onchange="handleCropModeChange()"> CD/45 Front</label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="radio"
-                        name="mediaType" value="lp" onchange="handleCropModeChange()"> Custom One</label>
+                        name="mediaType" value="auto" checked onchange="handleCropModeChange()"> <span
+                        class="crop-mode-name" data-mode="auto">Auto</span></label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Right-click while selected to rename"><input type="radio"
+                        name="mediaType" value="cd" onchange="handleCropModeChange()"> <span
+                        class="crop-mode-name" data-mode="cd">CD Matrix</span></label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Right-click while selected to rename"><input type="radio"
+                        name="mediaType" value="tape" onchange="handleCropModeChange()"> <span
+                        class="crop-mode-name" data-mode="tape">CD/45 Front</span></label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Right-click while selected to rename"><input type="radio"
+                        name="mediaType" value="lp" onchange="handleCropModeChange()"> <span
+                        class="crop-mode-name" data-mode="lp">Custom One</span></label>
             </div>
         </div>
 
@@ -1020,31 +1068,40 @@
                     <label title="Loaded when you pick it - applied only when you press Apply">
                         <input type="radio" name="adjPreset" value="custom2"
                             onchange="selectAdjustPreset('custom2')"> Custom Two</label>
-                    <button type="button" class="adj-reset-default" onclick="resetDefaultPreset()"
-                        title="Put the Default preset back to 0, so new scans are left as the scanner made them">Reset Default</button>
+                    <div class="adj-preset-actions">
+                        <button type="button" class="adj-preset-btn" onclick="resetDefaultPreset()"
+                            title="Put the Default preset back to 0, so new scans are left as the scanner made them">Zero Default</button>
+                        <button type="button" class="adj-preset-btn" onclick="zeroOutAdjustPreset()"
+                            title="Set every slider to 0 and store that in the selected preset">Zero Out</button>
+                    </div>
                 </div>
                 <label class="adj-row">
-                    <span class="adj-head">Brightness<span class="adj-val" id="adjBrightnessVal">0</span></span>
+                    <span class="adj-head">Brightness<input type="number" class="adj-val" id="adjBrightnessVal"
+                        min="-100" max="100" step="1" value="0" title="Type a value, or use the arrows"></span>
                     <input type="range" id="adjBrightness" min="-100" max="100" step="1" value="0"
                         oninput="adjustCssFilter()">
                 </label>
                 <label class="adj-row">
-                    <span class="adj-head">Contrast<span class="adj-val" id="adjContrastVal">0</span></span>
+                    <span class="adj-head">Contrast<input type="number" class="adj-val" id="adjContrastVal"
+                        min="-100" max="100" step="1" value="0" title="Type a value, or use the arrows"></span>
                     <input type="range" id="adjContrast" min="-100" max="100" step="1" value="0"
                         oninput="adjustCssFilter()">
                 </label>
                 <label class="adj-row">
-                    <span class="adj-head">Saturation<span class="adj-val" id="adjSaturationVal">0</span></span>
+                    <span class="adj-head">Saturation<input type="number" class="adj-val" id="adjSaturationVal"
+                        min="-100" max="100" step="1" value="0" title="Type a value, or use the arrows"></span>
                     <input type="range" id="adjSaturation" min="-100" max="100" step="1" value="0"
                         oninput="adjustCssFilter()">
                 </label>
                 <label class="adj-row">
-                    <span class="adj-head">Hue<span class="adj-val" id="adjHueVal">0</span></span>
+                    <span class="adj-head">Hue<input type="number" class="adj-val" id="adjHueVal"
+                        min="-180" max="180" step="1" value="0" title="Type a value, or use the arrows"></span>
                     <input type="range" id="adjHue" min="-180" max="180" step="1" value="0"
                         oninput="adjustCssFilter()">
                 </label>
                 <label class="adj-row">
-                    <span class="adj-head">Tint<span class="adj-val" id="adjTintVal">0</span></span>
+                    <span class="adj-head">Tint<input type="number" class="adj-val" id="adjTintVal"
+                        min="-100" max="100" step="1" value="0" title="Type a value, or use the arrows"></span>
                     <input type="range" id="adjTint" min="-100" max="100" step="1" value="0"
                         oninput="adjustCssFilter()">
                 </label>
@@ -1227,6 +1284,29 @@
                 <button onclick="closeRenameModal()"
                     style="padding: 6px 12px; font-size: 14px; background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; margin-right: 5px;">Cancel</button>
                 <button onclick="submitRename()"
+                    style="padding: 6px 12px; font-size: 14px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 0;">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename a Crop Mode label (right-click the radio that is selected) -->
+    <div id="cropModeRenameModal" class="ocr-modal" style="width: 340px;">
+        <div class="ocr-modal-content">
+            <div class="ocr-modal-header">
+                <h3 style="margin: 0;">Rename Crop Mode</h3>
+                <button onclick="closeCropModeRename()" class="close-btn" title="Close">&times;</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label for="cropModeRenameInput" style="font-weight: bold; display: block; margin-bottom: 5px;"
+                    id="cropModeRenameLabel">Name:</label>
+                <input type="text" id="cropModeRenameInput" maxlength="24"
+                    style="width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); border-radius: 4px;"
+                    onkeydown="if (event.key === 'Enter') submitCropModeRename();">
+            </div>
+            <div class="ocr-modal-footer">
+                <button onclick="closeCropModeRename()"
+                    style="padding: 6px 12px; font-size: 14px; background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; margin-right: 5px;">Cancel</button>
+                <button onclick="submitCropModeRename()"
                     style="padding: 6px 12px; font-size: 14px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 0;">Rename</button>
             </div>
         </div>
@@ -1619,27 +1699,59 @@
             return '';
         }
 
+        // Barcodes come out of an extraction with the grouping the package shows
+        // ("0 08817 00414 3"). Discogs wants one unbroken string, so everything
+        // that is not a letter or digit is dropped.
+        function cliNormBarcode(value) {
+            return String(value || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+        }
+
         // The extracted fields the Discogs search is built from.
         function cliDiscogsFields() {
             return {
                 artist: cliFieldValue(['band/artist', 'band name', 'artist', 'brand name']),
                 title: cliFieldValue(['album title', 'title', 'item name']),
                 catno: cliFieldValue(['catalog number', 'catalogue number', 'catalog #', 'catalogue #', 'cat#', 'catno']),
-                upc: cliFieldValue(['upc', 'upc/gtin', 'upc/gtin (scanned)', 'upc/gtin (text display)',
+                upc: cliNormBarcode(cliFieldValue(['upc', 'upc/gtin', 'upc/gtin (scanned)', 'upc/gtin (text display)',
                     'barcode', 'barcode (scanned)', 'barcode (text)', 'barcode number',
-                    'ean', 'gtin'])
+                    'ean', 'gtin']))
             };
         }
 
+        // Show the barcode exactly as the search will use it.
+        function refreshCliBarcodeBox() {
+            const box = document.getElementById('cliBarcodeBox');
+            if (!box) return;
+            const code = cliDiscogsFields().upc;
+            if (box.value !== code) box.value = code;
+        }
+
+        // Which extracted identifiers go into the search. A catalogue number is
+        // unique, so Cat# narrows; the same barcode is reused across pressings,
+        // so UPC alone widens; both is the most specific (and the default).
+        const DISCOGS_PART_OPTIONS = [
+            { key: 'catno', label: 'Cat# + Artist/Title' },
+            { key: 'upc', label: 'UPC + Artist/Title' },
+            { key: 'both', label: 'Both (Cat# + UPC)' }
+        ];
+        let discogsSearchParts = 'both';
+
         // Search the Discogs marketplace for the extracted item.
         // The marketplace search takes ONE free-text query (q) — its per-field
-        // filters are internal IDs, not names — so every extracted identifier is
+        // filters are internal IDs, not names — so every chosen identifier is
         // folded into that string: Band/Artist Album Title Catalog# UPC/Barcode.
         // The results page is /sell/list (the /sell marketplace search); the
         // newer /shop/list renders the redesigned shop UI instead.
+        function discogsQueryText(f) {
+            const parts = [f.artist, f.title];
+            if (discogsSearchParts !== 'upc') parts.push(f.catno);
+            if (discogsSearchParts !== 'catno') parts.push(f.upc);
+            return parts.filter(Boolean).join(' ').trim();
+        }
+
         function searchDiscogsMarketplace() {
             const f = cliDiscogsFields();
-            const query = [f.artist, f.title, f.catno, f.upc].filter(Boolean).join(' ').trim();
+            const query = discogsQueryText(f);
             if (!query) {
                 showToast('Nothing to search - run an extraction first.', 'warn');
                 return;
@@ -1649,6 +1761,84 @@
             // Named window: subsequent searches reuse the same tab.
             const win = window.open(url, 'DiscogsMarketplaceSearch');
             if (win) win.focus();
+        }
+
+        // --- Right-click menu on the Discogs button --------------------------
+        function closeDiscogsSearchMenu() {
+            const menu = document.getElementById('discogsSearchMenu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        function openDiscogsSearchMenu(ev) {
+            ev.preventDefault();
+            const menu = document.getElementById('discogsSearchMenu');
+            const btn = document.getElementById('cliDiscogsBtn');
+            if (!menu || !btn) return;
+
+            menu.innerHTML = '';
+            DISCOGS_PART_OPTIONS.forEach(opt => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.textContent = (opt.key === discogsSearchParts ? '\u2713  ' : '\u2003  ') + opt.label;
+                item.style.cssText = 'display:block;width:100%;text-align:left;padding:5px 8px;background:transparent;border:none;border-radius:3px;color:var(--text-main);font-size:12px;cursor:pointer;';
+                item.addEventListener('mouseenter', () => { item.style.background = 'rgba(127,127,127,0.22)'; });
+                item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+                item.addEventListener('click', () => {
+                    discogsSearchParts = opt.key;
+                    closeDiscogsSearchMenu();
+                    saveDiscogsSearchParts();
+                    updateCliDiscogsBtn();
+                });
+                menu.appendChild(item);
+            });
+
+            // Open above the button when there is no room below it.
+            const rect = btn.getBoundingClientRect();
+            menu.style.display = 'block';
+            const h = menu.offsetHeight || 90;
+            const w = menu.offsetWidth || 180;
+            const top = (rect.bottom + h + 4 > window.innerHeight) ? Math.max(4, rect.top - h - 2) : rect.bottom + 2;
+            const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4));
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+        }
+
+        async function saveDiscogsSearchParts() {
+            try {
+                await fetch('/update-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ discogs_search_parts: discogsSearchParts })
+                });
+            } catch (err) { console.error('Failed to save the Discogs search mode', err); }
+        }
+
+        // Wire the right-click menu and remember the last choice.
+        function initDiscogsUi() {
+            const btn = document.getElementById('cliDiscogsBtn');
+            if (btn && btn.dataset.discogsMenu !== 'on') {
+                btn.dataset.discogsMenu = 'on';
+                btn.addEventListener('contextmenu', openDiscogsSearchMenu);
+            }
+            if (!document.body.dataset.discogsMenuClick) {
+                document.body.dataset.discogsMenuClick = 'on';
+                document.addEventListener('mousedown', (e) => {
+                    const menu = document.getElementById('discogsSearchMenu');
+                    if (menu && menu.style.display === 'block' && !menu.contains(e.target)) closeDiscogsSearchMenu();
+                });
+            }
+            // Editing an extracted field updates the barcode box straight away.
+            const results = document.getElementById('cliResultBox');
+            if (results && results.dataset.barcodeWatch !== 'on') {
+                results.dataset.barcodeWatch = 'on';
+                results.addEventListener('input', refreshCliBarcodeBox);
+            }
+            fetch('/config').then(r => r.json()).then(cfg => {
+                if (cfg && DISCOGS_PART_OPTIONS.some(o => o.key === cfg.discogs_search_parts)) {
+                    discogsSearchParts = cfg.discogs_search_parts;
+                }
+                updateCliDiscogsBtn();
+            }).catch(() => { });
         }
 
         // The Discogs button stays disabled until an extraction provides fields.
@@ -1661,8 +1851,9 @@
             btn.style.opacity = hasData ? '1' : '0.5';
             btn.style.cursor = hasData ? 'pointer' : 'not-allowed';
             btn.title = hasData
-                ? 'Search the Discogs marketplace for this item'
+                ? 'Search the Discogs marketplace - right-click to choose Cat# / UPC / both'
                 : 'Run an extraction first';
+            refreshCliBarcodeBox();
         }
 
         async function submitCliPrompt() {
@@ -1902,6 +2093,75 @@
             }
         }
 
+        // --- Crop Mode labels: right-click the selected radio to rename it -----
+        // Only the wording changes. The values (auto/cd/tape/lp) stay put, since
+        // they select the processing and the per-mode padding, and Auto cannot be
+        // renamed at all.
+        const CROP_MODE_DEFAULT_NAMES = {
+            auto: 'Auto', cd: 'CD Matrix', tape: 'CD/45 Front', lp: 'Custom One'
+        };
+        let cropModeNames = { ...CROP_MODE_DEFAULT_NAMES };
+        let cropModeRenameMode = null;
+
+        function applyCropModeNames(names) {
+            cropModeNames = { ...CROP_MODE_DEFAULT_NAMES, ...(names || {}) };
+            document.querySelectorAll('.crop-mode-name').forEach(el => {
+                const key = el.dataset.mode;
+                if (cropModeNames[key]) el.textContent = cropModeNames[key];
+            });
+        }
+
+        function wireCropModeRenaming() {
+            document.querySelectorAll('input[name="mediaType"]').forEach(input => {
+                if (input.value === 'auto') return;      // Auto keeps its name
+                const label = input.closest('label');
+                if (!label) return;
+                label.addEventListener('contextmenu', (e) => {
+                    if (!input.checked) return;          // only the selected one renames
+                    e.preventDefault();
+                    openCropModeRename(input.value);
+                });
+            });
+        }
+
+        function openCropModeRename(mode) {
+            cropModeRenameMode = mode;
+            const current = cropModeNames[mode] || '';
+            const label = document.getElementById('cropModeRenameLabel');
+            if (label) label.textContent = `Name for this mode (was "${current}"):`;
+            const input = document.getElementById('cropModeRenameInput');
+            if (input) input.value = current;
+            const modal = document.getElementById('cropModeRenameModal');
+            if (modal) modal.style.display = 'flex';
+            if (input) { input.focus(); input.select(); }
+        }
+
+        function closeCropModeRename() {
+            cropModeRenameMode = null;
+            const modal = document.getElementById('cropModeRenameModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitCropModeRename() {
+            const input = document.getElementById('cropModeRenameInput');
+            const mode = cropModeRenameMode;
+            if (!input || !mode) return;
+            const name = input.value.trim();
+            if (!name) return;                           // an empty name would hide the mode
+            cropModeNames[mode] = name;
+            applyCropModeNames(cropModeNames);
+            closeCropModeRename();
+            try {
+                await fetch('/update-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ crop_mode_names: cropModeNames })
+                });
+            } catch (err) { console.error('Failed to save crop mode names', err); }
+        }
+
+        wireCropModeRenaming();
+
         const defaultHotkeys = {
             scan: { key: '.', code: 'Period', ctrl: false, alt: false, shift: false, description: 'Scan/Add to Group' },
             recropLast: { key: '/', code: 'Slash', ctrl: false, alt: false, shift: false, description: 'Recrop Last Image' },
@@ -1916,7 +2176,12 @@
             paddingDown: { key: 'ArrowDown', code: 'ArrowDown', ctrl: false, alt: false, shift: false, description: 'Decrease Padding' }
         };
 
-        function openHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
+        // The Hot Keys window opens over the page, so the menu that opened it
+        // must not stay behind it (it used to sit under the modal's backdrop).
+        function openHelpModal() {
+            closeWysiScanDrawer();
+            document.getElementById('helpModal').style.display = 'flex';
+        }
         function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
 
         // Hamburger drawer (Hot Keys / Theme / Exit)
@@ -2766,7 +3031,6 @@
             // Prioritize the original scan as the source to ensure high quality 
             // and prevent "same file" errors where the source and target paths are identical.
             const sourcePath = lastOriginalPath || lastCroppedPath;
-
             if (!sourcePath) {
                 showToast(useOriginal ? "Original image not available." : "No image available to recrop.", "warn")
                 return;
@@ -2797,6 +3061,17 @@
 
             const padding = document.getElementById('cropPadding').value;
             const mediaType = document.querySelector('input[name="mediaType"]:checked').value;
+
+            // Adjust Pad aligns first: re-cropping a tilted scan just bakes the
+            // tilt into the new crop. The align works on the original, which is
+            // the file the crop is taken from. "Crop" (back to original) is left
+            // exactly as before - it is not a padding change.
+            if (!useOriginal && lastOriginalPath) {
+                const alignMsg = await deskewFile(lastOriginalPath, 0);
+                // Only a real rotation replaces the image. "Already aligned."
+                // leaves the pixels - and the tilt baked into them - alone.
+                if (alignMsg && alignMsg !== 'Already aligned.') tiltShow(0);
+            }
 
             try {
                 const response = await fetch('/recrop', {
@@ -3264,6 +3539,7 @@
         // Load configuration on startup
         let lastScanSaveLoc = '';
         window.addEventListener('DOMContentLoaded', async () => {
+            initDiscogsUi();
             // Extract Text window: skip the scanner boot (config, gallery, hotkeys)
             // and just bring up the panel.
             if (isExtractWindow()) {
@@ -3327,6 +3603,14 @@
                 if (config.auto_delete_original !== undefined) {
                     document.getElementById('autoDeleteOriginal').checked = config.auto_delete_original;
                 }
+                // Autoscan is remembered between runs too.
+                if (config.auto_scan !== undefined) {
+                    document.getElementById('autoScanCheckbox').checked = !!config.auto_scan;
+                }
+                // Any renamed Crop Mode labels.
+                if (config.crop_mode_names && typeof config.crop_mode_names === 'object') {
+                    applyCropModeNames(config.crop_mode_names);
+                }
                 // Presets load last so the sliders land on the user's Default values.
                 if (config.adjust_presets && typeof config.adjust_presets === 'object') {
                     ADJ_PRESETS.forEach(name => {
@@ -3374,6 +3658,17 @@
                         body: JSON.stringify({ auto_delete_original: e.target.checked })
                     });
                 } catch (err) { console.error("Failed to save config", err); }
+            });
+
+            // Remember the Autoscan tick between runs
+            document.getElementById('autoScanCheckbox').addEventListener('change', async (e) => {
+                try {
+                    await fetch('/update-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ auto_scan: e.target.checked })
+                    });
+                } catch (err) { console.error("Failed to save autoscan setting", err); }
             });
 
             // Init Theme
@@ -3530,7 +3825,12 @@
 
             ADJ_KEYS.forEach(k => {
                 const out = document.getElementById('adj' + k + 'Val');
-                if (out) out.textContent = adjValue(k);
+                if (!out) return;
+                const v = adjValue(k);
+                // The box is editable now, so never overwrite what is being
+                // typed - only push the slider's value in when it differs.
+                if (document.activeElement === out) return;
+                if (String(v) !== out.value) out.value = v;
             });
 
             // Any real slider move is remembered in the selected preset.
@@ -3579,6 +3879,40 @@
             adjustCssFilter();
             adjustPresetLoading = false;
         }
+
+        // --- Editable value boxes -------------------------------------------
+        // Each number box is a twin of its slider: typing in it (or spinning the
+        // arrows) moves the slider, and the slider moves the box. "[...]" while
+        // typing is left alone so a half-typed "-" or "" is not forced to 0.
+        function wireAdjustValueBoxes() {
+            ADJ_KEYS.forEach(k => {
+                const box = document.getElementById('adj' + k + 'Val');
+                const slider = document.getElementById('adj' + k);
+                if (!box || !slider) return;
+
+                box.addEventListener('input', () => {
+                    const v = parseInt(box.value, 10);
+                    if (box.value === '' || isNaN(v)) return;   // mid-typing
+                    slider.value = v;                            // clamps to min/max
+                    adjustCssFilter();
+                });
+
+                // Fires on blur, Enter and every spinner click: snap the text to
+                // whatever the slider actually accepted.
+                box.addEventListener('change', () => {
+                    const v = parseInt(box.value, 10);
+                    slider.value = isNaN(v) ? 0 : v;
+                    box.value = slider.value;
+                    adjustCssFilter();
+                });
+
+                box.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
+                });
+            });
+        }
+
+        wireAdjustValueBoxes();
 
         // Remember what is already in the pixels, so the preview stays honest.
         function setAdjustApplied(values) {
@@ -3669,6 +4003,29 @@
             showToast('Default preset set to 0 - new scans are left as scanned.', 'success');
         }
 
+        // Zero Out: the same idea, but for whichever preset is selected - the
+        // sliders go to 0 and that is stored in the radio's slot.
+        async function zeroOutAdjustPreset() {
+            const zeros = { brightness: 0, contrast: 0, saturation: 0, hue: 0, tint: 0 };
+            const name = adjustPresetName;
+            adjustPresets[name] = zeros;
+
+            clearTimeout(adjustPresetTimer);
+            adjustPresetPending = null;
+
+            adjustPresetLoading = true;
+            ADJ_KEYS.forEach(k => {
+                const el = document.getElementById('adj' + k);
+                if (el) el.value = 0;
+            });
+            adjustCssFilter();
+            adjustPresetLoading = false;
+
+            await postAdjustPreset(name, zeros);
+            const label = { default: 'Default', custom1: 'Custom One', custom2: 'Custom Two' }[name] || name;
+            showToast(`${label} preset zeroed.`, 'success');
+        }
+
         // Adjustments go to BOTH copies: the original you preview on, and the
         // cropped output that gets saved/uploaded - otherwise the two would drift.
         function adjustTargetPaths() {
@@ -3756,10 +4113,14 @@
             }
 
             if (restored) {
-                // Nothing colour is left in the pixels now, and the sliders go
-                // back to zero so they describe the picture again.
-                setAdjustApplied({});
-                resetImageAdjustSliders();
+                // The pixels are untouched now, but Remove All does not forget the
+                // preset: the sliders go back to whatever the selected radio holds,
+                // so the Default values stay visible instead of reading as zeros.
+                // Marking those same values as "already applied" keeps the preview
+                // honest - it shows the plain scan rather than re-applying them.
+                const presetValues = adjustPresets[adjustPresetName] || {};
+                selectAdjustPreset(adjustPresetName);
+                setAdjustApplied(presetValues);
                 showToast(restored > 1 ? 'Colour settings removed from both images - rotation and tilt kept.'
                     : 'Colour settings removed - rotation and tilt kept.', 'success');
             } else if (notRemoved) {
@@ -3908,6 +4269,27 @@
             }
         }
 
+        // One file through /auto-deskew. True when the server accepted it.
+        // Shared by Auto-Align and by Adjust Pad, which aligns before re-cropping.
+        async function deskewFile(path, padding) {
+            try {
+                const resp = await fetch('/auto-deskew', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path, padding: padding })
+                });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    refreshImageElements(path, res.new_url);
+                    return res.message || 'done';
+                }
+                showToast(`Error aligning ${path.split(/[\\/]/).pop()}: ${res.message}`, "error")
+            } catch (e) {
+                showToast(`Network error aligning ${path.split(/[\\/]/).pop()}: ${e}`, "error")
+            }
+            return null;
+        }
+
         async function autoDeskew() {
             const padding = document.getElementById('cropPadding').value;
             const pathsToDeskew = [];
@@ -3926,23 +4308,8 @@
             btn.disabled = true;
 
             for (const path of pathsToDeskew) {
-                try {
-                    const isOriginal = (path === lastOriginalPath);
-                    const effectivePadding = isOriginal ? 0 : padding;
-                    const resp = await fetch('/auto-deskew', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: path, padding: effectivePadding })
-                    });
-                    const res = await resp.json();
-                    if (res.status === 'success') {
-                        refreshImageElements(path, res.new_url);
-                    } else {
-                        showToast(`Error aligning ${path.split(/[\\/]/).pop()}: ${res.message}`, "error")
-                    }
-                } catch (e) {
-                    showToast(`Network error aligning ${path.split(/[\\/]/).pop()}: ${e}`, "error")
-                }
+                const isOriginal = (path === lastOriginalPath);
+                await deskewFile(path, isOriginal ? 0 : padding);
             }
 
             // Auto-Align replaces the image, so the absolute tilt starts again.
@@ -4338,6 +4705,15 @@
                 </div>
             </div>
 
+            <!-- Barcode as the marketplace wants it: one run of characters, no spaces. -->
+            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                <label for="cliBarcodeBox"
+                    style="font-weight: bold; font-size: 13px; white-space: nowrap;">Barcode (no spaces):</label>
+                <input type="text" id="cliBarcodeBox" readonly placeholder="UPC/GTIN appears here after an extraction"
+                    title="UPC/GTIN with the spaces and hyphens removed - this is what a Discogs search uses"
+                    style="flex: 1 1 auto; padding: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace; letter-spacing: 0.04em;">
+            </div>
+
             <div class="ocr-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="cliStatusMsg" style="font-size: 12px; color: var(--primary-text);"></span>
                 <div>
@@ -4354,6 +4730,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Right-click menu for the Discogs button: which identifiers to search -->
+    <div id="discogsSearchMenu"
+        style="display:none;position:fixed;z-index:3000;min-width:180px;padding:3px;background:var(--bg-container);color:var(--text-main);border:1px solid var(--border-color);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.35);">
     </div>
 </body>
 
