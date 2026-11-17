@@ -1,13 +1,13 @@
 [F0T]
-
+Red Transparent
 [F0T MAPS]
-Blue
+Red Transparent
 [FORMATS]
-[{"name":"CD","qty":"6","descriptions":["AVCD","Album","Remastered"]},{"name":"DVD","qty":"2","descriptions":["DVD-Video","NTSC"]},{"name":"Vinyl","qty":"1","descriptions":["7\"","45 RPM","Single","Promo"],"text":"Blue"},{"name":"Box Set","qty":"1","descriptions":["Compilation"]}]
+[{"name":"Vinyl","qty":"1","descriptions":["LP","Album","Reissue","Stereo"],"text":"Red Transparent"}]
 [NOTES]
-title: The Moody Blues - The Polydor Years 1986-1992
-formats[0].name: CD
-formats[0].descriptions: AVCD, Album, Remastered
+title: The Cult - Love
+formats[0].name: Vinyl
+formats[0].descriptions: LP, Album, Reissue, Stereo
 vinyl entries: 1
 country: Europe
-released: 2014
+released: Feb 24, 2023

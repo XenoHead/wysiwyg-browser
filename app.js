@@ -9,9 +9,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         location.reload(true);
         return;
     }
-    // Awaited so the selects really are populated before the load-time Reset All
-    // below clears them (it used to run alongside this fetch).
-    await initializeDropdowns();
+    // Started here rather than awaited: the selects are populated on the same tick
+    // the settings arrive, and the Reset All hooks below can be registered first.
+    // The reset still waits for this promise before it runs, because it needs the
+    // options to exist before it can put the saved conditions back into them.
+    const dropdownsReady = initializeDropdowns();
+
+    // A page refresh - F5, the Refresh button or the drawer's Refresh - counts as
+    // Reset All. Chromium re-applies the old form state just AFTER DOMContentLoaded,
+    // so clearing here would simply be undone: wait for the load event (with a
+    // backstop in case a resource never finishes) and clear once, there.
+    //
+    // Registered BEFORE any await. It used to be registered after /settings, so a
+    // settings fetch slower than the page missed an already-fired `load` and fell
+    // through to the 3 s backstop - the menus sat there stale the whole time. A
+    // page that is already complete now runs the reset on the next tick instead.
+    let resetOnLoadDone = false;
+    const resetOnLoad = () => {
+        if (resetOnLoadDone) return;
+        resetOnLoadDone = true;
+        Promise.resolve(dropdownsReady)
+            .then(() => fullReset())
+            .catch(e => console.error('Reset All on load failed:', e));
+    };
+    if (document.readyState === 'complete') {
+        setTimeout(resetOnLoad, 0);
+    } else {
+        window.addEventListener('load', () => setTimeout(resetOnLoad, 0), { once: true });
+        // Backstop for a resource that never finishes. It only has to outlast
+        // Chromium's own form restore, which happens just after DOMContentLoaded,
+        // so it no longer waits 3 s while the previous item is still on screen.
+        setTimeout(resetOnLoad, 1500);
+    }
+
+    await dropdownsReady;
     loadAppVersion();
     loadProfile();
     loadMediaFormats();
@@ -24,19 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup Event Listeners
     setupEventListeners();
     initHotkeys();
-
-    // A page refresh - F5, the Refresh button or the drawer's Refresh - counts as
-    // Reset All. Chromium re-applies the old form state just AFTER DOMContentLoaded,
-    // so clearing here would simply be undone: wait for the load event (with a
-    // backstop in case a resource never finishes) and clear once, there.
-    let resetOnLoadDone = false;
-    const resetOnLoad = () => {
-        if (resetOnLoadDone) return;
-        resetOnLoadDone = true;
-        fullReset().catch(e => console.error('Reset All on load failed:', e));
-    };
-    window.addEventListener('load', () => setTimeout(resetOnLoad, 0), { once: true });
-    setTimeout(resetOnLoad, 3000);
 
     // Hide the "Settings Editor" menu option if the admin file (allpass.json)
     // is not present in the working directory.
@@ -3837,6 +3855,9 @@ function renderConditionMultiselects() {
     
     // Helper to render a multiselect
     const renderSelect = (select, selectedKeys, data, visibleType) => {
+        // Emptying the list resets its scroll to the top, so a re-render would
+        // move the user away from wherever they were in a long condition list.
+        const scrollTop = select.scrollTop;
         select.innerHTML = '';
         data.forEach(({ opt, type }) => {
             const option = document.createElement('option');
@@ -3850,6 +3871,7 @@ function renderConditionMultiselects() {
             }
             select.appendChild(option);
         });
+        select.scrollTop = scrollTop;
     };
     
     // Get currently selected keys from the new multiselects (to preserve selection on re-render)
@@ -3886,7 +3908,12 @@ function enableClickToggle(select) {
         const option = (e.target && e.target.tagName === 'OPTION') ? e.target : null;
         if (!option || option.disabled) return;
         e.preventDefault();              // stop the browser resetting the selection
+        // Chrome also scrolls a listbox to its active option on click, which yanks
+        // a long list back to the top. The click finishes after this handler, so
+        // the scroll position is put back on the next frame.
+        const scrollTop = select.scrollTop;
         option.selected = !option.selected;
+        requestAnimationFrame(() => { select.scrollTop = scrollTop; });
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 

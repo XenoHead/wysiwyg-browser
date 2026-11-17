@@ -8842,5 +8842,98 @@
       "source": "cli",
       "timestamp": "2026-11-14T15:05:23.624Z"
     }
+  },
+  {
+    "id": "f6ed53ee-9597-4515-8529-41e34633aef0",
+    "question": "Why roll .continuity/SESSION_NOTES.md forward to 1.20.15.0?",
+    "answer": "The notes still described the 2026-07/2026-10 Walmart-Exporter era and 1.15.3.18, five versions behind. They now reflect 1.20.15.0 (2026-11-16 release), the current artefacts, the restart/rebuild gotchas, and a pointer to docs/WORK_LOG.md for history. Prior sections remain in git history.",
+    "timestamp": "2026-11-17T15:30:31.795Z",
+    "tags": [
+      "continuity notes",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:30:31.796Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [
+        "rest",
+        "git"
+      ],
+      "patterns": [],
+      "concepts": []
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:30:31.792Z"
+    }
+  },
+  {
+    "id": "4987e772-1e6e-4d34-a016-fa542f6ceccf",
+    "question": "Why does the refresh Reset All no longer use the 3 s fallback?",
+    "answer": "The load listener and 3 s backstop were registered after awaiting /settings, so a slow settings fetch missed an already-fired load event and the previous item's menus stayed on screen until the timer ran. The settings promise now starts first, the hooks are registered immediately, the reset awaits that promise itself, readyState=complete runs on the next tick, and the backstop is 1500 ms. The remaining delay is the parser-blocking htmx CDN script; Scott chose not to vendor it for now.",
+    "timestamp": "2026-11-17T15:36:40.419Z",
+    "tags": [
+      "ui startup",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-17T15:36:40.419Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "cdn"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-17T15:36:40.415Z"
+    }
   }
 ]

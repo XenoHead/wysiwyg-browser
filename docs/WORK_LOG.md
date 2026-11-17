@@ -1892,6 +1892,36 @@ the `effectiveSleeveType()` calls in the modal and the `userChanged` reset on th
 - Build warnings: `Hidden import 'Xeno_ui.about' / 'Xeno_ui.theme' not found`. Harmless - `main.py` imports
   `Xeno_ui.about` lazily inside the About handler and the module itself ships via `--add-data "C:/Git/Xeno_ui;Xeno_ui"`.
 
+### 99. `.continuity/SESSION_NOTES.md` rolled forward to 1.20.15.0
+**Files:** `.continuity/SESSION_NOTES.md` (+ `.continuity/decisions.json` via `continuity log`)
+- Cause: the notes were last written for 1.15.3.18 (27 Oct) and still listed the retired Walmart Exporter
+  goals, so a new session loaded five versions of stale context. `unfinished-task.json` and
+  `working-memory.json` are older still (12 May, and point at `C:\Git\WysiWyg`, the wrong repo).
+- Rewritten to the current state: 1.20.15.0 release, what the batch shipped, the 16 Nov artefacts,
+  rebuild order, the restart/rebuild map, protected areas, logging conventions, and a pointer to
+  entries 1-98 here for history. Prior note sections remain on the previous revision of the file in git.
+- Not touched: the two Continuity-generated JSONs above (extension-owned; stale but overwritten on
+  its next run). `AGENTS.md`'s embedded "Total Decisions: 5" block is likewise stale - the log holds 244.
+- Only docs changed - nothing to restart.
+
+### 100. Reset All after a refresh - the 3 s fallback is gone
+**Files:** `app.js` (`DOMContentLoaded` init)
+- Cause: the `load` listener and the 3 s backstop were registered *after* `await initializeDropdowns()`.
+  When `/settings` took longer than the page did, `load` had already fired, so the listener never ran and
+  the only path left was the 3 s timer - the previous item's menus sat on screen until it fired.
+- Fix: `initializeDropdowns()` is started (not awaited) first, the reset hooks are registered immediately,
+  and the reset awaits that settings promise itself, so the selects are still populated before
+  `fullReset()` puts the saved conditions back. `document.readyState === 'complete'` now runs the reset on
+  the next tick instead of waiting for an event that has already happened, and the backstop is 1500 ms -
+  it only has to outlast Chromium's form restore (just after DOMContentLoaded), not a slow resource.
+- Not changed (Scott's call, 17 Nov): `index.html` loads htmx 1.9.10 + json-enc from unpkg,
+  parser-blocking, so `load` still waits on the CDN - measured 246-734 ms per request from this machine.
+  Vendoring them locally is the remaining lever if it ever matters. Do not `defer`/`async` them as a
+  shortcut: the submit handler checks `window.htmx` at submit time, but the `load` event itself is what
+  would need re-timing.
+- Verified: `node --check app.js`. Browser behaviour is Scott's to test. `app.js` is served no-cache, so
+  Ctrl+F5 is enough - no app restart.
+
 ---
 
 ## Notes / gotchas

@@ -25,6 +25,7 @@
 -- Weight/Speed: "180 Gram 180 gram" no longer appears twice - the same weight was in the list with two capitalisations and both were selected.
 -- WysiChat: the bubble can be resized - Small, Medium, Large or Extra Large from the bubble's right-click menu or File > Bubble Size, remembered between runs.
 -- Installer: run_me_Installer.bat now reports every process it stopped or skipped (like kill_wysiwyg.bat), shuts down UberPaste as well, and says when it is deleting the old WYSIWYG backup - with a warning if that backup copy fails.
+-- App: a refresh no longer leaves the previous item's menus on screen while the settings load - Reset All now starts as soon as the page finishes loading instead of falling through to a 3-second safety timer.
 
 ### v1.19.8.3 - 2026-11-13
 -- Chrome extension: on a Discogs marketplace listing page (/shop/item/...) the right-click menu reads "Send to Amazon Add" and opens the Adds > Amazon page in its own popup window, pre-loaded with that listing and scraped automatically; all other Discogs pages keep "Send Page to WYSIWYG Scraper".
