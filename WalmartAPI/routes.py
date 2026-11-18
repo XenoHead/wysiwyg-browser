@@ -21,10 +21,14 @@ wrapped -- a failed seller lookup is information, not an error.
 
 from __future__ import annotations
 
+import html
+import json
+import math
 import os
 import re
 import sys
 import threading
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body
@@ -96,6 +100,19 @@ def _catalog_items(payload: Any) -> List[Dict[str, Any]]:
     return []
 
 
+def _text(value: Any, limit: Optional[int] = None) -> str:
+    """Decode the HTML entities Walmart puts in its free text.
+
+    The catalog/search payloads come back with ``Obituary&apos;s`` and
+    ``&quot;senseless gurgles&quot;`` literally in the strings, so a page that
+    escapes for HTML renders the entity itself. Decode once, here, and both the
+    page and the raw JSON show real characters. The page still escapes on the way
+    back into the DOM, so this is not an XSS hole.
+    """
+    out = html.unescape(str(value if value is not None else ""))
+    return out[:limit] if limit else out
+
+
 def _summarise_catalog_item(item: Dict[str, Any]) -> Dict[str, Any]:
     props = item.get("properties") or {}
     images = item.get("images") or []
@@ -104,17 +121,18 @@ def _summarise_catalog_item(item: Dict[str, Any]) -> Dict[str, Any]:
         image = images[0].get("url", "")
     price = item.get("price")
     amount = price.get("amount") if isinstance(price, dict) else price
+    categories = props.get("categories") or []
     return {
         "itemId": item.get("itemId", ""),
-        "title": item.get("title", ""),
-        "brand": item.get("brand", ""),
-        "productType": item.get("productType", ""),
+        "title": _text(item.get("title")),
+        "brand": _text(item.get("brand")),
+        "productType": _text(item.get("productType")),
         "price": amount,
         "currency": (price or {}).get("currency") if isinstance(price, dict) else "USD",
         "isMarketPlaceItem": bool(item.get("isMarketPlaceItem")),
         "image": image,
-        "categories": props.get("categories") or [],
-        "description": (item.get("description") or "")[:600],
+        "categories": [_text(c) for c in categories],
+        "description": _text(item.get("description"), 600),
     }
 
 
@@ -141,16 +159,16 @@ def _summarise_seller_item(payload: Any) -> Optional[Dict[str, Any]]:
         "sku": row.get("sku", ""),
         "itemId": row.get("itemId", ""),
         "wpid": row.get("wpid", ""),
-        "productName": row.get("productName", ""),
+        "productName": _text(row.get("productName")),
         "price": price.get("amount"),
         "currency": price.get("currency", "USD"),
         "publishedStatus": row.get("publishedStatus", ""),
         "lifecycleStatus": row.get("lifecycleStatus", ""),
-        "unpublishedReasons": reason_list or [],
+        "unpublishedReasons": [_text(r) for r in (reason_list or [])],
         "availability": row.get("availability", ""),
-        "condition": row.get("condition", ""),
-        "productType": row.get("productType", ""),
-        "shelf": row.get("shelf", ""),
+        "condition": _text(row.get("condition")),
+        "productType": _text(row.get("productType")),
+        "shelf": _text(row.get("shelf")),
         "upc": row.get("upc", ""),
         "gtin": row.get("gtin", ""),
     }
@@ -260,3 +278,276 @@ async def walmart_api_lookup(data: dict = Body(...)) -> Any:
         "seller": {"found": bool(seller_item), "item": seller_item},
         "warnings": warnings,
     }
+
+
+# ------------------------------------------------------------ pending list --
+
+PENDING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pending.json")
+_pending_lock = threading.Lock()
+
+
+def _gtin14(digits: str) -> str:
+    return digits.zfill(14) if 0 < len(digits) <= 14 else digits
+
+
+@router.get("/api/walmart-api/pending")
+async def walmart_api_pending() -> Any:
+    """The staged list, as it stands on disk."""
+    with _pending_lock:
+        rows = _read_pending()
+    return {"ok": True, "pending": len(rows), "items": rows}
+
+
+@router.post("/api/walmart-api/stage")
+async def walmart_api_stage(data: Dict[str, Any] = Body(...)) -> Any:
+    """Add a Walmart-catalog hit to the pending list.
+
+    Deliberately local: this writes ``WalmartAPI/pending.json`` and nothing else.
+    No catalog write, no feed, and nothing in ``WalmartSheet/`` is touched -- this
+    is the input a later submit step would read.
+
+    The card fields come from the page, which already has them from the lookup, so
+    adding an item costs no extra Walmart API call.
+    """
+    digits = re.sub(r"\D", "", str(data.get("upc") or ""))
+    if not digits:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "No barcode to add."})
+
+    item = data.get("item") if isinstance(data.get("item"), dict) else {}
+    record = {
+        "upc": digits,
+        "gtin": _gtin14(digits),
+        "addedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "decision": str(data.get("decision") or ""),
+        "title": str(item.get("title") or ""),
+        "brand": str(item.get("brand") or ""),
+        "productType": str(item.get("productType") or ""),
+        "itemId": str(item.get("itemId") or ""),
+        "price": item.get("price"),
+        "currency": str(item.get("currency") or "USD"),
+        "image": str(item.get("image") or ""),
+        "isMarketPlaceItem": bool(item.get("isMarketPlaceItem")),
+    }
+
+    with _pending_lock:
+        rows = _read_pending()
+        existing = next((r for r in rows if r.get("upc") == digits), None)
+        if existing:
+            existing.update(record)
+            added = False
+        else:
+            rows.append(record)
+            added = True
+        _write_pending(rows)
+
+    return {
+        "ok": True,
+        "added": added,
+        "pending": len(rows),
+        "record": record,
+        "file": os.path.relpath(PENDING_FILE, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    }
+
+
+@router.post("/api/walmart-api/unstage")
+async def walmart_api_unstage(data: Dict[str, Any] = Body(...)) -> Any:
+    """Drop a staged item -- the Remove side of + Add. Local only, no Walmart call."""
+    digits = re.sub(r"\D", "", str(data.get("upc") or ""))
+    if not digits:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "No barcode to remove."})
+
+    with _pending_lock:
+        rows = _read_pending()
+        kept = [r for r in rows if r.get("upc") != digits]
+        removed = len(kept) != len(rows)
+        if removed:
+            _write_pending(kept)
+
+    return {"ok": True, "removed": removed, "pending": len(kept), "record": None}
+
+
+_LISTING_TEXT_LIMITS = {
+    "productName": 200,
+    "brand": 100,
+    "manufacturerPartNumber": 60,
+    "genre": 80,
+    "sku": 60,
+    "shortDescription": 4000,
+}
+_LISTING_CONDITIONS = ("New", "Refurbished", "Used")
+
+
+_CREATE_TEXT_LIMITS = {
+    "productName": 200,
+    "description": 4000,
+    "mainImageUrl": 1000,
+    "productSubcategory": 120,
+    "productType": 60,
+    "manufacturerPartNumber": 60,
+    "brand": 100,
+}
+_CREATE_REQUIRED = (
+    ("productName", "Product name"),
+    ("description", "Description"),
+    ("mainImageUrl", "Main image URL"),
+    ("productSubcategory", "Product subcategory"),
+    ("manufacturerPartNumber", "MPN"),
+    ("brand", "Brand name"),
+)
+_CREATE_FULFILLMENT = ("Seller Fulfilled", "Walmart Fulfilled")
+
+
+def _is_true(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "on", "yes")
+    return bool(value)
+
+
+@router.post("/api/walmart-api/create")
+async def walmart_api_create(data: Dict[str, Any] = Body(...)) -> Any:
+    """Save the "Create item" screen for a barcode Walmart does not carry.
+
+    Mirrors the required attributes only -- the same fields Walmart's Seller
+    Center asks for before it will list a new Music item. Local, like everything
+    else here: the record lands in ``WalmartAPI/pending.json`` and a later feed
+    builder would turn it into an ``MP_ITEM`` payload.
+    """
+    digits = re.sub(r"\D", "", str(data.get("upc") or ""))
+    if not digits or not 8 <= len(digits) <= 14:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "UPC/GTIN should be 8-14 digits."})
+
+    form = data.get("listing") if isinstance(data.get("listing"), dict) else {}
+
+    listing: Dict[str, Any] = {}
+    for key, limit in _CREATE_TEXT_LIMITS.items():
+        listing[key] = str(form.get(key) or "").strip()[:limit]
+
+    missing = [label for key, label in _CREATE_REQUIRED if not listing[key]]
+    if missing:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "Required: " + ", ".join(missing) + "."},
+        )
+
+    if not listing["mainImageUrl"].lower().startswith(("http://", "https://")):
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "Main image URL must start with http:// or https://."},
+        )
+
+    if not _is_true(form.get("certified")):
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "Tick the certification box before creating the item."},
+        )
+
+    fulfillment = str(form.get("fulfillmentOperation") or "").strip()
+    listing["fulfillmentOperation"] = (
+        fulfillment if fulfillment in _CREATE_FULFILLMENT else "Seller Fulfilled"
+    )
+    listing["certified"] = True
+
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _pending_lock:
+        rows = _read_pending()
+        record = next((r for r in rows if r.get("upc") == digits), None)
+        if record is None:
+            record = {
+                "upc": digits,
+                "gtin": _gtin14(digits),
+                "addedAt": now,
+                "decision": "new-item",
+                "source": "create",
+                "itemId": "",
+                "price": None,
+                "currency": "USD",
+                "isMarketPlaceItem": False,
+            }
+            rows.append(record)
+        record.update({
+            "decision": "new-item",
+            "source": "create",
+            "title": listing["productName"],
+            "brand": listing["brand"],
+            "productType": listing["productType"],
+            "image": listing["mainImageUrl"],
+            "listing": listing,
+            "submittedAt": now,
+        })
+        _write_pending(rows)
+
+    return {"ok": True, "record": record, "pending": len(rows)}
+
+
+@router.post("/api/walmart-api/submit")
+async def walmart_api_submit(data: Dict[str, Any] = Body(...)) -> Any:
+    """Save the item-setup form against a staged record.
+
+    Still local: this stores what the fields said on ``WalmartAPI/pending.json``
+    and echoes it back so the page can render it as "Your listing". Nothing is
+    sent to Walmart -- a real submit would build an MP_ITEM feed from this record.
+    """
+    digits = re.sub(r"\D", "", str(data.get("upc") or ""))
+    if not digits:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "No barcode to submit."})
+
+    form = data.get("listing") if isinstance(data.get("listing"), dict) else {}
+
+    listing: Dict[str, Any] = {}
+    for key, limit in _LISTING_TEXT_LIMITS.items():
+        listing[key] = str(form.get(key) or "").strip()[:limit]
+
+    if not listing["productName"]:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Product Name is required."})
+    if not listing["sku"]:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "SKU is required."})
+
+    raw_price = str(form.get("price") or "").replace("$", "").replace(",", "").strip()
+    try:
+        price = round(float(raw_price), 2)
+    except ValueError:
+        price = 0.0
+    if not math.isfinite(price) or price <= 0:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Selling Price must be greater than 0."})
+    listing["price"] = f"{price:.2f}"
+
+    try:
+        raw_qty = float(str(form.get("quantity") or "0"))
+        quantity = max(0, int(raw_qty)) if math.isfinite(raw_qty) else 0
+    except (ValueError, OverflowError):
+        quantity = 0
+    listing["quantity"] = quantity
+
+    condition = str(form.get("condition") or "New").strip()
+    listing["condition"] = condition if condition in _LISTING_CONDITIONS else "New"
+
+    with _pending_lock:
+        rows = _read_pending()
+        record = next((r for r in rows if r.get("upc") == digits), None)
+        if record is None:
+            return JSONResponse(
+                status_code=404,
+                content={"ok": False, "error": "That barcode is not in the pending list."},
+            )
+        record["listing"] = listing
+        record["submittedAt"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _write_pending(rows)
+
+    return {"ok": True, "record": record, "pending": len(rows)}
+
+
+def _read_pending() -> List[Dict[str, Any]]:
+    try:
+        with open(PENDING_FILE, "r", encoding="utf-8") as fh:
+            rows = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return rows if isinstance(rows, list) else []
+
+
+def _write_pending(rows: List[Dict[str, Any]]) -> None:
+    tmp = PENDING_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(rows, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, PENDING_FILE)

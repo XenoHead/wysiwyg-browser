@@ -173,6 +173,179 @@
     }
     .panel .empty { font-size: 12px; color: var(--wapi-quiet); font-style: italic; }
 
+    /* Walmart catalog hit, laid out like the item card you see on walmart.com. */
+    .wapi-card { max-width: 300px; }
+    .wapi-card .card-img {
+        display: block;
+        width: 180px;
+        height: 180px;
+        margin: 0 auto;
+        object-fit: contain;
+        background: #fff;
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 6px;
+    }
+    .wapi-card .card-title {
+        margin: 12px 0 0 0;
+        font-size: 13px;
+        font-weight: bold;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .wapi-card .card-gtin {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--wapi-quiet);
+    }
+    .wapi-card .card-gtin span { font-family: var(--wapi-mono); color: var(--text-color); }
+    .wapi-card .card-price {
+        margin-top: 8px;
+        font-size: 15px;
+        font-weight: bold;
+    }
+    .wapi-card .card-price small {
+        font-weight: normal;
+        font-size: 11px;
+        color: var(--wapi-quiet);
+        margin-left: 4px;
+    }
+    .wapi-card .card-meta { margin-top: 8px; font-size: 12px; color: var(--wapi-quiet); }
+    .wapi-card .card-meta a { color: var(--wysiwyg-accent-text); }
+    .wapi-card .card-actions { margin-top: 14px; }
+    .wapi-card .add-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 7px 24px;
+        font-size: 13px;
+        font-weight: bold;
+        font-family: inherit;
+        color: var(--text-color);
+        background: transparent;
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 999px;
+        cursor: pointer;
+    }
+    .wapi-card .add-btn:hover:not([disabled]) {
+        border-color: var(--wysiwyg-accent-text);
+        color: var(--wysiwyg-accent-text);
+    }
+    .wapi-card .add-btn[disabled] { cursor: default; opacity: .55; }
+    .wapi-card .add-btn.remove { border-color: rgba(220, 53, 69, .55); }
+    .wapi-card .add-btn.remove:hover:not([disabled]) {
+        border-color: var(--danger-color);
+        color: var(--danger-color);
+    }
+    .wapi-card .add-note { margin-top: 8px; font-size: 11px; color: var(--wapi-quiet); }
+
+    /* Staged listing form, laid out like Walmart's item-setup screen but compact. */
+    .lform { font-size: 12px; }
+    .lf-section {
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+    }
+    .lf-head {
+        font-size: 11px;
+        font-weight: bold;
+        margin-bottom: 7px;
+    }
+    .lf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 560px) { .lf-grid { grid-template-columns: 1fr; } }
+    .lf-field { display: block; min-width: 0; }
+    .lf-field.wide { grid-column: 1 / -1; }
+    .lf-field textarea {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 46px;
+        resize: vertical;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 4px 6px;
+        color: var(--text-color);
+        background: var(--wapi-panel-bg);
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+    }
+    .lf-field input[readonly] {
+        color: var(--wapi-quiet);
+        background: transparent;
+    }
+    .lf-field > span {
+        display: block;
+        font-size: 10px;
+        color: var(--wapi-quiet);
+        margin-bottom: 3px;
+    }
+    .lf-field input,
+    .lf-field select {
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 4px 6px;
+        color: var(--text-color);
+        background: var(--wapi-panel-bg);
+        border: 1px solid var(--wapi-panel-border);
+        border-radius: 4px;
+    }
+    .lf-field input:focus,
+    .lf-field textarea:focus,
+    .lf-field select:focus { outline: 2px solid var(--wapi-blue-bg); outline-offset: 0; }
+    .lf-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+    .lf-actions .submit-btn {
+        padding: 7px 22px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: bold;
+        color: #fff;
+        background: var(--wysiwyg-accent-text);
+        border: 0;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+    .lf-note { margin-top: 8px; font-size: 11px; color: var(--danger-color); }
+    .lf-hint { margin-top: 8px; font-size: 10px; color: var(--wapi-quiet); }
+    .lf-hint.inline { margin: -3px 0 2px 0; }
+    .lf-grid.single { grid-template-columns: 1fr; }
+    .lf-head .lf-meta {
+        font-weight: normal;
+        font-size: 10px;
+        color: var(--wapi-quiet);
+        margin-left: 6px;
+    }
+    .lf-subhead {
+        margin: 10px 0 5px 0;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    .lf-subhead:first-of-type { margin-top: 0; }
+    .lf-check {
+        display: flex;
+        gap: 7px;
+        align-items: flex-start;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--text-color);
+    }
+    .lf-check input { margin: 2px 0 0 0; flex: 0 0 auto; }
+    .edit-btn {
+        margin-top: 10px;
+        padding: 0;
+        font-family: inherit;
+        font-size: 11px;
+        color: var(--wysiwyg-accent-text);
+        background: none;
+        border: 0;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
     .thumb-row { display: flex; gap: 10px; align-items: flex-start; }
     .thumb {
         width: 72px; height: 72px; flex: 0 0 72px;
@@ -278,7 +451,7 @@
                 <div id="catalogBody"></div>
             </div>
             <div class="panel">
-                <h3>Your listing</h3>
+                <h3 id="sellerHeading">Your listing</h3>
                 <div id="sellerBody"></div>
             </div>
         </div>
@@ -312,7 +485,11 @@
     var recent = [];
     var busy = false;
     var lastAutoValue = "";
+    var lastData = null;
     var debounceTimer = null;
+    var pendingByUpc = {};
+    var currentUpc = "";
+    var currentSeller = { found: false, item: null };
 
     function digitsOnly(s) { return (s || "").replace(/\D+/g, ""); }
 
@@ -348,58 +525,405 @@
         return out + '</div>';
     }
 
-    function renderCatalog(data) {
+    function gtin14(barcode) {
+        var d = digitsOnly(barcode || "");
+        if (!d || d.length > 14) { return d; }
+        return ("00000000000000" + d).slice(-14);
+    }
+
+    function renderCatalog(data, upc) {
         var body = $('catalogBody');
-        if (!data.found) {
+        if (!data.found || !data.items || !data.items.length) {
             body.innerHTML = '<div class="empty">No match in the Walmart catalog for this barcode.</div>';
             return;
         }
         body.innerHTML = data.items.map(function (it) {
-            var thumb = it.image
-                ? '<img class="thumb" src="' + esc(it.image) + '" alt="">'
-                : '<div class="thumb blank"></div>';
-            var rows = [
-                ["Title", esc(it.title), "name"],
-                ["Brand", esc(it.brand)],
-                ["Type", esc(it.productType)],
-                ["Price", money(it.price, it.currency)],
-                ["Item ID", esc(it.itemId)],
-                ["Seller", it.isMarketPlaceItem ? "Marketplace seller" : "Walmart (1P)"],
-                ["Category", esc((it.categories || []).slice(-2).join(" / "))]
-            ];
-            var link = it.itemId
-                ? '<div class="link-row"><a href="https://www.walmart.com/ip/' + encodeURIComponent(it.itemId) +
-                  '" target="_blank" rel="noopener">Open on walmart.com</a></div>'
+            // walmart.com serves the same image at any size through the odn params,
+            // so ask for one that fills the card instead of upscaling the 180 thumb.
+            var img = it.image
+                ? '<img class="card-img" src="' + esc(it.image.replace(/odnHeight=\d+/, "odnHeight=300")
+                                                           .replace(/odnWidth=\d+/, "odnWidth=300")) + '" alt="">'
+                : '<div class="card-img"></div>';
+            var price = (it.price === null || it.price === undefined || it.price === "")
+                ? ""
+                : '<div class="card-price">' + money(it.price, it.currency) +
+                  '<small>US Buy Box price</small></div>';
+            var meta = it.itemId
+                ? '<div class="card-meta"><a href="https://www.walmart.com/ip/' +
+                  encodeURIComponent(it.itemId) + '" target="_blank" rel="noopener">More info</a></div>'
                 : "";
-            return '<div class="thumb-row">' + thumb + '<div style="flex:1 1 auto;min-width:0;">' +
-                   kv(rows) + link + '</div></div>';
-        }).join('<hr style="border:0;border-top:1px solid var(--wapi-panel-border);margin:10px 0;">');
+            return '<div class="wapi-card">' + img +
+                   '<div class="card-title">' + esc(it.title) + '</div>' +
+                   '<div class="card-gtin">GTIN: <span>' + esc(gtin14(upc)) + '</span></div>' +
+                   price + meta +
+                   '<div class="card-actions">' +
+                       '<button type="button" class="add-btn" data-upc="' + esc(upc) + '">+ Add</button>' +
+                   '</div>' +
+                   '<div class="add-note hidden"></div>' +
+                   '</div>';
+        }).join('');
     }
 
-    function renderSeller(data) {
-        var body = $('sellerBody');
-        if (!data.found || !data.item) {
-            body.innerHTML = '<div class="empty">Not in your catalog.</div>';
-            return;
+    function stagePayload(upc) {
+        var payload = { upc: upc };
+        if (lastData) {
+            payload.decision = (lastData.decision && lastData.decision.code) || "";
+            var items = (lastData.catalog && lastData.catalog.items) || [];
+            if (items.length) { payload.item = items[0]; }
         }
-        var it = data.item;
+        return payload;
+    }
+
+    function pendingFor(upc) { return pendingByUpc[upc] || null; }
+
+    function loadPending() {
+        return fetch('/api/walmart-api/pending').then(function (resp) {
+            return resp.json();
+        }).then(function (body) {
+            var map = {};
+            ((body && body.items) || []).forEach(function (rec) {
+                if (rec && rec.upc) { map[rec.upc] = rec; }
+            });
+            pendingByUpc = map;
+        }).catch(function () { /* keep the cache we have */ });
+    }
+
+    // One button per catalog card, two states: + Add and Remove.
+    function syncAddButtons() {
+        var btns = document.querySelectorAll('.add-btn');
+        for (var i = 0; i < btns.length; i++) {
+            var btn = btns[i];
+            var staged = !!pendingFor(btn.getAttribute('data-upc'));
+            btn.classList.toggle('remove', staged);
+            btn.setAttribute('data-mode', staged ? 'remove' : 'add');
+            btn.textContent = staged ? 'Remove' : '+ Add';
+            btn.disabled = false;
+        }
+    }
+
+    function stageItem(btn) {
+        var card = btn.closest('.wapi-card');
+        var note = card ? card.querySelector('.add-note') : null;
+        var upc = btn.getAttribute('data-upc') || '';
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+
+        fetch('/api/walmart-api/stage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(stagePayload(upc))
+        }).then(function (resp) {
+            return resp.json().then(function (body) { return { status: resp.status, body: body }; });
+        }).then(function (r) {
+            if (r.status >= 400 || !r.body || r.body.ok === false) {
+                syncAddButtons();
+                var msg = (r.body && (r.body.error || r.body.detail)) || ('Could not add (' + r.status + ').');
+                if (note) { note.textContent = msg; note.classList.remove('hidden'); }
+                return;
+            }
+            if (r.body.record) { pendingByUpc[upc] = r.body.record; }
+            syncAddButtons();
+            renderSellerPanel(currentUpc, currentSeller, lastData && lastData.decision);
+            if (note) { note.textContent = ''; note.classList.add('hidden'); }
+            setStatus('Added ' + upc + ' - fill in the item setup form, then submit.');
+        }).catch(function () {
+            syncAddButtons();
+            if (note) { note.textContent = 'Could not reach the server.'; note.classList.remove('hidden'); }
+        });
+    }
+
+    function unstageItem(btn) {
+        var upc = btn.getAttribute('data-upc') || '';
+        btn.disabled = true;
+        btn.textContent = 'Removing...';
+
+        fetch('/api/walmart-api/unstage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upc: upc })
+        }).then(function (resp) {
+            return resp.json().then(function (body) { return { status: resp.status, body: body }; });
+        }).then(function (r) {
+            if (r.status >= 400 || !r.body || r.body.ok === false) {
+                syncAddButtons();
+                setStatus((r.body && r.body.error) || ('Could not remove (' + r.status + ').'), true);
+                return;
+            }
+            delete pendingByUpc[upc];
+            syncAddButtons();
+            renderSellerPanel(currentUpc, currentSeller, lastData && lastData.decision);
+            setStatus('Removed ' + upc + ' from the pending list.');
+        }).catch(function () {
+            syncAddButtons();
+            setStatus('Could not reach the server.', true);
+        });
+    }
+
+    function lfInput(label, name, value, cls, placeholder, mode) {
+        return '<label class="lf-field' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span>' +
+               '<input type="text" name="' + esc(name) + '" value="' + esc(value == null ? '' : value) + '"' +
+               (mode ? ' inputmode="' + esc(mode) + '"' : '') +
+               (placeholder ? ' placeholder="' + esc(placeholder) + '"' : '') +
+               ' autocomplete="off" spellcheck="false"></label>';
+    }
+
+    function lfReadonly(label, value) {
+        return '<label class="lf-field"><span>' + esc(label) + '</span>' +
+               '<input type="text" value="' + esc(value) + '" readonly tabindex="-1"></label>';
+    }
+
+    function lfTextarea(label, name, value, cls) {
+        return '<label class="lf-field' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span>' +
+               '<textarea name="' + esc(name) + '" rows="2">' + esc(value || '') + '</textarea></label>';
+    }
+
+    function lfSelect(label, name, options, selected) {
+        var opts = options.map(function (opt) {
+            return '<option' + (opt === selected ? ' selected' : '') + '>' + esc(opt) + '</option>';
+        }).join('');
+        return '<label class="lf-field"><span>' + esc(label) + '</span>' +
+               '<select name="' + esc(name) + '">' + opts + '</select></label>';
+    }
+
+    // A compact take on Walmart's item-setup screen: what MP_ITEM needs, nothing more.
+    function itemForm(rec) {
+        var items = (lastData && lastData.catalog && lastData.catalog.items) || [];
+        var cat = items[0] || {};
+        var cats = cat.categories || [];
+        var genre = cats.length ? cats[cats.length - 1] : (rec.productType || '');
+        return '<form class="lform" data-upc="' + esc(rec.upc) + '" novalidate>' +
+            '<div class="lf-section">' +
+                '<div class="lf-head">Item details</div>' +
+                '<div class="lf-grid">' +
+                    lfInput('Product Name', 'productName', rec.title, 'wide') +
+                    lfInput('Brand Name', 'brand', rec.brand) +
+                    lfInput('Manufacturer Part Number', 'manufacturerPartNumber', '', '', 'MPN') +
+                    lfInput('Genre', 'genre', genre) +
+                    lfSelect('Condition', 'condition', ['New', 'Refurbished', 'Used'], 'New') +
+                    lfTextarea('Site Description', 'shortDescription', cat.description, 'wide') +
+                '</div>' +
+            '</div>' +
+            '<div class="lf-section">' +
+                '<div class="lf-head">Offer</div>' +
+                '<div class="lf-grid">' +
+                    lfInput('SKU', 'sku', '', '', 'Your SKU') +
+                    lfInput('Selling Price (USD)', 'price', rec.price, '', '0.00', 'decimal') +
+                    lfInput('Quantity', 'quantity', '1', '', '1', 'numeric') +
+                    lfReadonly('UPC / GTIN-14', rec.gtin || gtin14(rec.upc)) +
+                '</div>' +
+            '</div>' +
+            '<div class="lf-actions"><button type="submit" class="submit-btn">Submit</button></div>' +
+            '<div class="lf-note hidden"></div>' +
+            '<div class="lf-hint">Local draft only &mdash; nothing is sent to Walmart yet.</div>' +
+            '</form>';
+    }
+
+    // The "Create item" screen for a barcode Walmart does not carry.
+    // Required attributes only, in the order Seller Center asks them.
+    function createForm(rec) {
+        var li = (rec && rec.listing) || {};
+        var ptype = li.productType || 'Music';
+        return '<form class="lform" data-kind="create" data-upc="' + esc(rec ? rec.upc : currentUpc) + '" novalidate>' +
+            '<div class="lf-section">' +
+                '<div class="lf-grid single">' +
+                    lfInput('Product name', 'productName', li.productName) +
+                    lfTextarea('Description', 'description', li.description) +
+                    lfInput('Main image URL', 'mainImageUrl', li.mainImageUrl, '', 'https://...') +
+                    '<div class="lf-hint inline">JPG, JPEG, PNG, GIF or TIFF, 5 MB maximum, 1000 &times; 1000 px minimum.</div>' +
+                    lfInput('Product subcategory', 'productSubcategory', li.productSubcategory, '', 'e.g. Music / Vinyl Records') +
+                '</div>' +
+            '</div>' +
+            '<div class="lf-section">' +
+                '<div class="lf-head">Required to list<span class="lf-meta">For ' + esc(ptype) +
+                    ' &middot; 4/24 attributes</span></div>' +
+                '<div class="lf-subhead">Product identifiers</div>' +
+                '<div class="lf-grid single">' +
+                    lfReadonly('Product type', ptype) +
+                    lfInput('MPN', 'manufacturerPartNumber', li.manufacturerPartNumber) +
+                '</div>' +
+                '<div class="lf-subhead">Brand info</div>' +
+                '<div class="lf-grid single">' + lfInput('Brand name', 'brand', li.brand) + '</div>' +
+                '<div class="lf-subhead">Fulfillment</div>' +
+                '<div class="lf-grid single">' +
+                    lfSelect('Fulfillment operation', 'fulfillmentOperation',
+                             ['Seller Fulfilled', 'Walmart Fulfilled'],
+                             li.fulfillmentOperation || 'Seller Fulfilled') +
+                '</div>' +
+                '<div class="lf-subhead">Certifications</div>' +
+                '<label class="lf-check"><input type="checkbox" name="certified"' +
+                    (li.certified ? ' checked' : '') + '>' +
+                    '<span>By checking the box, I verify the products I&rsquo;ve listed have the ' +
+                    'required safety and product information.</span></label>' +
+            '</div>' +
+            '<div class="lf-actions"><button type="submit" class="submit-btn">Create item</button></div>' +
+            '<div class="lf-note hidden"></div>' +
+            '<div class="lf-hint">Local draft only &mdash; nothing is sent to Walmart yet.</div>' +
+            '</form>';
+    }
+
+    function createItem(form) {
+        var upc = form.getAttribute('data-upc') || currentUpc;
+        var note = form.querySelector('.lf-note');
+        var btn = form.querySelector('.submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+
+        function fail(msg) {
+            btn.disabled = false;
+            btn.textContent = 'Create item';
+            if (note) { note.textContent = msg; note.classList.remove('hidden'); }
+        }
+
+        var payload = collectListing(form);
+        payload.certified = !!form.querySelector('input[name="certified"]').checked;
+
+        fetch('/api/walmart-api/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upc: upc, listing: payload })
+        }).then(function (resp) {
+            return resp.json().then(function (body) { return { status: resp.status, body: body }; });
+        }).then(function (r) {
+            if (r.status >= 400 || !r.body || r.body.ok === false) {
+                fail((r.body && (r.body.error || r.body.detail)) || ('Could not create (' + r.status + ').'));
+                return;
+            }
+            if (r.body.record) { pendingByUpc[upc] = r.body.record; }
+            renderSellerPanel(upc, currentSeller, lastData && lastData.decision);
+            setStatus('Created ' + upc + ' as a local draft (not sent to Walmart).');
+        }).catch(function () { fail('Could not reach the server.'); });
+    }
+
+    function listingRows(rec) {
+        var li = rec.listing || {};
+        var rows;
+        if (rec.source === 'create') {
+            rows = [
+                ['Product', esc(li.productName), 'name'],
+                ['Status', 'Draft &mdash; not submitted'],
+                ['Product type', esc(li.productType)],
+                ['Subcategory', esc(li.productSubcategory)],
+                ['Brand', esc(li.brand)],
+                ['MPN', esc(li.manufacturerPartNumber)],
+                ['Fulfillment', esc(li.fulfillmentOperation)],
+                ['UPC', esc(rec.upc)],
+                ['Image', li.mainImageUrl
+                    ? '<a href="' + esc(li.mainImageUrl) + '" target="_blank" rel="noopener">View image</a>'
+                    : '']
+            ];
+        } else {
+            rows = [
+                ['SKU', esc(li.sku)],
+                ['Product', esc(li.productName), 'name'],
+                ['Status', 'Draft &mdash; not submitted'],
+                ['Price', money(li.price, rec.currency || 'USD')],
+                ['Stock', esc(String(li.quantity == null ? '' : li.quantity))],
+                ['Condition', esc(li.condition)],
+                ['Brand', esc(li.brand)],
+                ['MPN', esc(li.manufacturerPartNumber)],
+                ['Genre', esc(li.genre)],
+                ['UPC', esc(rec.upc)]
+            ];
+        }
+        var html = kv(rows);
+        var when = (rec.submittedAt || '').replace('T', ' ').replace('+00:00', '').trim();
+        html += '<div class="lf-hint">Saved locally' + (when ? ' ' + esc(when) + ' UTC' : '') +
+                ' &mdash; not sent to Walmart.</div>';
+        if (rec.source === 'create') {
+            html += '<button type="button" class="edit-btn" data-upc="' + esc(rec.upc) + '">Edit</button>';
+        }
+        return html;
+    }
+
+    function sellerRows(it) {
         var rows = [
-            ["SKU", esc(it.sku)],
-            ["Product", esc(it.productName), "name"],
-            ["Status", esc(it.publishedStatus)],
-            ["Price", money(it.price, it.currency)],
-            ["Stock", esc(it.availability)],
-            ["Condition", esc(it.condition)],
-            ["WPID", esc(it.wpid)],
-            ["Item ID", esc(it.itemId)]
+            ['SKU', esc(it.sku)],
+            ['Product', esc(it.productName), 'name'],
+            ['Status', esc(it.publishedStatus)],
+            ['Price', money(it.price, it.currency)],
+            ['Stock', esc(it.availability)],
+            ['Condition', esc(it.condition)],
+            ['WPID', esc(it.wpid)],
+            ['Item ID', esc(it.itemId)]
         ];
         var html = kv(rows);
         if (it.unpublishedReasons && it.unpublishedReasons.length) {
             html += it.unpublishedReasons.map(function (r) {
-                return '<div class="reason">' + esc(String(r).replace(/\|\|\|/g, " ").replace(/@@@/g, " ")) + '</div>';
-            }).join("");
+                return '<div class="reason">' + esc(String(r).replace(/\|\|\|/g, ' ').replace(/@@@/g, ' ')) + '</div>';
+            }).join('');
         }
-        body.innerHTML = html;
+        return html;
+    }
+
+    // The right-hand panel: a real listing, a staged offer form, the create-item
+    // screen for a barcode Walmart does not carry, or the empty state.
+    function renderSellerPanel(upc, seller, decision) {
+        var body = $('sellerBody');
+        var head = $('sellerHeading');
+        var rec = pendingFor(upc);
+        var code = decision && decision.code;
+        if (seller && seller.found && seller.item) {
+            head.textContent = 'Your listing';
+            body.innerHTML = sellerRows(seller.item);
+            return;
+        }
+        if (rec && rec.listing) {
+            head.textContent = 'Your listing';
+            body.innerHTML = listingRows(rec);
+            return;
+        }
+        if (code === 'new') {
+            head.textContent = 'Create item';
+            body.innerHTML = createForm(rec);
+            return;
+        }
+        if (rec) {
+            head.textContent = 'Your listing';
+            body.innerHTML = itemForm(rec);
+            return;
+        }
+        head.textContent = 'Your listing';
+        body.innerHTML = '<div class="empty">Not in your catalog.</div>';
+    }
+
+    function collectListing(form) {
+        var out = {};
+        var els = form.elements;
+        for (var i = 0; i < els.length; i++) {
+            if (els[i].name) { out[els[i].name] = els[i].value; }
+        }
+        return out;
+    }
+
+    function submitListing(form) {
+        var upc = form.getAttribute('data-upc') || currentUpc;
+        var note = form.querySelector('.lf-note');
+        var btn = form.querySelector('.submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        function fail(msg) {
+            btn.disabled = false;
+            btn.textContent = 'Submit';
+            if (note) { note.textContent = msg; note.classList.remove('hidden'); }
+        }
+
+        fetch('/api/walmart-api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upc: upc, listing: collectListing(form) })
+        }).then(function (resp) {
+            return resp.json().then(function (body) { return { status: resp.status, body: body }; });
+        }).then(function (r) {
+            if (r.status >= 400 || !r.body || r.body.ok === false) {
+                fail((r.body && (r.body.error || r.body.detail)) || ('Could not submit (' + r.status + ').'));
+                return;
+            }
+            if (r.body.record) { pendingByUpc[upc] = r.body.record; }
+            syncAddButtons();
+            renderSellerPanel(upc, currentSeller, lastData && lastData.decision);
+            setStatus('Saved listing for ' + upc + ' (local draft - not sent to Walmart).');
+        }).catch(function () { fail('Could not reach the server.'); });
     }
 
     function pushRecent(upc, code) {
@@ -415,6 +939,9 @@
     }
 
     function render(data) {
+        lastData = data;
+        currentUpc = data.upc;
+        currentSeller = data.seller || { found: false, item: null };
         var banner = $('banner');
         var code = data.decision.code;
         var cls = code === 'new' ? 'new-item' : code;
@@ -422,8 +949,16 @@
         $('bannerCode').textContent = cls;
         $('bannerHeadline').textContent = data.decision.headline;
         $('bannerDetail').textContent = data.decision.detail;
-        renderCatalog(data.catalog || { found: false, items: [] });
-        renderSeller(data.seller || { found: false, item: null });
+        renderCatalog(data.catalog || { found: false, items: [] }, data.upc);
+        renderSellerPanel(currentUpc, currentSeller, data.decision);
+        syncAddButtons();
+        // Staged records live on disk, so the panel may need a second paint once
+        // the pending list has loaded (e.g. after a page reload).
+        loadPending().then(function () {
+            if (currentUpc !== data.upc) { return; }
+            renderSellerPanel(currentUpc, currentSeller, data.decision);
+            syncAddButtons();
+        });
         $('rawJson').textContent = JSON.stringify(data, null, 2);
         resultBox.classList.remove('hidden');
         pushRecent(data.upc, code);
@@ -489,6 +1024,31 @@
     });
 
     lookupBtn.addEventListener('click', function () { lookup(input.value); });
+
+    // The card button is re-rendered with the card, so listen on the container.
+    $('catalogBody').addEventListener('click', function (e) {
+        var btn = e.target.closest('.add-btn');
+        if (!btn || btn.disabled) { return; }
+        if (btn.getAttribute('data-mode') === 'remove') { unstageItem(btn); }
+        else { stageItem(btn); }
+    });
+
+    // The setup form is re-rendered into the panel, so listen there too.
+    $('sellerBody').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (e.target.getAttribute('data-kind') === 'create') { createItem(e.target); }
+        else { submitListing(e.target); }
+    });
+
+    // Edit reopens the create screen with the saved values filled in.
+    $('sellerBody').addEventListener('click', function (e) {
+        var btn = e.target.closest('.edit-btn');
+        if (!btn) { return; }
+        var rec = pendingFor(btn.getAttribute('data-upc'));
+        if (!rec || !rec.listing) { return; }
+        $('sellerHeading').textContent = 'Create item';
+        $('sellerBody').innerHTML = createForm(rec);
+    });
 
     clearBtn.addEventListener('click', function () {
         input.value = "";

@@ -125,6 +125,23 @@ FYRTOOLS_ROOT = resolve_fyrtools_root()
 SHARED_PATH = os.path.join(FYRTOOLS_ROOT, "WysiChat")
 
 
+def open_shared_folder():
+    """Open the shared Attachments folder (fallback: the WysiChat share root)."""
+    att = os.path.join(SHARED_PATH, "Attachments")
+    try:
+        os.makedirs(att, exist_ok=True)
+    except Exception:
+        pass
+    target = att if os.path.isdir(att) else SHARED_PATH
+    try:
+        os.startfile(target)
+    except Exception as e:
+        try:
+            sg.popup_error(f"Could not open shared files:\n{target}\n\n{e}")
+        except Exception:
+            pass
+
+
 # --- SETTINGS & PERSISTENCE ---
 # Settings filename is now set at the top of the script
 sent_col = sg.user_settings_get_entry('-SENT-COLOR-', 'blue')
@@ -409,7 +426,8 @@ def print_chat_message(window, text, color, font):
         is_disabled = widget['state'] == 'disabled'
         if is_disabled: widget.configure(state='normal')
             
-        style_tag = f"style_{str(color).replace('#','').replace(' ','')}_{font[1]}"
+        color = str(color).strip().lower() if color else 'black'
+        style_tag = f"style_{color.replace('#','').replace(' ','')}_{font[1]}"
         widget.tag_config(style_tag, foreground=color, font=font)
         
         # Detect [FILE] tag and convert to file:/// URL
@@ -652,12 +670,29 @@ def load_tray_icon_bytes(path, max_side=22):
     The artwork in the bundle is ~574px wide; handing it to sg.Image made the
     bubble enormous. Scale it down to something tray-like, keeping the aspect.
     """
-    with Image.open(path) as im:
-        im = im.convert('RGBA')
-        im.thumbnail((max_side, max_side), Image.LANCZOS)
-        buf = io.BytesIO()
-        im.save(buf, format='PNG')
-        return buf.getvalue()
+    try:
+        with Image.open(path) as im:
+            im = im.convert('RGBA')
+            # thumbnail() only shrinks - it never enlarges. The alert artwork is
+            # smaller (99x75) than the main logo, so at Large/XL it stayed tiny
+            # and the blink did not match. Fit to the box in both directions.
+            im.thumbnail((max_side, max_side), Image.LANCZOS)
+            longest = max(im.size) if im.size else 0
+            if longest and longest < max_side:
+                ratio = max_side / float(longest)
+                im = im.resize(
+                    (max(1, int(round(im.width * ratio))),
+                     max(1, int(round(im.height * ratio)))),
+                    Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format='PNG')
+            return buf.getvalue()
+    except Exception as e:
+        logging.error(f"Could not load tray icon from {path}: {e}")
+        # Return a tiny transparent PNG so the tray window can still be created.
+        import base64
+        return base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
 
 def load_global_groups():
     path = os.path.join(SHARED_PATH, "global_groups.json")
@@ -815,8 +850,9 @@ def get_menu_def(size):
     admin_opt = 'Manage Groups'
 
     return [
-        ['File', ['Minimize to Tray', 'Open Shared Files', ['Bubble Size', TRAY_SIZE_LABELS], 'Switch User', 'Exit']],
-        ['Settings', ['Sent Color', 'Recv Color', 'App Theme Color',
+        ['File', ['Minimize to Tray', '---', 'Open Shared Files', '---',
+                  ['Bubble Size', TRAY_SIZE_LABELS], '---', 'Switch User', 'Exit']],
+        ['Settings', ['AIM Look', 'Sent Color', 'Recv Color', 'App Theme Color',
                       'Font Size', [check(x, size) for x in size_opts]]],
         ['History', ['View History', 'Clear View']],
         ['Groups', [admin_opt]],
@@ -826,12 +862,23 @@ def get_menu_def(size):
 def restart_application():
     """Restarts the application to apply changes."""
     try:
+        env = dict(os.environ)
+        # PyInstaller's onefile bootloader hands the extraction directory to the
+        # "inner" process through environment variables. A child launched with
+        # subprocess inherits them and reuses the parent's (already torn-down)
+        # _MEI folder, which surfaces as "Failed to load Python DLL" or
+        # "couldn't read _tcl_data/auto.tcl". Strip them so the child extracts
+        # its own fresh bundle.
+        for k in ("_PYI_PARENT_PROCESS_LEVEL", "_PYI_APPLICATION_HOME_DIR",
+                  "_MEIPASS2", "MEIPASS"):
+            env.pop(k, None)
         if getattr(sys, 'frozen', False):
-            args = [sys.executable] + sys.argv[1:]
+            exe = sys.executable
+            args = [exe] + sys.argv[1:]
+            subprocess.Popen(args, env=env)
         else:
             args = [sys.executable] + sys.argv
-        
-        subprocess.Popen(args)
+            subprocess.Popen(args, env=env)
         sys.exit()
     except Exception as e:
         logging.error(f"Restart failed: {e}")
@@ -884,9 +931,30 @@ def main():
     prune_attachments() # Clean up old files on startup
     
     # --- THEME SETUP ---
+    # Classic AIM-ish palette: silver chrome, white chat pane, navy headings.
+    AIM_BG = '#d4d0c8'
+    AIM_PANEL = '#ffffff'
+    AIM_TEXT = '#000000'
+    AIM_HEAD = '#000080'
+    aim_look = sg.user_settings_get_entry('-AIM-LOOK-', True)
     app_bg = sg.user_settings_get_entry('-APP-BG-', None)
     use_custom_title = False
-    if app_bg:
+    txt_col = 'black'
+    if aim_look:
+        sg.theme_add_new('AimChat', {
+            'BACKGROUND': AIM_BG,
+            'TEXT': AIM_TEXT,
+            'INPUT': AIM_PANEL,
+            'TEXT_INPUT': AIM_TEXT,
+            'SCROLL': '#808080',
+            'BUTTON': (AIM_TEXT, '#c0c0c0'),
+            'PROGRESS': ('#01826B', '#D0D0D0'),
+            'BORDER': 1, 'SLIDER_DEPTH': 0, 'PROGRESS_DEPTH': 0,
+        })
+        sg.theme('AimChat')
+        app_bg = AIM_BG
+        txt_col = AIM_TEXT
+    elif app_bg:
         txt_col = get_contrast_text_color(app_bg)
         # Define a custom theme based on user selection
         sg.theme_add_new('UserTheme', {
@@ -901,6 +969,11 @@ def main():
         })
         sg.theme('UserTheme')
         use_custom_title = True
+    else:
+        # Cleaner default theme than FreeSimpleGUI's stock look.
+        sg.theme('LightBlue3')
+        app_bg = sg.theme_background_color() or '#f0f4f8'
+        txt_col = get_contrast_text_color(app_bg)
 
     # Initialize networking/contacts
     announce_self(my_alias)
@@ -936,9 +1009,13 @@ def main():
             current_list = window["-USERS-"].get_list_values()
             
             # Recalculate text color based on current theme background
-            app_bg = sg.user_settings_get_entry('-APP-BG-', '#ffffff')
-            txt_col = get_contrast_text_color(app_bg)
-            offline_col = 'grey' if txt_col == 'black' else "#868184" # grey for Offline
+            if aim_look:
+                txt_col = AIM_TEXT
+                offline_col = '#808080'  # grey for Offline
+            else:
+                app_bg = sg.user_settings_get_entry('-APP-BG-', '#ffffff')
+                txt_col = get_contrast_text_color(app_bg)
+                offline_col = 'grey' if txt_col == 'black' else "#868184"  # grey for Offline
             
             for i, item in enumerate(current_list):
                 if item in unread_per_user and unread_per_user[item] > 0:
@@ -962,14 +1039,36 @@ def main():
 
     # Define Layout inside main to support dynamic theme changes
     contacts = {} 
+    buddy_panel = [
+        [sg.Text("Buddy List", font=(f_family, 10, "bold"), text_color=AIM_HEAD if aim_look else txt_col)],
+        [sg.Listbox(list(contacts.keys()), size=(20, 20), key="-USERS-", enable_events=True,
+                    expand_x=True, expand_y=True, right_click_menu=contact_rc_menu,
+                    background_color=AIM_PANEL if aim_look else app_bg,
+                    text_color=AIM_TEXT if aim_look else txt_col,
+                    font=(f_family, f_size))],
+    ]
+    chat_panel = [
+        [sg.Text("Chatting with: ", font=(f_family, 10, "bold")),
+         sg.Text("None", key="-TARGET-", text_color=AIM_HEAD if aim_look else "yellow",
+                 font=(f_family, 10, "bold"))],
+        [sg.Multiline(size=(60, 20), key="-CHAT-", disabled=True, font=(f_family, f_size),
+                      expand_x=True, expand_y=True, right_click_menu=right_click_menu,
+                      background_color="#ffffff", text_color="#000000", autoscroll=True)],
+        [sg.Multiline(key="-IN-", size=(40, 4), expand_x=True, expand_y=True,
+                      enter_submits=True, right_click_menu=right_click_menu,
+                      font=(f_family, f_size), background_color="#ffffff",
+                      text_color="#000000")],
+        [sg.Button("Send"), sg.Button("Attach"), sg.Button("Clear")],
+    ]
     layout = [
         [sg.MenubarCustom(get_menu_def(f_size), key='-MENU-')],
-        [sg.Text(f"Chatting as: {my_alias}", font=(f_family, 10, "bold")), sg.Push(), sg.Checkbox("AFK", key='-AFK-', enable_events=True), sg.Checkbox("Start Minimized", default=start_minimized, key='-START-MIN-', enable_events=True)],
-        [sg.Col([[sg.Text("Contacts")],
-                 [sg.Listbox(list(contacts.keys()), size=(15, 15), key="-USERS-", enable_events=True, expand_y=True, right_click_menu=contact_rc_menu)]], key='-COL-USERS-', expand_y=True, expand_x=False, pad=((5, 5), (0, 5))),
-         sg.Col([[sg.Text("Chatting with: "), sg.Text("None", key="-TARGET-", text_color="yellow")],
-                 [sg.Multiline(size=(50, 15), key="-CHAT-", disabled=True, font=(f_family, f_size), expand_x=True, expand_y=True, right_click_menu=right_click_menu)],
-                 [sg.Input(key="-IN-", size=(30, 1), expand_x=True, right_click_menu=right_click_menu), sg.Button("Send", bind_return_key=True), sg.Button("Attach"), sg.Button("Clear")]], key='-COL-CHAT-', expand_x=True, expand_y=True, pad=((0, 5), (0, 5)))]
+        [sg.Text(f"Chatting as: {my_alias}", font=(f_family, 10, "bold"), text_color=AIM_HEAD if aim_look else txt_col),
+         sg.Push(), sg.Checkbox("AFK", key='-AFK-', enable_events=True),
+         sg.Checkbox("Start Minimized", default=start_minimized, key='-START-MIN-', enable_events=True)],
+        [sg.Column(buddy_panel, key='-COL-USERS-', expand_x=False, expand_y=True,
+                   vertical_alignment='top', pad=((5, 2), (0, 5))),
+         sg.Column(chat_panel, key='-COL-CHAT-', expand_x=True, expand_y=True,
+                   vertical_alignment='top', pad=((2, 5), (0, 5)))]
     ]
 
     # --- Icon Loading ---
@@ -1013,7 +1112,6 @@ def main():
     
     window = sg.Window("WysiChat", layout, finalize=True, icon=window_icon_path, resizable=True, use_custom_titlebar=use_custom_title, enable_close_attempted_event=True, location=win_loc if win_loc else (None, None), size=win_size if win_size else (None, None), keep_on_top=True)
     window.TKroot.bind('<Enter>', lambda e: window.bring_to_front())
-    window['-IN-'].bind('<Button-1>', 'ResetUnread')
     window['-CHAT-'].bind('<Button-1>', 'ResetUnread')
     
     # Configure URL tag and bindings
@@ -1025,18 +1123,20 @@ def main():
     chat_widget.tag_bind("URL", "<Leave>", lambda e: chat_widget.config(cursor=""))
     chat_widget.bind("<Button-3>", on_chat_right_click)
 
-    # Configure element expansion and pack geometry for resizing and far-left alignment
+    # Configure element expansion and pack geometry so the buddy list and chat
+    # pane fill the window at any size (including maximised).
     try:
         if "-COL-USERS-" in window.AllKeysDict:
-            window["-COL-USERS-"].Widget.pack_configure(expand=False, fill='y', side='left')
+            window["-COL-USERS-"].Widget.pack_configure(side='left', fill='y', expand=False)
+            window["-COL-USERS-"].Widget.master.pack_configure(side='top', fill='both', expand=True)
         if "-COL-CHAT-" in window.AllKeysDict:
-            window["-COL-CHAT-"].Widget.pack_configure(expand=True, fill='both', side='left')
-        if "-COL-USERS-" in window.AllKeysDict:
-            window["-COL-USERS-"].Widget.master.pack_configure(expand=True, fill='both', side='top')
+            window["-COL-CHAT-"].Widget.pack_configure(side='left', fill='both', expand=True)
+            window["-COL-CHAT-"].Widget.master.pack_configure(side='top', fill='both', expand=True)
         if "-USERS-" in window.AllKeysDict:
             window["-USERS-"].expand(expand_x=True, expand_y=True)
         if "-CHAT-" in window.AllKeysDict:
             window["-CHAT-"].expand(expand_x=True, expand_y=True)
+            window["-CHAT-"].Widget.master.pack_configure(fill='both', expand=True)
         if "-IN-" in window.AllKeysDict:
             window["-IN-"].expand(expand_x=True, expand_y=False)
     except Exception as e:
@@ -1070,7 +1170,7 @@ def main():
             hist, all_rows, debug_misses = get_chat_history(target, target_ip)
             logging.info(f"Found {len(hist)} valid messages out of {len(all_rows)} total DB rows.")
             if not hist:
-                print_chat_message(window, f"--- No history found with {target} ---", "gray", (f_family, f_size))
+                print_chat_message(window, f"--- No history found with {target} ---", "#808080", (f_family, f_size))
             else:
                 for row in hist:
                     ts, sender, enc_msg = row
@@ -1105,7 +1205,7 @@ def main():
     # --- TRAY REPLACEMENT (Floating Window) ---
     def create_tray_window():
         loc = sg.user_settings_get_entry('-TRAY-LOC-', (None, None))
-        menu = ['', ['Restore', 'Run Wysiwyg', 'WysiScan', 'Update Apps', '---',
+        menu = ['', ['Restore', 'Open Shared Files', 'Run Wysiwyg', 'WysiScan', 'Update Apps', '---',
                      ['Bubble Size', TRAY_SIZE_LABELS], '---', 'Exit']]
         
         # Use Magenta as transparency key to hide the window background
@@ -1283,28 +1383,78 @@ def main():
             sg.user_settings_set_entry('-START-MIN-', values['-START-MIN-'])
         
         # --- Handle Settings Changes ---
+        if event == 'AIM Look':
+            current = sg.user_settings_get_entry('-AIM-LOOK-', True)
+            new_val = not bool(current)
+            sg.user_settings_set_entry('-AIM-LOOK-', new_val)
+            try:
+                answer = sg.popup_yes_no(
+                    "Classic AIM look " + ("on" if new_val else "off") + ". Restart to apply?") == 'Yes'
+            except Exception:
+                answer = True
+            if answer:
+                try:
+                    save_loc()
+                except Exception:
+                    pass
+                try:
+                    window.close()
+                except Exception:
+                    pass
+                try:
+                    tray_window.close()
+                except Exception:
+                    pass
+                restart_application()
+
         if event == 'Sent Color':
-            color_resp = sg.askcolor(color=sent_col, title="Sent Color")
-            if color_resp and color_resp[1]:
-                sent_col = color_resp[1]
-                sg.user_settings_set_entry('-SENT-COLOR-', sent_col)
+            try:
+                color_resp = sg.askcolor(color=sent_col, title="Sent Color")
+                if color_resp and color_resp[1]:
+                    new_c = str(color_resp[1]).strip().lower()
+                    if new_c.startswith('#'):
+                        sent_col = new_c
+                        sg.user_settings_set_entry('-SENT-COLOR-', sent_col)
+            except Exception as e:
+                logging.error(f"Sent color change failed: {e}")
 
         if event == 'Recv Color':
-            color_resp = sg.askcolor(color=recv_col, title="Recv Color")
-            if color_resp and color_resp[1]:
-                recv_col = color_resp[1]
-                sg.user_settings_set_entry('-RECV-COLOR-', recv_col)
+            try:
+                color_resp = sg.askcolor(color=recv_col, title="Recv Color")
+                if color_resp and color_resp[1]:
+                    new_c = str(color_resp[1]).strip().lower()
+                    if new_c.startswith('#'):
+                        recv_col = new_c
+                        sg.user_settings_set_entry('-RECV-COLOR-', recv_col)
+            except Exception as e:
+                logging.error(f"Recv color change failed: {e}")
 
         if event == 'App Theme Color':
-            color_resp = sg.askcolor(color=app_bg if app_bg else '#ffffff', title="App Background")
-            if color_resp and color_resp[1]:
-                new_bg = color_resp[1]
-                sg.user_settings_set_entry('-APP-BG-', new_bg)
-                if sg.popup_yes_no("Restart to apply theme?") == 'Yes':
-                    save_loc()
-                    window.close()
-                    tray_window.close()
-                    restart_application()
+            try:
+                color_resp = sg.askcolor(color=app_bg if app_bg else '#ffffff', title="App Background")
+                if color_resp and color_resp[1]:
+                    new_bg = str(color_resp[1]).strip().lower()
+                    if not new_bg.startswith('#'):
+                        new_bg = None
+                    if new_bg and new_bg != app_bg:
+                        sg.user_settings_set_entry('-APP-BG-', new_bg)
+                        if sg.popup_yes_no("Restart to apply theme?") == 'Yes':
+                            try:
+                                save_loc()
+                            except Exception:
+                                pass
+                            try:
+                                window.close()
+                            except Exception:
+                                pass
+                            try:
+                                tray_window.close()
+                            except Exception:
+                                pass
+                            restart_application()
+            except Exception as e:
+                logging.error(f"App theme color change failed: {e}")
+                sg.popup_error(f"Could not apply color: {e}")
 
         if event in ('10', '12', '14', '16', '18', '20', '24'):
             f_size = int(event)
@@ -1319,6 +1469,8 @@ def main():
         if tray_event == 'Exit':
             save_loc()
             break
+        if tray_event == 'Open Shared Files':
+            open_shared_folder()
         if tray_event == 'Run Wysiwyg':
             launch_wysiwyg()
         if tray_event == 'WysiScan':
@@ -1412,9 +1564,7 @@ def main():
             break
 
         if event == "Open Shared Files":
-            att_path = os.path.join(SHARED_PATH, "Attachments")
-            if not os.path.exists(att_path): os.makedirs(att_path)
-            os.startfile(att_path)
+            open_shared_folder()
 
         if event == "Switch User":
             if sg.popup_yes_no("Switch User? This will restart the application.") == "Yes":
@@ -1526,10 +1676,11 @@ def main():
             window["-IN-"].set_focus()
             load_chat(target)
 
-        if event == "Send" and values["-USERS-"]:
+        if event in ("Send", "-IN-") and values["-USERS-"]:
             target_selection = values["-USERS-"][0]
             msg = values["-IN-"]
-            
+            if isinstance(msg, str):
+                msg = msg.strip("\n")
             # Ensure chat is loaded for this user (fixes issue if selection event was missed)
             if current_chat_target != target_selection:
                 load_chat(target_selection)
@@ -1543,7 +1694,7 @@ def main():
                     all_groups = {**local_groups, **global_groups}
                     if g_name in all_groups:
                         members = all_groups[g_name]
-                        print_chat_message(window, f"--- Sending to Group: {g_name} ---", "yellow", (f_family, f_size))
+                        print_chat_message(window, f"--- Sending to Group: {g_name} ---", "#000080", (f_family, f_size))
                         for member in members:
                             if member in remote_contacts:
                                 send_payload(member, remote_contacts[member], msg)

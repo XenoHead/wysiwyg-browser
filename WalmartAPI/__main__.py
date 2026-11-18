@@ -28,7 +28,7 @@ DEFAULT_PORT = 8009  # 8008 belongs to the main app
 def build_app(sandbox: bool = False):
     """A FastAPI app holding only the WalmartAPI page and its lookup route."""
     from fastapi import FastAPI
-    from fastapi.responses import RedirectResponse
+    from fastapi.responses import FileResponse, RedirectResponse, Response
 
     from . import routes
 
@@ -40,6 +40,29 @@ def build_app(sandbox: bool = False):
 
     app = FastAPI(title="WalmartAPI (standalone)", docs_url="/docs")
     app.include_router(routes.router)
+
+    # The page is written to be served by the main app, so it links the app's
+    # global stylesheet (the --wysiwyg-* custom properties live there), the
+    # favicon, and the app's heartbeat script. Serve the first two from the repo
+    # root and stub the third: without these the page renders half-styled and
+    # logs two 404s on every load.
+    @app.get("/styles.css", include_in_schema=False)
+    async def _styles():
+        return FileResponse(routes.resource_path("styles.css"))
+
+    @app.get("/fyrlogo.png", include_in_schema=False)
+    async def _logo():
+        return FileResponse(routes.resource_path("fyrlogo.png"))
+
+    @app.get("/heartbeat.js", include_in_schema=False)
+    async def _heartbeat_js():
+        # In the app this keeps the server alive while a tab is open. There is no
+        # /heartbeat route standalone, so a stub beats a 404 plus failed POSTs.
+        return Response(
+            content="/* standalone: heartbeat not needed */\n",
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/", include_in_schema=False)
     async def _root():

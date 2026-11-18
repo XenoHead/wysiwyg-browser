@@ -1009,6 +1009,9 @@
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Right-click while selected to rename"><input type="radio"
                         name="mediaType" value="lp" onchange="handleCropModeChange()"> <span
                         class="crop-mode-name" data-mode="lp">Custom One</span></label>
+                <button id="padCircleBtn" onclick="recropLast(false, false)" disabled
+                    title="CD matrix/faces only: apply the padding without auto-aligning the scan"
+                    style="padding: 3px 8px; background-color: #6f42c1; color: #fff; border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; opacity: 0.5;">Pad Circle</button>
             </div>
         </div>
 
@@ -2091,6 +2094,19 @@
             if (paddingByMode[selectedMode] !== undefined) {
                 document.getElementById('cropPadding').value = paddingByMode[selectedMode];
             }
+            updatePadCircleEnabled();
+        }
+
+        // Pad Circle is only for CD matrix/faces (cd / tape).
+        function updatePadCircleEnabled() {
+            const btn = document.getElementById('padCircleBtn');
+            if (!btn) return;
+            const sel = document.querySelector('input[name="mediaType"]:checked');
+            const val = sel ? sel.value : '';
+            const enabled = (val === 'cd' || val === 'tape') && !!(lastOriginalPath);
+            btn.disabled = !enabled;
+            btn.style.opacity = enabled ? '1' : '0.5';
+            btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
         }
 
         // --- Crop Mode labels: right-click the selected radio to rename it -----
@@ -2318,6 +2334,7 @@
                 document.getElementById('addToGroupBtn').disabled = true;
                 document.getElementById('importBtn').disabled = true;
                 document.getElementById('recropBtn').disabled = true;
+                document.getElementById('padCircleBtn').disabled = true;
                 document.getElementById('revertCropBtn').disabled = true;
             } else {
                 updateActionButtonsState();
@@ -2327,9 +2344,21 @@
         function updateCropButtonsState() {
             const currentInput = document.getElementById('groupName').value.trim();
             const groupMatches = groupStarted && (currentInput === currentGroupName);
+            const hasImage = !!lastCroppedPath;
 
             document.getElementById('recropBtn').disabled = !groupMatches || !lastCroppedPath;
             document.getElementById('revertCropBtn').disabled = !groupMatches || !lastOriginalPath;
+
+            // Pad Circle is only for CD matrix/faces and only with an image loaded.
+            const padBtn = document.getElementById('padCircleBtn');
+            if (padBtn) {
+                const sel = document.querySelector('input[name="mediaType"]:checked');
+                const val = sel ? sel.value : '';
+                const ok = (val === 'cd' || val === 'tape') && !!lastCroppedPath;
+                padBtn.disabled = !ok;
+                padBtn.style.opacity = ok ? '1' : '0.5';
+                padBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+            }
         }
 
         async function fetchGroups() {
@@ -3027,7 +3056,7 @@
             }
         }
 
-        async function recropLast(useOriginal = false) {
+        async function recropLast(useOriginal = false, align = true) {
             // Prioritize the original scan as the source to ensure high quality 
             // and prevent "same file" errors where the source and target paths are identical.
             const sourcePath = lastOriginalPath || lastCroppedPath;
@@ -3043,12 +3072,15 @@
             }
 
             const recropBtn = document.getElementById('recropBtn');
+            const padCircleBtn = document.getElementById('padCircleBtn');
             const revertCropBtn = document.getElementById('revertCropBtn');
-            recropBtn.disabled = true;
-            revertCropBtn.disabled = true;
+            if (recropBtn) recropBtn.disabled = true;
+            if (padCircleBtn) padCircleBtn.disabled = true;
+            if (revertCropBtn) revertCropBtn.disabled = true;
 
-            recropBtn.innerText = "Processing...";
-            revertCropBtn.innerText = "Processing...";
+            if (recropBtn) recropBtn.innerText = "Processing...";
+            if (padCircleBtn) padCircleBtn.innerText = "Processing...";
+            if (revertCropBtn) revertCropBtn.innerText = "Processing...";
 
             const container = document.getElementById('croppedImgContainer');
             let overlay = null;
@@ -3064,9 +3096,9 @@
 
             // Adjust Pad aligns first: re-cropping a tilted scan just bakes the
             // tilt into the new crop. The align works on the original, which is
-            // the file the crop is taken from. "Crop" (back to original) is left
-            // exactly as before - it is not a padding change.
-            if (!useOriginal && lastOriginalPath) {
+            // the file the crop is taken from. Pad Circle skips this step (CD
+            // matrix/faces only) and "Crop" never changes the padding.
+            if (align && !useOriginal && lastOriginalPath) {
                 const alignMsg = await deskewFile(lastOriginalPath, 0);
                 // Only a real rotation replaces the image. "Already aligned."
                 // leaves the pixels - and the tilt baked into them - alone.
@@ -3087,12 +3119,38 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    const timestamp = new Date().getTime();
-                    document.querySelectorAll('img').forEach(img => {
-                        if (img.dataset.path === lastCroppedPath) {
-                            img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
+                    // Pad Circle is "padding only": the recrop rebuilds the
+                    // cropped file from the original, which would drop any manual
+                    // tilt applied to the cropped image. Re-apply it (if any) so
+                    // the rotation the user set is preserved - only the padding
+                    // changes.
+                    if (align === false && Math.abs(tiltValue) > 0.05) {
+                        try {
+                            const tiltResp = await fetch('/tilt-image', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    path: lastCroppedPath,
+                                    angle: -tiltValue,
+                                    padding: padding,
+                                    media_type: mediaType
+                                })
+                            });
+                            const tiltRes = await tiltResp.json();
+                            if (tiltRes.status === 'success' && tiltRes.new_url) {
+                                refreshImageElements(lastCroppedPath, tiltRes.new_url, true);
+                            }
+                        } catch (e) {
+                            console.error("Tilt replay after Pad Circle failed:", e);
                         }
-                    });
+                    } else {
+                        const timestamp = new Date().getTime();
+                        document.querySelectorAll('img').forEach(img => {
+                            if (img.dataset.path === lastCroppedPath) {
+                                img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
+                            }
+                        });
+                    }
                 } else { showToast("Error recropping: " + data.message, "error") }
             } catch (e) {
                 console.error("Recrop error:", e);
@@ -3100,8 +3158,10 @@
             } finally {
                 if (overlay) overlay.remove();
                 setButtonsDisabled(false);
-                recropBtn.innerText = "Adjust Pad";
-                revertCropBtn.innerText = "Crop";
+                if (recropBtn) recropBtn.innerText = "Adjust Pad";
+                if (padCircleBtn) padCircleBtn.innerText = "Pad Circle";
+                if (revertCropBtn) revertCropBtn.innerText = "Crop";
+                updatePadCircleEnabled();
             }
         }
 

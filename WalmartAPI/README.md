@@ -195,9 +195,50 @@ One verdict banner, one of five:
 | `new-item` | Nowhere | `MP_ITEM` — full item setup |
 | `invalid` | Bad check digit | Rescan; "not found" is meaningless here |
 
-Below that: a "Walmart catalog" panel (title, brand, type, price, item ID, image,
-link to walmart.com) and a "Your listing" panel (SKU, status, price, stock, and
-Walmart's verbatim unpublished reason), plus raw JSON and clickable session chips.
+Below that: a "Walmart catalog" panel and a "Your listing" panel, plus raw JSON and
+clickable session chips.
+
+When the barcode **is** on Walmart, the catalog panel renders an item card shaped
+like walmart.com's own listing: image, title, `GTIN:` in GTIN-14 form, price with
+"US Buy Box price", a `More info` link to `/ip/{itemId}`, and a pill **`+ Add`**.
+The "Your listing" panel keeps SKU, status, price, stock, and Walmart's verbatim
+unpublished reason.
+
+`+ Add` stages the item **locally** — `POST /api/walmart-api/stage` appends to
+`WalmartAPI/pending.json` (de-duplicated by UPC), and `GET /api/walmart-api/pending`
+reads it back. Once staged, the button becomes **`Remove`** and the "Your listing"
+panel turns into a compact item-setup form — Product Name, Brand Name, Manufacturer
+Part Number (MPN), Genre, Condition, Site Description, SKU, Selling Price and
+Quantity, all prefilled from the catalog hit where possible. `Submit` posts to
+`POST /api/walmart-api/submit`, which stores that form on the record and hands it
+back so the panel renders it as "Your listing" (SKU, product, price, stock,
+condition, MPN, genre, UPC, with a "saved locally" note). `Remove` calls
+`POST /api/walmart-api/unstage` and puts the panel back to "Not in your catalog."
+
+Nothing in that loop is written to Walmart: no feed, no catalog change, and
+`WalmartSheet/` is untouched. `pending.json` is the input a later submit step would
+use to build an `MP_ITEM` feed.
+
+### When the barcode is not on Walmart
+
+The `new` verdict (no catalog match) skips the card and opens the **Create item**
+screen in the right-hand panel — Seller Center's required attributes only:
+
+| Section | Fields |
+|---|---|
+| — | Product name, Description, Main image URL, Product subcategory |
+| Product identifiers | Product type (fixed `Music`), MPN |
+| Brand info | Brand name |
+| Fulfillment | Fulfillment operation (`Seller Fulfilled` / `Walmart Fulfilled`) |
+| Certifications | "I verify the products … have the required safety and product information" |
+
+`Create item` posts to `POST /api/walmart-api/create`, which validates the required
+set (including the certification tick and an http(s) image URL), stores the listing on
+a pending record with `source: "create"`, and re-renders the panel as "Your listing"
+with an `Edit` link back into the form. Local only, same as everything else.
+
+There is no "N offers" count on the card: the catalog-search response has no offers
+field, and buy-box/offers data comes from a separate async report.
 
 ```
 # from the repo root, with the venv

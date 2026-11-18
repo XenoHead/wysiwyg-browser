@@ -1,12 +1,13 @@
 [F0T]
-
+Pearl Lagoon Vinyl
 [F0T MAPS]
+Pearl Lagoon Vinyl
 [FORMATS]
-[{"name":"DVDr","qty":"1","descriptions":["DVD-Video"]}]
+[{"name":"Vinyl","qty":"1","descriptions":["12\"","45 RPM","Limited Edition","Mixtape","Reissue"],"text":"Pearl Lagoon Vinyl"}]
 [NOTES]
-title: Showtyme - State 2 State On The Road With Show
-formats[0].name: DVDr
-formats[0].descriptions: DVD-Video
-vinyl entries: 0
-country: US
-released: Apr 22, 2005
+title: PinkPantheress - To Hell With It
+formats[0].name: Vinyl
+formats[0].descriptions: 12", 45 RPM, Limited Edition, Mixtape, Reissue
+vinyl entries: 1
+country: USA, Canada & Europe
+released: Oct 16, 2026

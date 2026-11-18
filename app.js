@@ -1862,6 +1862,29 @@ function dedupeCaseInsensitive(values) {
     return out;
 }
 
+function dedupeConditionValues(values) {
+    // The same condition ("Final Sale") can live in more than one legacy select
+    // (cdOptions and boxSleeveOptions) after switching media types or views, and
+    // would otherwise be written twice into the description. Keep it once, and key
+    // on the TEXT only (point 3): entries that share a title but describe
+    // different things ("Final Sale (Color)" vs "Final Sale (Matrix)") must stay
+    // distinct, while identical text collapses regardless of its title.
+    const seen = new Set();
+    const out = [];
+    (values || []).forEach(value => {
+        let text = String(value || '');
+        try {
+            const d = JSON.parse(value);
+            text = (d.text || '');
+        } catch (e) { /* not JSON - keep the raw string */ }
+        const key = text.trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(value);
+    });
+    return out;
+}
+
 function getVal(id) {
     const el = document.getElementById(id);
     if (!el) return "";
@@ -2525,15 +2548,15 @@ function generateListingData() {
         lister: document.getElementById('lister').value || 'XX',
         skuFlag: getVal('skuFlag'),
         isOOP: document.getElementById('oopToggle').checked,
-        customOptionsSelected: [
+        customOptionsSelected: dedupeConditionValues([
             ...Array.from(document.getElementById('lpOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('cdOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('customOptions')?.selectedOptions || []).map(o => o.value),
             ...Array.from(document.getElementById('boxSleeveOptions')?.selectedOptions || []).map(o => o.value)
-        ],
-        mediaCustomOptionsSelected: [
+        ]),
+        mediaCustomOptionsSelected: dedupeConditionValues([
             ...Array.from(document.getElementById('mediaConditionOptions')?.selectedOptions || []).map(o => o.value)
-        ]
+        ])
     };
 
     // 2. Process Logic
@@ -2834,7 +2857,7 @@ function processFormatData(inputs) {
         mediaCustomOptionsSelected.forEach(optJson => {
             try {
                 const opt = JSON.parse(optJson);
-                if (opt.title === "Final Sale") {
+                if (/final\s+sale/i.test(opt.title)) {
                     mediaFinalSale = (mediaFinalSale ? mediaFinalSale + " " : "") + opt.text;
                 } else {
                     if (opt.text) mediaEntries.push(capitalizeFlawContext(opt.text));
@@ -2854,7 +2877,7 @@ function processFormatData(inputs) {
         customOptionsSelected.forEach(optJson => {
             try {
                 const opt = JSON.parse(optJson);
-                if (opt.title === "Final Sale") {
+                if (/final\s+sale/i.test(opt.title)) {
                     // Exception to the media-first rule: Final Sale from the
                     // sleeve multiselect keeps its leading position on the
                     // format string (appended bare, ahead of everything else).
@@ -3542,7 +3565,7 @@ function inferSkuCode(rawLine, mediaFormat, sleevePkg) {
         if (combined.includes("cd") || combined.includes("sacd")) mixedCount++;
         if (combined.includes("dvd")) mixedCount++;
         if (combined.includes("blu-ray") || combined.includes("blue ray")) mixedCount++;
-        if (combined.includes("cassette") || combined.includes("mc")) mixedCount++;
+        if (/\bcassette(s)?\b/i.test(combined) || /\bmc\b/i.test(combined)) mixedCount++;
         if (combined.includes("vhs")) mixedCount++;
         if (mixedCount >= 2) return "MEDIABOX";
 
@@ -3551,7 +3574,7 @@ function inferSkuCode(rawLine, mediaFormat, sleevePkg) {
         if (combined.includes("dvd")) return "DVDBOX";
         if (combined.includes("vhs")) return "VHSBOX";
         if (combined.includes("cd")) return "CDBOX";
-        if (combined.includes("cassette") || combined.includes("mc")) return "CASSBOX";
+        if (/\bcassette(s)?\b/i.test(combined) || /\bmc\b/i.test(combined)) return "CASSBOX";
         return "VINYLBOX";
     }
 
@@ -3607,19 +3630,19 @@ function inferSkuCode(rawLine, mediaFormat, sleevePkg) {
     if (combined.includes("vhs")) return "VHS";
 
     // 3. SINGLES
-    const singleSignals = ["7\"", "12\"", "10\"", "single", "maxi-single"];
+    const singleSignals = ["7\"", "single", "maxi-single"];
     const hasSignal = singleSignals.some(s => combined.includes(s));
     const isAlbum = combined.includes("lp") || combined.includes("album");
 
     if (hasSignal && !isAlbum) {
         if (combined.includes("cd")) return "CDS";
-        if (combined.includes("cassette") || combined.includes("mc") || combined.includes("tape")) return "CASSS";
+        if (/\bcassette(s)?\b/i.test(combined) || /\bmc\b/i.test(combined) || /\btape(s)?\b/i.test(combined)) return "CASSS";
         return "VINYLS";
     }
 
     // 4. CORE FORMATS
     if (combined.includes("cd")) return "CD";
-    if (combined.includes("cassette") || combined.includes("mc")) return "CASS";
+    if (/\bcassette(s)?\b/i.test(combined) || /\bmc\b/i.test(combined)) return "CASS";
     if (combined.includes("vinyl") || combined.includes("lp")) return "VINYL";
 
     // 5. FALLBACK - JSON LOOKUP
@@ -3889,7 +3912,7 @@ function dedupeCustomOptions() {
         const keep = [];
         arr.forEach(item => {
             if (!item) return;
-            const key = [item.title, item.text, item.media_type || ''].join('|||');
+            const key = [item.text, item.media_type || ''].join('|||');
             const existing = seen.get(key);
             if (existing) {
                 if (item.favorite) existing.favorite = true;
@@ -3972,11 +3995,12 @@ function renderCustomOptionsSelect() {
         const select = document.getElementById(config.id);
         if (!select) return;
 
-        // Match by title/text key instead of entire JSON string to handle 'favorite' toggle correctly
+        // Match by title/text/type key instead of entire JSON string to handle
+        // 'favorite' toggle correctly and avoid cross-type phantom selection.
         const selectedKeys = Array.from(select.selectedOptions).map(o => {
             try {
                 const d = JSON.parse(o.value);
-                return d.title + '|||' + d.text;
+                return d.title + '|||' + d.text + '|||' + config.key;
             } catch (e) { return ''; }
         });
 
@@ -3987,7 +4011,7 @@ function renderCustomOptionsSelect() {
             const val = JSON.stringify(opt);
             option.value = val;
             option.text = (opt.favorite ? '⭐ ' : '') + opt.title;
-            if (selectedKeys.includes(opt.title + '|||' + opt.text)) {
+            if (selectedKeys.includes(conditionRenderKey(opt, config.key))) {
                 option.selected = true;
             }
             select.appendChild(option);
@@ -4052,7 +4076,7 @@ function renderConditionMultiselects() {
             option.text = (opt.favorite ? '⭐ ' : '') + opt.title;
             option.dataset.mediaType = type;
             option.hidden = type !== visibleType;
-            if (selectedKeys.includes(opt.title + '|||' + opt.text)) {
+            if (selectedKeys.includes(conditionRenderKey(opt, type))) {
                 option.selected = true;
             }
             select.appendChild(option);
@@ -4064,13 +4088,13 @@ function renderConditionMultiselects() {
     const mediaSelectedKeys = Array.from(mediaSelect.selectedOptions).map(o => {
         try {
             const d = JSON.parse(o.value);
-            return d.title + '|||' + d.text;
+            return d.title + '|||' + d.text + '|||' + (o.dataset.mediaType || '');
         } catch (e) { return ''; }
     });
     const sleeveSelectedKeys = Array.from(sleeveSelect.selectedOptions).map(o => {
         try {
             const d = JSON.parse(o.value);
-            return d.title + '|||' + d.text;
+            return d.title + '|||' + d.text + '|||' + (o.dataset.mediaType || '');
         } catch (e) { return ''; }
     });
     
@@ -4315,6 +4339,14 @@ function setDualColumnToggle(visible, checked) {
 
 function conditionOptionKey(opt) {
     return (opt ? opt.title + '|||' + opt.text : '');
+}
+
+// Render/toggle key: title + text + the media type the entry belongs to. Including
+// the type stops an entry that is shared across types (e.g. "Final Sale" in both
+// cd and boxSleeve) from being marked selected in one type just because it is
+// selected in the other. conditionOptionKey() stays type-free for favouriting.
+function conditionRenderKey(opt, type) {
+    return (opt ? opt.title + '|||' + opt.text + '|||' + (type || opt.media_type || '') : '');
 }
 
 function openFavoriteContextMenuAt(e, targetId, optionKey, optionMediaType) {
@@ -5551,6 +5583,26 @@ function toggleSleeveConditionOption(mediaType, opt) {
     
     if (option) {
         option.selected = !option.selected;
+        if (option.selected) {
+            // Only the clicked item stays highlighted: clear the same condition
+            // (matched by its text) from every other type's legacy select.
+            const text = opt.text || '';
+            const legacyByType = {
+                lp: document.getElementById('lpOptions'),
+                cd: document.getElementById('cdOptions'),
+                cassette: document.getElementById('customOptions'),
+                boxSleeve: document.getElementById('boxSleeveOptions')
+            };
+            Object.entries(legacyByType).forEach(([type, sel]) => {
+                if (type === mediaType || !sel) return;
+                Array.from(sel.options).forEach(o => {
+                    try {
+                        const d = JSON.parse(o.value);
+                        if ((d.text || '') === text) o.selected = false;
+                    } catch (e) { }
+                });
+            });
+        }
         syncConditionMultiselectsToLegacy();
     }
 }
@@ -5854,7 +5906,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     const mediaSelectedKeys = mediaSelect ? Array.from(mediaSelect.selectedOptions).map(o => {
         try {
             const d = JSON.parse(o.value);
-            return d.title + '|||' + d.text;
+            return d.title + '|||' + d.text + '|||' + (o.dataset.mediaType || mediaType);
         } catch (e) { return ''; }
     }) : [];
 
@@ -5865,7 +5917,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     const sleeveSelectedKeys = sleeveSelect ? Array.from(sleeveSelect.selectedOptions).map(o => {
         try {
             const d = JSON.parse(o.value);
-            return d.title + '|||' + d.text;
+            return d.title + '|||' + d.text + '|||' + (o.dataset.mediaType || sleeveType);
         } catch (e) { return ''; }
     }) : [];
     
@@ -5887,7 +5939,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     }
 
     mediaFiltered.forEach(opt => {
-        const isSelected = mediaSelectedKeys.includes(conditionOptionKey(opt));
+        const isSelected = mediaSelectedKeys.includes(conditionRenderKey(opt, mediaType));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
             (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');
@@ -5945,7 +5997,7 @@ function openDualColumnConditionPicker(mediaType, preserveSearch) {
     }
 
     sleeveFiltered.forEach(opt => {
-        const isSelected = sleeveSelectedKeys.includes(conditionOptionKey(opt));
+        const isSelected = sleeveSelectedKeys.includes(conditionRenderKey(opt, sleeveType));
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 5px; align-items: flex-start; padding: 4px 6px; cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border-color, #eee);' +
             (isSelected ? ' background: var(--wysiwyg-blue-light, #e6f0ff); font-weight: bold; color: #000;' : '');

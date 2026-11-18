@@ -1,3 +1,23 @@
+### v1.21.25.3 - 2026-11-18
+-- Update Menus now pulls data.json, colourmap.json and changelog.txt (colourmap added); freshness is based only on file mtimes of data.json / Conditions.json / colourmap.json, so patched clients no longer see "server version older than local".
+-- Conditions merge/overwrite now dedups by text (not title) and preserves local favourites; client-side dedupeCustomOptions matches.
+-- Upload/Update-to-server now keeps only the 5 most recent backup files per prefix (data/conditions/colourmap).
+-- Cumulative patches: make_patch now rolls up all published patches newer than the last full installer, so one apply gives everything.
+-- SKU: "Mixtape" no longer classifies as a cassette single (word-boundary fix).
+
+### v1.20.25.3 - 2026-11-18
+-- Older patches are now cumulativly rolled up into  all newer patches so that only one update is needed no matter how far behind a client is
+
+### v1.20.25.2 - 2026-11-18
+-- Scanner — Pad Circle now truly is padding-only (no deskew, no tilt loss). Restarted-scanner required to pick up the change.
+-- Main app — colour engine, box-set media rebuild, condition dedupe/phantom-selection fix, refresh = Reset All, all in.
+
+### v1.20.25.1 - 2026-11-18
+-- Conditions: selecting a condition in one sleeve type (CD / Box Set / LP / Cassette) no longer auto-selects the same-named entry in another type — only the clicked row stays highlighted, and the description no longer repeats identical condition text (deduped by text, not title).
+
+### v1.20.25.0 - 2026-11-18
+-- Conditions: selecting a condition in one sleeve type (CD / Box Set / LP / Cassette) no longer auto-selects the same-named entry in another type — only the clicked row stays highlighted, and the description no longer repeats identical condition text (deduped by text, not title).
+
 ### v1.20.24.1 - 2026-11-17
 -- Media format: a DVDr release now reads as DVDr, not DVD-Video, when Discogs also lists DVD-Video among its descriptions (Showtyme - State 2 State On The Road With Show).
 -- Description: a release with a single track now ends "with 1 Track" instead of "with 1 Tracks"; two or more stay plural.

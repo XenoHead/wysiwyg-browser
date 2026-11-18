@@ -176,6 +176,21 @@ def backup_pre_overwrite(path, prefix):
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup = os.path.join(os.path.dirname(path), f"{prefix}_pre_{stamp}.json")
     shutil.copy2(path, backup)
+    # Keep only the 5 most recent backups for this prefix; prune older ones.
+    try:
+        d = os.path.dirname(path)
+        backups = sorted(
+            (f for f in os.listdir(d)
+             if f.startswith(f"{prefix}_pre_") and f.endswith(".json")),
+            reverse=True,
+        )
+        for old in backups[5:]:
+            try:
+                os.remove(os.path.join(d, old))
+            except OSError:
+                pass
+    except OSError:
+        pass
     return backup
 
 def init_cost_calc():
@@ -874,43 +889,73 @@ async def save_settings(new_data: dict = Body(...)):
 @app.post("/update-menus")
 async def update_menus():
     _, base_server_path = resolve_server_paths()
-    files = ["data.json", "version.json", "changelog.txt"]
+    # Files update-menus may pull. Conditions.json is handled separately (merge /
+    # overwrite in the Update Menus modal) but its mtime counts toward the
+    # freshness gate, so a changed conditions file still unlocks an update.
+    # version.json is deliberately NOT pulled here: a patched client's version is
+    # newer than the full installer's, and overwriting it would downgrade it.
+    pull_files = ["data.json", "colourmap.json", "changelog.txt"]
     updated = []
-    
+
     try:
         if not os.path.exists(base_server_path):
             return JSONResponse(status_code=404, content={"status": "error", "message": "Server path not found."})
-            
-        # Check if server version is older
-        server_v_path = os.path.join(base_server_path, "version.json")
-        local_v_path = resource_path("version.json")
-        
-        if os.path.exists(server_v_path):
-            try:
-                with open(server_v_path, "r") as f: sv = json.load(f)
-                
-                lv = {"major": 0, "minor": 0, "patch": 0}
-                if os.path.exists(local_v_path):
-                    with open(local_v_path, "r") as f: lv = json.load(f)
-                
-                s_tuple = (int(sv.get("major", 0)), int(sv.get("minor", 0)), int(sv.get("patch", 0)), int(sv.get("build", 0)))
-                l_tuple = (int(lv.get("major", 0)), int(lv.get("minor", 0)), int(lv.get("patch", 0)), int(lv.get("build", 0)))
-                
-                if s_tuple < l_tuple:
-                    msg = f"Server version ({s_tuple[0]}.{s_tuple[1]}.{s_tuple[2]}) is older than local ({l_tuple[0]}.{l_tuple[1]}.{l_tuple[2]}). Update aborted."
-                    return JSONResponse(content={"status": "error", "message": msg})
-            except: pass
 
-        for filename in files:
+        # Freshness gate: based solely on mtimes of data.json / Conditions.json /
+        # colourmap.json. If the newest of those on the server is older than the
+        # newest of those locally, there is nothing newer to pull.
+        def server_cond_path():
+            p = os.path.join(base_server_path, "Conditions.json")
+            if os.path.exists(p):
+                return p
+            p2 = os.path.join(base_server_path, "conditions.json")
+            return p2 if os.path.exists(p2) else None
+
+        server_mtimes = []
+        for f in ("data.json", "colourmap.json"):
+            p = os.path.join(base_server_path, f)
+            if os.path.exists(p):
+                server_mtimes.append(os.path.getmtime(p))
+        cp = server_cond_path()
+        if cp:
+            server_mtimes.append(os.path.getmtime(cp))
+
+        local_mtimes = []
+        for f in ("data.json", "colourmap.json"):
+            p = get_local_path(f)
+            if os.path.exists(p):
+                local_mtimes.append(os.path.getmtime(p))
+        lp = get_local_path("Conditions.json")
+        if os.path.exists(lp):
+            local_mtimes.append(os.path.getmtime(lp))
+
+        server_newest = max(server_mtimes) if server_mtimes else 0.0
+        local_newest = max(local_mtimes) if local_mtimes else 0.0
+
+        if server_newest and server_newest < local_newest:
+            msg = "Server files are older than local. Update aborted."
+            return JSONResponse(content={"status": "error", "message": msg})
+
+        for filename in pull_files:
             server_path = os.path.join(base_server_path, filename)
             local_path = get_local_path(filename)
-            if os.path.exists(server_path):
-                shutil.copy2(server_path, local_path)
-                updated.append(filename)
-                
+            if not os.path.exists(server_path):
+                continue
+            # Per-file: only overwrite when the server copy is newer (or local
+            # is missing). Admin-only files should never be clobbered by an older
+            # server copy.
+            if os.path.exists(local_path):
+                try:
+                    if os.path.getmtime(server_path) < os.path.getmtime(local_path):
+                        continue
+                except OSError:
+                    pass
+            shutil.copy2(server_path, local_path)
+            updated.append(filename)
+
         if not updated:
             return JSONResponse(status_code=404, content={"status": "error", "message": "No files found on server."})
-            
+
         return {"status": "success", "message": f"Updated from server: {', '.join(updated)}"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
@@ -924,14 +969,10 @@ async def upload_menus():
     try:
         if not os.path.exists(local_path):
             return JSONResponse(status_code=404, content={"status": "error", "message": "Local data.json not found."})
-            
+
         if os.path.exists(server_path):
             backup_pre_overwrite(server_path, "data")
-            backup = server_path + ".old"
-            if os.path.exists(backup):
-                os.remove(backup)
-            os.rename(server_path, backup)
-            
+
         shutil.copy2(local_path, server_path)
         return {"status": "success", "message": "Menus uploaded to server."}
     except Exception as e:
@@ -1406,6 +1447,40 @@ async def merge_conditions(merge: bool = False):
             if not isinstance(server_data, dict):
                 return {"status": "error", "message": "Server Conditions.json must contain a JSON object."}
 
+            # Preserve the user's local favourites: a condition the user starred
+            # keeps its star even when the list is overwritten from the server.
+            # Match by (media_type, text) since text is the dedup identity.
+            local_favs = set()
+            if os.path.exists(local_path):
+                try:
+                    with open(local_path, "r", encoding="utf-8") as f:
+                        ld = json.load(f)
+                    if isinstance(ld, dict):
+                        for cat, items in ld.items():
+                            if not isinstance(items, list):
+                                continue
+                            for it in items:
+                                if not isinstance(it, dict):
+                                    continue
+                                if it.get("favorite"):
+                                    mt = str(it.get("media_type", "")).strip().lower()
+                                    txt = str(it.get("text", "") or it.get("title", "")).strip().lower()
+                                    local_favs.add((mt, txt))
+                except Exception:
+                    pass
+
+            if isinstance(server_data, dict):
+                for cat, items in server_data.items():
+                    if not isinstance(items, list):
+                        continue
+                    for it in items:
+                        if not isinstance(it, dict):
+                            continue
+                        mt = str(it.get("media_type", "")).strip().lower()
+                        txt = str(it.get("text", "") or it.get("title", "")).strip().lower()
+                        if (mt, txt) in local_favs:
+                            it["favorite"] = True
+
             with open(local_path, "w", encoding="utf-8") as f:
                 json.dump(server_data, f, indent=4)
             return {"status": "success", "message": "Conditions overwritten from server."}
@@ -1417,17 +1492,17 @@ async def merge_conditions(merge: bool = False):
         try:
             with open(local_path, "r", encoding="utf-8") as f: local_data = json.load(f)
         except: pass
-        
+
     server_data = {}
     try:
         with open(server_path, "r", encoding="utf-8") as f: server_data = json.load(f)
-    except: 
+    except:
         return {"status": "error", "message": "Could not read master file on server."}
 
     # Dynamic merge logic covering all categories (including mediaCondition & media)
     all_cats = list(dict.fromkeys(list(server_data.keys()) + list(local_data.keys())))
     if not all_cats:
-        all_cats = ["lp", "cd", "cassette", "media", "mediaCondition"]
+        all_cats = ["lp", "cd", "cassette", "media", "mediaCondition", "boxSleeve"]
 
     merged_data = {}
     for cat in all_cats:
@@ -1435,19 +1510,41 @@ async def merge_conditions(merge: bool = False):
         server_list = server_data.get(cat, [])
         if not isinstance(local_list, list): local_list = []
         if not isinstance(server_list, list): server_list = []
-        
+
+        # Dedup by text (the user-facing description), falling back to title.
+        # Two entries that share a text are the same condition regardless of
+        # title differences.
         combined = {}
+        order = []
         for item in server_list:
-            if isinstance(item, dict) and item.get("title"):
-                key = (item.get("media_type", "").lower(), item.get("title", "").strip().lower())
-                combined[key] = item
-            
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("text", "") or item.get("title", "")).strip().lower()
+            mt = str(item.get("media_type", "")).strip().lower()
+            key = (mt, key)
+            if key in combined:
+                # Keep local favourite status if either side is starred.
+                if item.get("favorite"):
+                    combined[key]["favorite"] = True
+            else:
+                combined[key] = dict(item)
+                order.append(key)
+
         for item in local_list:
-            if isinstance(item, dict) and item.get("title"):
-                key = (item.get("media_type", "").lower(), item.get("title", "").strip().lower())
-                combined[key] = item
-            
-        final_list = list(combined.values())
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("text", "") or item.get("title", "")).strip().lower()
+            mt = str(item.get("media_type", "")).strip().lower()
+            key = (mt, key)
+            if key in combined:
+                # Preserve the local favourite flag when merging.
+                if item.get("favorite"):
+                    combined[key]["favorite"] = True
+            else:
+                combined[key] = dict(item)
+                order.append(key)
+
+        final_list = [combined[k] for k in order]
         final_list.sort(key=lambda x: (x.get("media_type", ""), x.get("title", "").lower()))
         merged_data[cat] = final_list
 

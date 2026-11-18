@@ -46,7 +46,9 @@ param(
 
     [switch]$AllowStaleRepo,
 
-    [string]$ShareRoot = '\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG'
+    [string]$ShareRoot = '\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG',
+
+    [switch]$Delta
 )
 
 $ErrorActionPreference = 'Stop'
@@ -248,6 +250,58 @@ foreach ($rel in $fileArgs) {
         throw "'$n' does not exist in $RepoRoot."
     }
     if (-not $selected.Contains($n)) { $selected.Add($n) }
+}
+
+# --- Roll up earlier published patches (cumulative by default) ---------------
+# A patch that only carries its own delta would leave a user who skipped
+# intermediate versions missing those changes. Roll every published patch that
+# is still newer than the last full installer into this one, so applying the
+# newest patch always gives the user everything. Use -Delta to ship a pure
+# delta instead (rare).
+if (-not $Delta) {
+    $baselineVer = [version]'0.0.0.0'
+    $serverVersionPath = Join-Path (Join-Path $ShareRoot 'WYSIWYG') 'version.json'
+    try {
+        if (Test-Path -LiteralPath $serverVersionPath) {
+            $iv = Get-Content -LiteralPath $serverVersionPath -Raw | ConvertFrom-Json
+            $baselineVer = [version]('{0}.{1}.{2}.{3}' -f [int]$iv.major, [int]$iv.minor, [int]$iv.patch, [int]$iv.build)
+        }
+    } catch { }
+
+    $patchesDir = Join-Path $ShareRoot 'patches'
+    if (Test-Path -LiteralPath $patchesDir) {
+        $published = @(
+            Get-ChildItem -LiteralPath $patchesDir -Directory -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    $m = Join-Path $_.FullName 'patch.json'
+                    if (-not (Test-Path -LiteralPath $m)) { return }
+                    try {
+                        $d = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json
+                        $v = [version]('{0}.{1}.{2}.{3}' -f [int]$d.version.major, [int]$d.version.minor, [int]$d.version.patch, [int]$d.version.build)
+                        if ($v -gt $baselineVer) {
+                            [pscustomobject]@{ Version = $v; Manifest = $d }
+                        }
+                    } catch { }
+                }
+        )
+        $rolledUp = 0
+        foreach ($p in ($published | Sort-Object Version)) {
+            foreach ($f in ($p.Manifest.files)) {
+                $rel = Normalize-Rel $f.path
+                if (Test-Ignored $rel) { continue }
+                if (-not (Test-Allowed $rel)) { continue }
+                $full = Join-Path $RepoRoot $rel
+                if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+                if (-not $selected.Contains($rel)) {
+                    $selected.Add($rel)
+                    $rolledUp++
+                }
+            }
+        }
+        if ($rolledUp -gt 0) {
+            Write-Host ("Rolled up {0} file(s) from published patches newer than the installer baseline ({1})." -f $rolledUp, $baselineVer.ToString()) -ForegroundColor Cyan
+        }
+    }
 }
 
 # A patch always carries these, so the client's version and notes advance.

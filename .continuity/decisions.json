@@ -10263,5 +10263,182 @@
       "source": "cli",
       "timestamp": "2026-11-17T23:01:24.481Z"
     }
+  },
+  {
+    "id": "05ee95b9-142e-43da-99a2-591feb066f28",
+    "question": "How does the standalone WalmartAPI page get the main app's shared assets?",
+    "answer": "The page links /styles.css (source of the --wysiwyg-* custom properties), /fyrlogo.png and /heartbeat.js because it is written to be served by the app. WalmartAPI/__main__.py now serves styles.css and fyrlogo.png from the repo root via routes.resource_path and returns a no-op heartbeat.js, because there is no /heartbeat route standalone. Keeps the page identical in both contexts without editing the page.",
+    "timestamp": "2026-11-18T17:09:36.575Z",
+    "tags": [
+      "how",
+      "walmartapi standalone ui"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-18T17:09:36.576Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-18T17:09:36.572Z"
+    }
+  },
+  {
+    "id": "ce73c7b1-c25e-472a-a039-f15dac17e494",
+    "question": "What does the + Add button on the WalmartAPI lookup card do?",
+    "answer": "It stages the item locally: POST /api/walmart-api/stage appends a record to WalmartAPI/pending.json (deduped by UPC, atomic write under a lock) and the card reports the pending count. No Walmart catalog write, no feed, and WalmartSheet/ is untouched - the destination for adding items is still undecided, and pending.json is already the input a later submit step would read.",
+    "timestamp": "2026-11-18T19:04:20.771Z",
+    "tags": [
+      "api",
+      "walmartapi ui decision"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-18T19:04:20.772Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-18T19:04:20.767Z"
+    }
+  },
+  {
+    "id": "bb73d56a-1474-40b7-9abb-a7e7bb68938f",
+    "question": "What happens after + Add on the WalmartAPI lookup page?",
+    "answer": "The card button flips to Remove (POST /api/walmart-api/unstage drops the record). Staging also turns the 'Your listing' panel into a compact item-setup form (Product Name, Brand, MPN, Genre, Condition, Site Description, SKU, Price, Quantity + read-only GTIN-14). Submit posts to POST /api/walmart-api/submit, which validates (Product Name + SKU required, price > 0), stores a 'listing' object plus submittedAt on the pending record and the panel re-renders it as 'Your listing'. All local: no Walmart feed or catalog write, WalmartSheet untouched; pending.json is shaped for a later MP_ITEM feed builder.",
+    "timestamp": "2026-11-18T19:15:56.811Z",
+    "tags": [
+      "api",
+      "walmartapi ui decision"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-18T19:15:56.812Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-18T19:15:56.808Z"
+    }
+  },
+  {
+    "id": "cd9e9641-0017-4918-b6af-206232e571f7",
+    "question": "What does the WalmartAPI page show when a barcode is not on Walmart?",
+    "answer": "The 'new' verdict opens a Create item screen in the right panel modelled on Seller Center's required attributes only: Product name, Description, Main image URL, Product subcategory, then Product type (fixed Music), MPN, Brand name, Fulfillment operation and the certification tick. POST /api/walmart-api/create validates that set (http/https image URL, certification required) and stores it in WalmartAPI/pending.json with decision new-item and source create. SKU and price are not asked for because Seller Center asks them on the offer step. Local only, no Walmart feed; the listing gets an Edit link back into the form.",
+    "timestamp": "2026-11-18T21:40:25.572Z",
+    "tags": [
+      "api",
+      "walmartapi ui decision"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-18T21:40:25.573Z",
+        "action": "created"
+      }
+    ],
+    "entities": {
+      "technologies": [],
+      "patterns": [],
+      "concepts": [
+        "api"
+      ]
+    },
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-18T21:40:25.568Z"
+    }
   }
 ]

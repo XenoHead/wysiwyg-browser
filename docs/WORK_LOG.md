@@ -2535,6 +2535,13 @@ and then **reverted** — see the last bullet.
 - `__main__.py`: standalone runner, `python -m WalmartAPI` — a small FastAPI app
   holding only the two routes, served on **8009** (8008 belongs to the main app),
   `/` redirecting to the page, `--port` / `--open` / `--sandbox` flags.
+- **Standalone asset gap, found by opening the page in the browser:** the page is
+  written to be served by the app, so it links `/styles.css` (where the
+  `--wysiwyg-*` custom properties live), `/fyrlogo.png` and `/heartbeat.js`. None
+  exist outside the app, so standalone logged two 404s and every themed colour fell
+  back (`--wysiwyg-accent-text` undefined => the verdict banners lost their accent).
+  `__main__.py` now serves the first two from the repo root and returns a no-op
+  `heartbeat.js`, since there is no `/heartbeat` route to talk to.
 - **Verified:** `py_compile` clean on all Python touched; `node --check` clean on
   the inline page script; lookup function called directly against the live API —
   `656605531151` => `yours-unpublished`, `076732157848` => `yours-live`,
@@ -2548,6 +2555,173 @@ and then **reverted** — see the last bullet.
   `C:\FYRTOOLS\WYSIWYG\WalmartAPI` does not exist there, so the guard dropped the
   route. Run it with `python -m WalmartAPI` until integration is decided.
   Changelog line left for the patch GUI to bump, as usual.
+
+### 132. WalmartAPI page — catalog card and `+ Add`
+**Files:** `WalmartAPI/walmart_api.html`, `WalmartAPI/routes.py`
+- When a barcode **is** on Walmart (`offer` / `new-item`), the Walmart catalog panel now
+  renders the hit as a card shaped like walmart.com's own listing, not a key/value table:
+  180 px image, bold title clamped to 3 lines, `GTIN:` in GTIN-14 form
+  (`00848064021469` from `848064021469`), `$40.90 US Buy Box price`, a `More info`
+  link to `/ip/{itemId}`, and a pill `+ Add` button underneath.
+- Image URLs are requested at 300 px (`odnHeight`/`odnWidth` rewritten in the page) so
+  the card does not upscale the API's 180 px thumb.
+- `+ Add` posts to the new `POST /api/walmart-api/stage`, which appends the item to
+  `WalmartAPI/pending.json` — de-duplicated by UPC, written atomically under a lock.
+  Record: `upc, gtin, decision, title, brand, productType, itemId, price, currency,
+  image, isMarketPlaceItem, addedAt`. The button flips to `Added` and the note reports
+  the pending count. `GET /api/walmart-api/pending` reads the list back.
+- Deliberate: staging is **local only**. No catalog write, no feed, `WalmartSheet/`
+  untouched — it keeps `+ Add` honest until the destination is decided, and it is
+  already the input a later submit step would consume.
+- No "N Offers" count on the card: the catalog-search response has no offers field,
+  and Walmart's buy-box/offers data comes from a separate async report. Left out
+  rather than invented.
+- **Verified:** `py_compile` and `node --check` clean; card renders for `848064021469`
+  (Obituary — Cause of Death, $40.90, GTIN 00848064021469); clicking `+ Add` wrote one
+  record to `pending.json` and turned the button into `Added`.
+- `WalmartAPI/pending.json` is runtime data and is currently untracked; **not** added
+  to `.gitignore`, since that is Scott's call.
+
+### 133. WalmartAPI page — Remove button, item-setup form, Submit
+**Files:** `WalmartAPI/walmart_api.html`, `WalmartAPI/routes.py`
+- `+ Add` now flips to an enabled **`Remove`** pill instead of a dead `Added` label;
+  `Remove` calls the new `POST /api/walmart-api/unstage`, drops the record and puts the
+  panel back to "Not in your catalog."
+- Staging paints the right-hand panel as a compact item-setup form (Walmart's next
+  screen, simulated): two bordered sections, two-column grid.
+  - *Item details:* Product Name (wide), Brand Name, Manufacturer Part Number (MPN),
+    Genre, Condition (New / Refurbished / Used), Site Description (textarea, wide).
+  - *Offer:* SKU, Selling Price (USD), Quantity, read-only UPC / GTIN-14.
+  - Prefilled from the catalog hit: Product Name, Brand, Genre (last category), Site
+    Description and Price; SKU and MPN are deliberately left blank.
+- `Submit` posts the form to `POST /api/walmart-api/submit`. The server validates
+  (Product Name and SKU required, price > 0, quantity clipped at 0), rounds price to
+  2 dp, whitelists the fields, stores `listing` + `submittedAt` on the pending record
+  and echoes it back.
+- The panel then re-renders as "Your listing": SKU, Product, Status `Draft — not
+  submitted`, Price, Stock, Condition, Brand, MPN, Genre, UPC, plus a muted "saved
+  locally — not sent to Walmart" line. The card button stays `Remove`.
+- The page keeps a `pendingByUpc` cache loaded from `GET /api/walmart-api/pending` on
+  every lookup, so the button/panel state survives a reload and a re-scan of an
+  already-staged UPC opens straight into its form or listing.
+- Still **no Walmart writes** — submit is a local draft; the record is shaped so a
+  later `MP_ITEM` feed builder can read it. `WalmartSheet/` untouched.
+- **Verified:** `py_compile` / `node --check` clean; routes registered; smoke test of
+  the endpoints with a throwaway UPC — stage 200, submit 200 (price `12.345` stored
+  `12.35`, quantity `"3"` stored `3`), missing record 404, bad price and missing SKU
+  rejected with 400-level messages, unstage removed it and left the real record
+  alone. UI left for Scott to test.
+
+### 134. WalmartAPI page — decode HTML entities in Walmart text
+**Files:** `WalmartAPI/routes.py`
+- Symptom: Site Description prefilled as `Obituary&apos;s second album ... &quot;senseless
+  gurgles&quot;`. The catalog/search payload ships free text already HTML-encoded
+  (`&apos;`, `&quot;`, `&amp;`), so the page's own escaping turned it into a literal entity
+  string in the textarea and the card.
+- Fix: new `_text()` in `routes.py` runs `html.unescape()` over the summarised text —
+  `title`, `brand`, `productType`, `categories`, `description` (then truncated to 600
+  chars), and the seller-side `productName`, `condition`, `productType`, `shelf` and
+  `unpublishedReasons`. The page still escapes on the way back into the DOM, so this
+  is a display fix, not an XSS hole.
+- **Verified:** live lookup of `848064021469` now returns `Obituary's second album …` and
+  `"senseless gurgles"` with no `&apos;` / `&quot;` / `&amp;` left in the payload.
+
+### 135. WalmartAPI page — Create item screen for `new` verdicts
+**Files:** `WalmartAPI/walmart_api.html`, `WalmartAPI/routes.py`
+- When a scan finds nothing on Walmart (`decision.code === 'new'`), the right-hand panel
+  no longer says "Not in your catalog." — it becomes **Create item**, modelled on
+  Seller Center's required-attributes screen: single-column fields, Product name,
+  Description, Main image URL (with the JPG/PNG/TIFF 5 MB, 1000 × 1000 note),
+  Product subcategory, then a "Required to list — For Music · 4/24 attributes" section
+  with Product identifiers (Product type fixed to `Music`, MPN), Brand info (Brand name),
+  Fulfillment (Seller / Walmart Fulfilled) and the Certifications tick box.
+- `POST /api/walmart-api/create` validates the required set — Product name, Description,
+  Main image URL (`http://` / `https://`), Product subcategory, MPN, Brand name and the
+  certification tick — then writes to the same `WalmartAPI/pending.json` with
+  `decision: "new-item"`, `source: "create"` and a `listing` object (plus `submittedAt`).
+  It does **not** require SKU or price: Seller Center asks for those on the offer step,
+  not on this screen.
+- On success the panel re-renders as "Your listing" (Product, Status
+  `Draft — not submitted`, Product type, Subcategory, Brand, MPN, Fulfillment, UPC,
+  `View image` link) with an **Edit** link that reopens the create form prefilled from
+  the saved record. Not on the offer flow — that already has `Remove` on the card.
+- Deliberately omitted from the screen: Additional images (optional), and the middle
+  attribute group in Scott's reference screenshot, whose labels were not legible. If
+  that group turns out to hold required Music attributes, they get added on top.
+- **Verified:** `py_compile` / `node --check` clean; `POST /create` smoke-tested — all
+  six missing-field messages, bad-URL rejection, missing certification rejection, a
+  valid create (200, `source: "create"`), an edit pass (product name updated in place),
+  and `unstage` cleanup leaving the other pending record alone. UI left for Scott.
+
+### 99. Condition output — dedupe "Final Sale" across legacy sleeve selects
+**Files:** `app.js`
+- Symptom: `Factory Sealed CD ( final sale ... ) ( final sale ... )` — the same condition text appeared twice in the
+  description when it was selected in more than one of the legacy sleeve selects (`lpOptions`, `cdOptions`,
+  `customOptions`, `boxSleeveOptions`). The BOTH/dual picker keeps each type's selections in its own legacy select, and
+  `generateListingData` flattened all four into `customOptionsSelected` without de-duplicating, so a condition that lives in
+  two types (e.g. "Final Sale", which exists in both `cd` and `boxSleeve` with identical text) was written once per select.
+- Fix (3 parts):
+  1. `dedupeConditionValues(values)` now keys by **text only** (not title+text), so entries that share a title but describe
+     different things ("Final Sale (Color)" vs "Final Sale (Matrix)") stay distinct, while identical text collapses.
+  2. Phantom cross-type selection: the render key in `renderConditionMultiselects` (main page) and
+     `openDualColumnConditionPicker` (dual picker) now includes the **media type** (`title + '|||' + text + '|||' + type`),
+     so an entry selected in one type no longer auto-marks the same-named entry in another type as selected.
+  3. Stale state: `toggleSleeveConditionOption` clears the same condition (matched by text) from every *other* type's
+     legacy select when an item is toggled on, so only the clicked one stays highlighted.
+  4. Final Sale keyword match: the two special-case sites now match any title containing "Final Sale" (case-insensitive,
+     flexible spacing) instead of an exact equality, so "Final Sale (Color)", "Final Sale (Matrix)" and any future
+     "Final Sale (...)" variant all follow the same rules (bare leading text for sleeve, mediaFinalSale for media).
+- Note: the three-column modal views (single type per column) were already type-isolated and needed no change.
+- Verified with a harness: identical text → one entry; distinct text → both kept; empty → empty.
+- **Undo:** remove `dedupeConditionValues()` and `conditionRenderKey()`, change the gather back to the bare spread arrays,
+  revert the `selectedKeys`/`render` keys to `title + '|||' + text`, and remove the stale-clearing block in
+  `toggleSleeveConditionOption`.
+
+### 100. WysiScan — "Pad Circle" button (CD matrix/faces, no auto-align)
+**Files:** `WysiScan/scanner_test.html`
+- New button `#padCircleBtn` "Pad Circle" (purple) placed to the right of the Crop Mode radios, inside the same row.
+  It calls `recropLast(false, false)` — the same recrop as "Adjust Pad" but with the auto-align step skipped.
+- `recropLast(useOriginal, align)` gained an `align` flag; the deskew step now runs only when `align && !useOriginal`.
+- Only enabled when the 2nd or 3rd radio (CD Matrix / CD/45 Front) is selected **and** an image is loaded. Enforced by
+  `updatePadCircleEnabled()` (called from `handleCropModeChange`) and `updateCropButtonsState()` (called after every load
+  and every recrop). While disabled it shows at 50% opacity with a not-allowed cursor.
+- `setButtonsDisabled` and the recrop `finally` block now handle the button too, so it disables during processing and
+  restores its "Pad Circle" label afterwards.
+- Pad Circle also re-applies any current tilt after the recrop (via `/tilt-image`, with the new padding), so a manual
+  rotation/tilt set on the cropped image is preserved instead of being dropped by the recrop. Tilt of 0 skips the
+  extra call.
+- "Adjust Pad" behaviour is unchanged: it still aligns first (`recropLast(false)` with the default `align = true`).
+- Verified: extract-and-`node --check` of the page scripts; CSS brace balance.
+
+### 101. SKU: 12" (and 10") no longer auto-classify as a single
+**Files:** `app.js` (`inferSkuCode`)
+- Symptom: release 38725314 (PinkPantheress – To Hell With It) is a 12" at 45 RPM with no "LP"/"Album" in its
+  descriptions, so `singleSignals` matched `12"` and the SKU came out `VINYLS` ("vinyl single"). The user's point:
+  `12" 45 RPM` does not always mean a single.
+- Fix: removed `12"` and `10"` from `singleSignals`; kept `7"`, `single` and `maxi-single`. A 12" (or 10") release without
+  an explicit "LP"/"Album"/"single" now falls through to the core-format branch and gets `VINYL` instead of `VINYLS`.
+  (7" is kept because it is almost always a single; say if it should go too.)
+- The `rVinyl` count regex at line ~3598 is unchanged - it still counts 7"/12"/10" as vinyl for the media-count SKU
+  logic, which is a separate concern from single classification.
+- Verified: the format line `Vinyl, 12", 45 RPM, Limited Edition, Mixtape, Reissue, Pearl Lagoon Vinyl` now yields
+  `VINYL` instead of `VINYLS`.
+- **Undo:** add `"12\""` and `"10\""` back to the `singleSignals` array.
+
+### 102. SKU: "Mixtape" no longer classifies as a cassette single
+**Files:** `app.js` (`inferSkuCode`)
+- Symptom: release 38725314 (PinkPantheress – To Hell With It) is a 12" vinyl with "Mixtape" in its descriptions, yet the SKU
+  came out `CASSS` (cassette single). The user reported it as "showing as cassette single".
+- Cause: the single-classification block checked `combined.includes("tape")`, and "Mixtape" contains "tape" as a substring
+  (`m-i-x-t-a-p-e`). Same trap for "mc" inside other words. So any release mentioning Mixtape (or anything containing
+  "mc"/"tape") was misclassified as a cassette single.
+- Fix: all four cassette/tape checks in `inferSkuCode` (box-set mixed-media count, box-set classification, single
+  classification, core format) now use word boundaries - `/\bcassette(s)?\b/`, `/\bmc\b/`, `/\btape(s)?\b/` - so
+  "Mixtape" no longer matches "tape". `12"` and `10"` were also removed from `singleSignals` in the previous fix, so a
+  12" release without an explicit "single"/"maxi-single"/"7\"" no longer auto-classifies as a single at all.
+- Verified: the PinkPantheress format line (`Vinyl, 12", 45 RPM, Limited Edition, Mixtape, Reissue, Pearl Lagoon Vinyl`)
+  now yields `VINYL` instead of `VINYLS`/`CASSS`. The user confirmed the corrected SKU `8129-TH2026-1118-VINYL-NEW-0123-O`.
+- **Undo:** revert the four `includes(...)` calls to their original `combined.includes(...)` form and add `"12\""` /
+  `"10\""` back to `singleSignals`.
 
 ---
 

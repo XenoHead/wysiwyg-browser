@@ -187,6 +187,19 @@ C:\FYRTOOLS\wysiwyg.patch-backup\
 Copy its contents back over `C:\FYRTOOLS\WYSIWYG` with the app closed. The folder
 also holds `patch-backup-info.txt` naming the version that was replaced.
 
+## Cumulative patches (new)
+
+Each patch is **cumulative**: when you build one, it automatically rolls in every file from
+all published patches that are still newer than the last full installer on the share, in
+addition to your current changes. So a user who skipped several same-day patches only ever
+needs the newest one - applying it gives them everything.
+
+- `make_patch` does this by default. Use `-Delta` to ship a pure delta instead (rare).
+- `apply_patch` is unchanged: it applies a single patch and refuses an older one, but
+  because the payload is cumulative a single apply is enough.
+- After a full installer build, the published patches are no longer newer than the
+  installer, so the next patch is small again.
+
 ## Rules of thumb
 
 - **One version, one meaning.** If a batch of changes includes Python, do the full
