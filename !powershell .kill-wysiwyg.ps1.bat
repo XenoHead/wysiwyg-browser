@@ -4,3 +4,6 @@ REM the next launch picks up the current files. See kill-wysiwyg.ps1 for switche
 REM (-NoChrome, -WhatIf).
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0kill-wysiwyg.ps1"
 if errorlevel 1 pause
+
+
+pause

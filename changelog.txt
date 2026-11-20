@@ -1,5 +1,26 @@
+### v1.21.33.6 - 2026-11-20
+-- WysiScan: Full now preserves Auto-Align (including CD/45 Front), incremental tilt, 90°/45° rotations, Undo/Redo, and applied colour changes while showing the full scan; Original remains pristine.
+-- WysiScan: Auto-Align affects Cropped only and clears manual tilt. Adjust Pad rebuilds from Original using the tracked rotation state.
+-- WysiScan: Undo/Redo operates on the selected Original or Cropped panel and restores rotation/colour history.
+-- WysiScan: Pad Circle remains a no-auto-align operation for CD Matrix/CD/45 Front, using a centered disc-fit square of 2r + 2×padding; contour crop remains the fallback if the circle fit is implausible.
+
+### v1.21.30.1 - 2026-11-20
+-- WysiScan: the scanner no longer wipes the scans folder on shutdown - finished scans are the user's files and are never swept.
+-- WysiScan: the twice-weekly cleanup (Tue/Thu) touches only the thumbnail cache, which regenerates on demand; raw scans in temp survive 24 hours so Revert / Adjust Pad / recrop still work after a restart.
+-- WysiScan: importing a scan that cannot be auto-cropped no longer fails with "are the same file" - the file is kept as-is.
+-- WysiScan: the server assigns the next scan number (highest + 1), so a new scan can no longer overwrite an earlier one or reuse its thumbnail.
+-- WysiScan: the gallery lists 1, 2, 3... in numeric order with new scans continuing at the end.
+-- WysiScan: rotation survives edits - tilt and 90-degree turns are recorded per file and re-applied after Full, Adjust Pad, Pad Circle and crop-replace; a turn after a tilt keeps the tilt, and Auto-Align clears the tilt as it sets the new rotation.
+-- WysiScan: Full is now purely a zoom-out - the whole scan shows with the rotation kept (no re-crop) and the brightness/contrast/saturation/hue/tint edits re-applied.
+-- WysiScan: the rotate buttons on the Cropped panel no longer rotate the Original, and vice versa.
+-- WysiScan: new "Copy Original" button under the Original - replaces the Cropped with the pristine scan, clearing rotation, tilt and colour.
+-- WysiScan: Full now keeps the second image's Auto-Align/CD/45 Front correction, incremental tilt, quarter-turns, and Undo/Redo rotation/colour state while showing the full scan; the Original remains pristine.
+-- WysiScan: Undo/Redo controls affect only their own Original or Cropped preview.
+-- WysiScan: Pad Circle retains the centred disc-fit crop (`2r + 2×padding`) for CD Matrix/CD/45 Front; Adjust Pad stays on its separate auto-align/contour-crop path.
+
 ### v1.21.25.3 - 2026-11-18
 -- Update Menus now pulls data.json, colourmap.json and changelog.txt (colourmap added); freshness is based only on file mtimes of data.json / Conditions.json / colourmap.json, so patched clients no longer see "server version older than local".
+-- Favorites in conditions are not over written.
 -- Conditions merge/overwrite now dedups by text (not title) and preserves local favourites; client-side dedupeCustomOptions matches.
 -- Upload/Update-to-server now keeps only the 5 most recent backup files per prefix (data/conditions/colourmap).
 -- Cumulative patches: make_patch now rolls up all published patches newer than the last full installer, so one apply gives everything.

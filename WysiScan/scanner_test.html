@@ -1009,7 +1009,7 @@
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Right-click while selected to rename"><input type="radio"
                         name="mediaType" value="lp" onchange="handleCropModeChange()"> <span
                         class="crop-mode-name" data-mode="lp">Custom One</span></label>
-                <button id="padCircleBtn" onclick="recropLast(false, false)" disabled
+                <button id="padCircleBtn" onclick="recropLast(false, false, true)" disabled
                     title="CD matrix/faces only: apply the padding without auto-aligning the scan"
                     style="padding: 3px 8px; background-color: #6f42c1; color: #fff; border: 1px solid var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; opacity: 0.5;">Pad Circle</button>
             </div>
@@ -1036,7 +1036,7 @@
                 <input type="number" id="tiltAngle" value="0.0" step="1"
                     onchange="setTiltFromInput()"
                     style="width: 70px; text-align: center; padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background: var(--input-bg); color: var(--text-main);"
-                    title="Absolute tilt in degrees - measured from the untouched scan">
+                    title="Absolute tilt in degrees - measured from the current aligned/quarter-turned base">
 
                 <div style="display: flex; gap: 5px; justify-content: center; width: 100%;">
                     <button onpointerdown="tiltPressStart(event, 10)" onpointerup="stopTiltHold()"
@@ -1130,8 +1130,8 @@
                                 title="Rotate Left 90°">⟲</button>
                             <button onclick="rotateImage(document.getElementById('originalImg'), 'right')"
                                 title="Rotate Right 90°">⟳</button>
-                            <button onclick="undoLastAction()" title="Undo Last Action (Ctrl+Z)">↩️</button>
-                            <button onclick="redoLastAction()" title="Redo Last Undo (Ctrl+Y)">↪️</button>
+                            <button onclick="undoLastAction(document.getElementById('originalImg'))" title="Undo Last Action (Ctrl+Z)">↩️</button>
+                            <button onclick="redoLastAction(document.getElementById('originalImg'))" title="Redo Last Undo (Ctrl+Y)">↪️</button>
                             <button onclick="openCropper(document.getElementById('originalImg'))"
                                 title="Manual Crop">✂️</button>
                             <button onclick="openCropToReplace()" title="Crop Original to Replace Output">✂️➜</button>
@@ -1139,6 +1139,10 @@
                         <img id="originalImg"
                             src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMjAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBzdHlsZT0iYmFja2dyb3VuZDogIzFlMWUxZTsgYm9yZGVyOiAycHggZGFzaGVkICMzYTNhM2E7IGJvcmRlci1yYWRpdXM6IDhweDsiPiAgPHBhdGggZD0iTTEzNSA2NSBoMzAgYTUgNSAwIDAgMSA1IDUgdjM1IGE1IDUgMCAwIDEgLTUgNSBoLTMwIGE1IDUgMCAwIDEgLTUgLTUgdi0zNSBhNSA1IDAgMCAxIDUgLTUgeiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiLz4gIDxwYXRoIGQ9Ik0xMzggOTUgbDEwIC0xMCBsOCA4IGw4IC0xMiBsOCAxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTU1IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPiAgPGNpcmNsZSBjeD0iMTQ2IiBjeT0iNzciIHI9IjMiIGZpbGw9IiM1NTUiLz4gIDx0ZXh0IHg9IjE1MCIgeT0iMTM1IiBmaWxsPSIjODg4IiBmb250LWZhbWlseT0iU2Vnb2UgVUksIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U2NhbiBvciBJbXBvcnQgbm93PC90ZXh0Pjwvc3ZnPg=="
                             alt="Original Scan will appear here" data-path="">
+                        <div style="margin-top: 10px; display: flex; gap: 8px;">
+                            <button onclick="resetCroppedToPristine()" title="Replace the Cropped image with the pristine Original - exactly as scanned, no rotation, crop or adjustments"
+                                style="flex: 1; max-width: calc(50% - 4px); margin-right: 0;">Copy Original</button>
+                        </div>
                     </div>
                     <div>
                         <h3>Last Scan (Cropped)</h3>
@@ -1147,8 +1151,8 @@
                                 title="Rotate Left 90°">⟲</button>
                             <button onclick="rotateImage(document.getElementById('croppedImg'), 'right')"
                                 title="Rotate Right 90°">⟳</button>
-                            <button onclick="undoLastAction()" title="Undo Last Action (Ctrl+Z)">↩️</button>
-                            <button onclick="redoLastAction()" title="Redo Last Undo (Ctrl+Y)">↪️</button>
+                            <button onclick="undoLastAction(document.getElementById('croppedImg'))" title="Undo Last Action (Ctrl+Z)">↩️</button>
+                            <button onclick="redoLastAction(document.getElementById('croppedImg'))" title="Redo Last Undo (Ctrl+Y)">↪️</button>
                             <button onclick="openCropper(document.getElementById('croppedImg'))"
                                 title="Manual Crop (Overwrite)">✂️</button>
                             <button onclick="openCropAsNew()" title="Crop From This Image as New">✂️+</button>
@@ -2075,7 +2079,8 @@
         let groupStarted = false;
         let lastOriginalPath = '';
         let lastCroppedPath = '';
-        let tiltValue = 0;          // absolute degrees, measured from the untouched scan
+        let tiltValue = 0;          // absolute degrees from the current un-tilted rotation base
+        let fullImageView = false;  // Full shows the whole scan without dropping its rotations
         // What is already baked into the picture on screen. The CSS preview shows
         // only the difference, so an applied adjustment is never shown twice.
         let adjustApplied = { brightness: 0, contrast: 0, saturation: 0, hue: 0, tint: 0 };
@@ -2478,7 +2483,7 @@
             const currentCounter = scanCounter;
 
             setButtonsDisabled(true);
-            status.innerText = `Scanning item ${currentCounter} for group '${groupName}'... Check for Windows popup.`;
+            status.innerText = `Scanning item ${currentCounter + 1} for group '${groupName}'... Check for Windows popup.`;
 
             try {
                 const response = await fetch('/trigger-scan', {
@@ -2678,12 +2683,17 @@
             // If original was deleted, we can't "Revert" to it, but we can still "Adjust Pad" the cropped one
             lastOriginalPath = data.original_deleted ? "" : data.original_path;
             lastCroppedPath = data.cropped_path;
+            fullImageView = false;
 
             status.innerText = `Scan Complete!`;
 
-            // Add to gallery at the bottom and refresh groups
-            addToGallery(data.original, data.cropped, currentCounter, data.original_path, data.cropped_path);
-            scanCounter++;
+            // The server owns the number: it is the highest already in this group
+            // plus one, so the browser never invents one that is taken.
+            const savedNumber = Number(data.number) || (currentCounter + 1);
+
+            // Add to gallery in numerical position and refresh groups
+            addToGallery(data.original, data.cropped, savedNumber, data.original_path, data.cropped_path);
+            scanCounter = savedNumber;
             fetchGroups(); // Refresh group list as a new group might have been created
         }
 
@@ -2733,6 +2743,7 @@
             }
 
             lastCroppedPath = croppedPath || "";
+            fullImageView = false;
             // Restoring a different item must not keep the previous sliders' preview.
             // Its colour state is unknown, so the sliders start at 0 and nothing
             // is previewed until the user moves one.
@@ -2764,6 +2775,7 @@
             itemDiv.dataset.croppedSrc = croppedSrc || "";
             itemDiv.dataset.originalPath = originalPath || "";
             itemDiv.dataset.croppedPath = croppedPath || "";
+            itemDiv.dataset.number = itemNumber;
 
             const croppedName = getFilename(croppedPath);
             // Gallery tiles use a small cached thumbnail; the full image is kept
@@ -2795,8 +2807,19 @@
                 itemDiv.dataset.croppedPath
             );
 
-            // Prepend to show newest at the top of the gallery
-            gallery.insertBefore(itemDiv, gallery.children[1]);
+            // Append, then put the gallery back into numerical order. Appending
+            // first means a slow scan cannot jump above a faster one that
+            // finished while it was still running.
+            gallery.appendChild(itemDiv);
+            sortGallery();
+        }
+
+        function sortGallery() {
+            const gallery = document.getElementById('scan-gallery');
+            const items = Array.from(gallery.children).filter(el => el.classList.contains('gallery-item'));
+            items
+                .sort((a, b) => (parseInt(a.dataset.number, 10) || 0) - (parseInt(b.dataset.number, 10) || 0))
+                .forEach(el => gallery.appendChild(el));
         }
 
         function openCropAsNew() {
@@ -2942,6 +2965,7 @@
                     // Refresh all images with this path (Main preview + Gallery)
                     const timestamp = new Date().getTime();
                     const path = currentCropTarget.dataset.path;
+                    if (path === lastCroppedPath) fullImageView = false;
                     const allImages = document.querySelectorAll('img');
                     allImages.forEach(img => {
                         if (img.dataset.path === path) {
@@ -2972,6 +2996,7 @@
                 const data = await response.json();
                 if (data.status === 'success') {
                     const timestamp = new Date().getTime();
+                    fullImageView = false;
                     document.querySelectorAll('img').forEach(img => {
                         if (img.dataset.path === targetPath) {
                             img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
@@ -3003,11 +3028,62 @@
                 });
                 const data = await response.json();
                 if (data.status === 'success') {
-                    addToGallery(null, data.cropped_url, `c${newCounter}`, null, data.cropped_path);
-                    scanCounter++;
+                    const savedNumber = Number(data.number) || (newCounter + 1);
+                    addToGallery(null, data.cropped_url, savedNumber, null, data.cropped_path);
+                    scanCounter = savedNumber;
                     closeCropper();
                 } else { showToast("Error creating new crop: " + data.message, "error") }
             } catch (e) { showToast("Network error while cropping: " + e, "error") }
+        }
+
+        async function resetCroppedToPristine() {
+            const originalImg = document.getElementById('originalImg');
+            const croppedImg = document.getElementById('croppedImg');
+
+            const originalPath = originalImg.dataset.path;
+            const croppedPath = croppedImg.dataset.path;
+
+            if (!originalPath) {
+                showToast("Original image not available (it may have been deleted).", "warn")
+                return;
+            }
+            if (!croppedPath) {
+                showToast("No cropped image to replace.", "warn")
+                return;
+            }
+
+            try {
+                const response = await fetch('/revert-crop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        original_path: originalPath,
+                        cropped_path: croppedPath,
+                        pristine: true
+                    })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    const timestamp = new Date().getTime();
+                    fullImageView = true;
+                    // Update main view
+                    croppedImg.src = `${croppedImg.src.split('&t=')[0]}&t=${timestamp}`;
+
+                    // Update gallery
+                    document.querySelectorAll('img').forEach(img => {
+                        if (img.dataset.path === croppedPath) {
+                            img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
+                        }
+                    });
+                    // The pristine copy carries no rotation: the tilt is gone.
+                    if (typeof tiltShow === 'function') tiltShow(0);
+                } else {
+                    showToast("Error copying original: " + data.message, "error")
+                }
+            } catch (e) {
+                showToast("Network error: " + e, "error")
+            }
         }
 
         async function resetCropToOriginal() {
@@ -3039,6 +3115,10 @@
 
                 if (data.status === 'success') {
                     const timestamp = new Date().getTime();
+                    fullImageView = true;
+                    if (data.rotation_state && typeof tiltShow === 'function') {
+                        tiltShow(-Number(data.rotation_state.manual_angle || 0));
+                    }
                     // Update main view
                     croppedImg.src = `${croppedImg.src.split('&t=')[0]}&t=${timestamp}`;
 
@@ -3056,7 +3136,7 @@
             }
         }
 
-        async function recropLast(useOriginal = false, align = true) {
+        async function recropLast(useOriginal = false, align = true, padCircle = false) {
             // Prioritize the original scan as the source to ensure high quality 
             // and prevent "same file" errors where the source and target paths are identical.
             const sourcePath = lastOriginalPath || lastCroppedPath;
@@ -3094,15 +3174,10 @@
             const padding = document.getElementById('cropPadding').value;
             const mediaType = document.querySelector('input[name="mediaType"]:checked').value;
 
-            // Adjust Pad aligns first: re-cropping a tilted scan just bakes the
-            // tilt into the new crop. The align works on the original, which is
-            // the file the crop is taken from. Pad Circle skips this step (CD
-            // matrix/faces only) and "Crop" never changes the padding.
-            if (align && !useOriginal && lastOriginalPath) {
-                const alignMsg = await deskewFile(lastOriginalPath, 0);
-                // Only a real rotation replaces the image. "Already aligned."
-                // leaves the pixels - and the tilt baked into them - alone.
-                if (alignMsg && alignMsg !== 'Already aligned.') tiltShow(0);
+            // Adjust Pad aligns the Cropped image, not the pristine Original.
+            // The server records that exact correction so Full can replay it.
+            if (align && !useOriginal && lastCroppedPath) {
+                await deskewFile(lastCroppedPath, padding, lastOriginalPath);
             }
 
             try {
@@ -3113,44 +3188,23 @@
                         original_path: sourcePath,
                         cropped_path: lastCroppedPath,
                         padding: padding,
-                        media_type: mediaType
+                        media_type: mediaType,
+                        pad_circle: padCircle
                     })
                 });
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    // Pad Circle is "padding only": the recrop rebuilds the
-                    // cropped file from the original, which would drop any manual
-                    // tilt applied to the cropped image. Re-apply it (if any) so
-                    // the rotation the user set is preserved - only the padding
-                    // changes.
-                    if (align === false && Math.abs(tiltValue) > 0.05) {
-                        try {
-                            const tiltResp = await fetch('/tilt-image', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    path: lastCroppedPath,
-                                    angle: -tiltValue,
-                                    padding: padding,
-                                    media_type: mediaType
-                                })
-                            });
-                            const tiltRes = await tiltResp.json();
-                            if (tiltRes.status === 'success' && tiltRes.new_url) {
-                                refreshImageElements(lastCroppedPath, tiltRes.new_url, true);
-                            }
-                        } catch (e) {
-                            console.error("Tilt replay after Pad Circle failed:", e);
-                        }
-                    } else {
-                        const timestamp = new Date().getTime();
-                        document.querySelectorAll('img').forEach(img => {
-                            if (img.dataset.path === lastCroppedPath) {
-                                img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
-                            }
-                        });
+                    fullImageView = false;
+                    if (data.rotation_state && typeof tiltShow === 'function') {
+                        tiltShow(-Number(data.rotation_state.manual_angle || 0));
                     }
+                    const timestamp = new Date().getTime();
+                    document.querySelectorAll('img').forEach(img => {
+                        if (img.dataset.path === lastCroppedPath) {
+                            img.src = `${img.src.split('&t=')[0]}&t=${timestamp}`;
+                        }
+                    });
                 } else { showToast("Error recropping: " + data.message, "error") }
             } catch (e) {
                 console.error("Recrop error:", e);
@@ -3195,18 +3249,9 @@
                 return;
             }
 
-            // Determine if we are in the main view or gallery
-            const isMainView = (imgElement.id === 'originalImg' || imgElement.id === 'croppedImg');
-            let pathsToRotate = [path];
-
-            // If in main view, rotate both Original and Cropped to keep them in sync
-            if (isMainView) {
-                pathsToRotate = [];
-                if (lastOriginalPath) pathsToRotate.push(lastOriginalPath);
-                if (lastCroppedPath && lastCroppedPath !== lastOriginalPath) pathsToRotate.push(lastCroppedPath);
-                // Deduplicate
-                pathsToRotate = [...new Set(pathsToRotate)];
-            }
+            // Each panel rotates its own file only: the buttons over the
+            // Cropped panel must never touch the raw Original, and vice versa.
+            const pathsToRotate = [path];
 
             const parentControls = imgElement.closest('div');
             const buttons = parentControls.querySelectorAll('.image-controls button');
@@ -3222,8 +3267,10 @@
                     const data = await response.json();
 
                     if (data.status === 'success') {
-                        // Update all images on the page that share this path
-                        refreshImageElements(p, data.new_url);
+                        // Update all images on the page that share this path.
+                        // keepTilt: a rotate keeps the recorded tilt (the server
+                        // re-composes it), so the tilt input must not reset.
+                        refreshImageElements(p, data.new_url, true);
                     } else {
                         console.error("Error rotating image: " + data.message);
                     }
@@ -3453,76 +3500,73 @@
             setTimeout(() => { window.close(); }, 200);
         }
 
-        async function undoLastAction() {
-            const pathsToUndo = [];
-            // We primarily care about the cropped image, but if an original was also modified
-            // in the same "action group" (like a rotation), we should try to undo it too.
-            // The server logic is simple: if a .bak exists, it restores it.
-            if (lastCroppedPath) pathsToUndo.push(lastCroppedPath);
-            if (lastOriginalPath) pathsToUndo.push(lastOriginalPath);
-
-            const uniquePaths = [...new Set(pathsToUndo)];
-
-            if (uniquePaths.length === 0) {
+        async function undoLastAction(imageElement = null) {
+            const path = (imageElement && imageElement.dataset.path) || lastCroppedPath;
+            if (!path) {
                 showToast("No last action to undo.", "warn")
                 return;
             }
 
             const status = document.getElementById('status');
             status.innerText = 'Undoing last action...';
-            let success = false;
+            try {
+                const response = await fetch('/undo-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await response.json();
 
-            for (const path of uniquePaths) {
-                try {
-                    const response = await fetch('/undo-action', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: path })
-                    });
-                    const data = await response.json();
-
-                    if (data.status === 'success') {
-                        success = true;
-                        refreshImageElements(path, data.new_url);
-                    } else if (data.message !== 'No undo history found for this file.') {
+                if (data.status === 'success') {
+                    refreshImageElements(path, data.new_url);
+                    if (path === lastCroppedPath && data.rotation_state) {
+                        fullImageView = !!data.rotation_state.full_view;
+                        tiltShow(-Number(data.rotation_state.manual_angle || 0));
+                    }
+                    status.innerText = 'Last action undone.';
+                } else {
+                    status.innerText = 'Undo failed: No undo history found.';
+                    if (data.message !== 'No undo history found for this file.') {
                         showToast(`Undo failed for ${path.split(/[\\/]/).pop()}: ${data.message}`, "error")
                     }
-                } catch (e) { showToast(`A network error occurred during undo: ${e}`, "error") }
+                }
+            } catch (e) {
+                status.innerText = 'Undo failed.';
+                showToast(`A network error occurred during undo: ${e}`, "error")
             }
-            status.innerText = success ? 'Last action undone.' : 'Undo failed: No undo history found.';
         }
 
-        async function redoLastAction() {
-            const pathsToRedo = [];
-            if (lastCroppedPath) pathsToRedo.push(lastCroppedPath);
-            if (lastOriginalPath) pathsToRedo.push(lastOriginalPath);
-
-            const uniquePaths = [...new Set(pathsToRedo)];
-            if (uniquePaths.length === 0) {
+        async function redoLastAction(imageElement = null) {
+            const path = (imageElement && imageElement.dataset.path) || lastCroppedPath;
+            if (!path) {
                 showToast("No image active to redo.", "warn")
                 return;
             }
 
             const status = document.getElementById('status');
             status.innerText = 'Redoing last action...';
-            let success = false;
+            try {
+                const response = await fetch('/redo-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await response.json();
 
-            for (const path of uniquePaths) {
-                try {
-                    const response = await fetch('/redo-action', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: path })
-                    });
-                    const data = await response.json();
-
-                    if (data.status === 'success') {
-                        success = true;
-                        refreshImageElements(path, data.new_url);
+                if (data.status === 'success') {
+                    refreshImageElements(path, data.new_url);
+                    if (path === lastCroppedPath && data.rotation_state) {
+                        fullImageView = !!data.rotation_state.full_view;
+                        tiltShow(-Number(data.rotation_state.manual_angle || 0));
                     }
-                } catch (e) { console.error("Redo network error:", e); }
+                    status.innerText = 'Redo successful.';
+                } else {
+                    status.innerText = 'Redo failed: No redo history available.';
+                }
+            } catch (e) {
+                status.innerText = 'Redo failed.';
+                console.error("Redo network error:", e);
             }
-            status.innerText = success ? 'Redo successful.' : 'Redo failed: No redo history available.';
         }
 
         // --- Padding Options Logic ---
@@ -4313,7 +4357,9 @@
                     // is a disc (crop to the circle) or artwork (auto-crop).
                     body: JSON.stringify({
                         path: target, angle: -angle, padding: padding,
-                        media_type: mediaType
+                        media_type: mediaType,
+                        original_path: lastOriginalPath,
+                        skip_crop: fullImageView
                     })
                 });
                 const res = await resp.json();
@@ -4321,6 +4367,7 @@
                     // keepTilt: this refresh is the tilt itself, so it must not
                     // reset the angle back to 0.
                     refreshImageElements(target, res.new_url, true);
+                    fullImageView = !!(res.rotation_state && res.rotation_state.full_view);
                 } else {
                     showToast(`Error rotating ${basenameOf(target)}: ${res.message}`, "error")
                 }
@@ -4331,12 +4378,16 @@
 
         // One file through /auto-deskew. True when the server accepted it.
         // Shared by Auto-Align and by Adjust Pad, which aligns before re-cropping.
-        async function deskewFile(path, padding) {
+        async function deskewFile(path, padding, originalPath = '') {
             try {
                 const resp = await fetch('/auto-deskew', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: path, padding: padding })
+                    body: JSON.stringify({
+                        path: path,
+                        padding: padding,
+                        original_path: originalPath || (path === lastCroppedPath ? lastOriginalPath : '')
+                    })
                 });
                 const res = await resp.json();
                 if (res.status === 'success') {
@@ -4352,11 +4403,7 @@
 
         async function autoDeskew() {
             const padding = document.getElementById('cropPadding').value;
-            const pathsToDeskew = [];
-            if (lastOriginalPath) pathsToDeskew.push(lastOriginalPath);
-            if (lastCroppedPath && lastCroppedPath !== lastOriginalPath) pathsToDeskew.push(lastCroppedPath);
-
-            if (pathsToDeskew.length === 0) {
+            if (!lastCroppedPath) {
                 showToast("No image loaded to align.", "warn")
                 return;
             }
@@ -4367,13 +4414,7 @@
             btn.innerText = "Aligning...";
             btn.disabled = true;
 
-            for (const path of pathsToDeskew) {
-                const isOriginal = (path === lastOriginalPath);
-                await deskewFile(path, isOriginal ? 0 : padding);
-            }
-
-            // Auto-Align replaces the image, so the absolute tilt starts again.
-            tiltShow(0);
+            await deskewFile(lastCroppedPath, padding, lastOriginalPath);
             btn.innerText = oldText;
             btn.disabled = false;
         }

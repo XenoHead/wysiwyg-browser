@@ -2723,6 +2723,15 @@ and then **reverted** — see the last bullet.
 - **Undo:** revert the four `includes(...)` calls to their original `combined.includes(...)` form and add `"12\""` /
   `"10\""` back to `singleSignals`.
 
+### WysiScan Full preserves the second image's rotation state (2026-11-20)
+**Files:** `WysiScan/scanner_server.py`, `WysiScan/scanner_test.html`, `changelog.txt`
+- Full now rebuilds from the untouched Original plus tracked Auto-Align, incremental tilt, and 90°/45° rotations. The Original stays pristine; Full keeps applied colour history and remains a full-frame view.
+- Auto-Align acts on Cropped only, clears manual tilt as intended, and records its measured correction separately. Initial CD/45 Front text-straightening is tracked the same way. Adjust Pad rebuilds from the Original with the tracked rotation state.
+- Rotation and adjustment histories are snapshotted with image backups so Undo/Redo restore what Full will replay. Full-mode tilt continues to rotate the entire frame instead of cropping it again.
+- The Original and Cropped Undo/Redo controls now operate on their own image path rather than undoing both panels together.
+- Pad Circle is explicitly distinguished from Adjust Pad: CD Matrix/CD/45 Front use `_disc_crop` on the full transformed source with a centred `2r + 2×padding` square, falling back to contour crop only when the circle fit is implausible. This keeps positive padding outside the disc rim.
+- **Undo:** restore the previous `/revert-crop`, `/auto-deskew`, tilt/rotate handlers, and their UI state handling; remove the rotation-state history helpers.
+
 ---
 
 ## Notes / gotchas

@@ -171,7 +171,114 @@ if not os.path.exists(THUMB_DIR):
 # the folder grew without bound. A weekly wipe is enough to keep it in check;
 # the stamp lives inside the folder and is the one file the wipe keeps.
 THUMB_CLEAN_STAMP = os.path.join(THUMB_DIR, ".last_clean")
-THUMB_CLEAN_INTERVAL = 7 * 24 * 60 * 60
+# Tuesday and Thursday (Monday == 0). The wipe runs on the first launch of each,
+# so a busy Monday never clears under a running gallery and a missed week is
+# caught on the next one of the two days.
+THUMB_CLEAN_DAYS = {1, 3}
+# How long a raw scan survives in temp. It is the source for Revert, Adjust Pad
+# and recrop, so it has to outlive the session that made it, not an hour of it.
+TEMP_KEEP_SECONDS = 24 * 60 * 60
+
+# Rotation state is separate from the pixels so Full can rebuild the full scan
+# without losing auto-align, manual tilt, quarter turns, or undo/redo state.
+_ROTATION_STATE = {}
+_ROTATION_HISTORY = {}
+_ROTATION_REDO = {}
+_ADJUST_HISTORY_BACKUPS = {}
+_ADJUST_HISTORY_REDO = {}
+
+def _rotation_key(path):
+    return os.path.abspath(path) if path else ""
+
+def _get_rotation_state(path, create=False):
+    key = _rotation_key(path)
+    state = _ROTATION_STATE.get(key)
+    if state is None and create and key:
+        tilt = (globals().get("_TILT_STATE") or {}).get(key) or {}
+        state = {
+            "quarter": int(tilt.get("quarter") or 0),
+            "auto_angle": float(tilt.get("auto_angle") or 0.0),
+            "manual_angle": float(tilt.get("angle") or 0.0),
+            "full_view": bool(tilt.get("full_view", False)),
+            "disc_base": bool(tilt.get("disc_base", False)),
+            "media_type": tilt.get("media_type", "auto"),
+            "padding": int(tilt.get("padding", 5)),
+        }
+        _ROTATION_STATE[key] = state
+    return state
+
+def _snapshot_rotation_state(path):
+    key = _rotation_key(path)
+    if not key:
+        return
+    history = _ROTATION_HISTORY.setdefault(key, [])
+    current = _ROTATION_STATE.get(key)
+    history.insert(0, dict(current) if current is not None else None)
+    del history[5:]
+    _ROTATION_REDO.pop(key, None)
+
+    current_adjustments = (globals().get("_ADJUST_HISTORY") or {}).get(key)
+    adjustment_history = _ADJUST_HISTORY_BACKUPS.setdefault(key, [])
+    adjustment_history.insert(
+        0, [dict(item) for item in current_adjustments]
+        if current_adjustments is not None else None)
+    del adjustment_history[5:]
+    _ADJUST_HISTORY_REDO.pop(key, None)
+
+def _restore_rotation_state_after_undo(path):
+    key = _rotation_key(path)
+    if not key:
+        return None
+    current = _ROTATION_STATE.get(key)
+    _ROTATION_REDO[key] = dict(current) if current is not None else None
+    history = _ROTATION_HISTORY.get(key) or []
+    restored = history.pop(0) if history else None
+    if restored is None:
+        _ROTATION_STATE.pop(key, None)
+    else:
+        _ROTATION_STATE[key] = dict(restored)
+    return dict(restored) if restored is not None else None
+
+def _restore_rotation_state_after_redo(path):
+    key = _rotation_key(path)
+    if not key:
+        return None
+    restored = _ROTATION_REDO.pop(key, None)
+    if restored is None:
+        _ROTATION_STATE.pop(key, None)
+    else:
+        _ROTATION_STATE[key] = dict(restored)
+    return dict(restored) if restored is not None else None
+
+def _restore_adjustment_history_after_undo(path):
+    key = _rotation_key(path)
+    if not key:
+        return None
+    histories = globals().get("_ADJUST_HISTORY")
+    if histories is None:
+        return None
+    current = histories.get(key)
+    _ADJUST_HISTORY_REDO[key] = (
+        [dict(item) for item in current] if current is not None else None)
+    snapshots = _ADJUST_HISTORY_BACKUPS.get(key) or []
+    restored = snapshots.pop(0) if snapshots else None
+    if restored is None:
+        histories.pop(key, None)
+    else:
+        histories[key] = [dict(item) for item in restored]
+    return [dict(item) for item in restored] if restored is not None else None
+
+def _restore_adjustment_history_after_redo(path):
+    key = _rotation_key(path)
+    histories = globals().get("_ADJUST_HISTORY")
+    if not key or histories is None:
+        return None
+    restored = _ADJUST_HISTORY_REDO.pop(key, None)
+    if restored is None:
+        histories.pop(key, None)
+    else:
+        histories[key] = [dict(item) for item in restored]
+    return [dict(item) for item in restored] if restored is not None else None
 
 # --- Path safety for file-serving endpoints -------------------------------
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
@@ -237,19 +344,26 @@ def cleanup_temp(older_than=0):
     cleanup_directory(TEMP_DIR, older_than)
 
 def cleanup_thumbs(force=False):
-    """Wipe the thumbnail cache at most once a week (or now, with force).
+    """Wipe the thumbnail cache on the first run of Tuesday and Thursday.
 
     Safe at any time: every thumbnail is regenerated from its source image on
     the next /thumb request. Called on startup as well as from the periodic
-    loop, so a scanner that is only opened briefly still gets its weekly wipe.
+    loop, so a scanner that is only opened briefly still gets its wipe; the
+    stamp holds the date it last ran, so it happens once per those days.
     """
     now = time.time()
+    today = time.strftime("%Y-%m-%d", time.localtime(now))
     try:
-        last = os.path.getmtime(THUMB_CLEAN_STAMP)
+        with open(THUMB_CLEAN_STAMP, "r", encoding="utf-8") as fh:
+            last_day = fh.read().strip()
     except OSError:
-        last = 0
-    if not force and last and (now - last) < THUMB_CLEAN_INTERVAL:
-        return
+        last_day = ""
+
+    if not force:
+        if time.localtime(now).tm_wday not in THUMB_CLEAN_DAYS:
+            return
+        if last_day == today:
+            return
 
     removed = 0
     try:
@@ -270,32 +384,36 @@ def cleanup_thumbs(force=False):
 
     try:
         with open(THUMB_CLEAN_STAMP, "w", encoding="utf-8") as fh:
-            fh.write(str(int(now)))
+            fh.write(today)
     except OSError:
         pass
-    logging.info(f"Weekly thumbnail cleanup: removed {removed} file(s).")
+    logging.info(f"Thumbnail cleanup: removed {removed} file(s).")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Clean all temp files on startup
-    cleanup_temp(older_than=0)
-    # ...and the thumbnail cache if a week has passed
+    # Temp holds the raw scan behind Revert / Adjust Pad / recrop. It survives a
+    # restart so those keep working for the session in progress; only genuinely
+    # old files are swept.
+    cleanup_temp(older_than=TEMP_KEEP_SECONDS)
+    # ...and the thumbnail cache on the first run of Tuesday and Thursday
     cleanup_thumbs()
 
     # Start periodic cleanup task
     def periodic_cleanup():
         while True:
             time.sleep(1800) # Check every 30 minutes
-            cleanup_temp(older_than=3600) # Delete files older than 1 hour
+            cleanup_temp(older_than=TEMP_KEEP_SECONDS)
             cleanup_directory(THUMB_DIR, older_than=86400,
                               keep=(os.path.basename(THUMB_CLEAN_STAMP),)) # Stale thumbnails
-            cleanup_thumbs() # Weekly wipe, no-op until due
+            cleanup_thumbs() # Twice-weekly wipe, no-op unless due
             
     threading.Thread(target=periodic_cleanup, daemon=True).start()
     yield
-    # Cleanup on shutdown
-    cleanup_temp(older_than=0)
-    cleanup_directory(SCAN_DIR, older_than=0)
+    # Cleanup on shutdown: keep the raw scans for the same window, otherwise a
+    # restart silently removes the originals of the group still on screen.
+    # Never touch SCAN_DIR or a user save location - finished scans are the
+    # user's files, and only the thumbnail cache is ours to delete.
+    cleanup_temp(older_than=TEMP_KEEP_SECONDS)
 
 def get_backup_path_in_temp(original_path, level=1):
     """Generates a unique path for a backup file in the TEMP_DIR."""
@@ -338,6 +456,7 @@ def create_backup(file_path):
     primary_backup_path = get_backup_path_in_temp(file_path, 1)
     try:
         shutil.copy2(file_path, primary_backup_path)
+        _snapshot_rotation_state(file_path)
         logging.info(f"Created backup for {file_path} at {primary_backup_path}")
     except Exception as e:
         logging.error(f"Failed to create backup for {file_path}: {e}")
@@ -963,14 +1082,27 @@ def _imwrite_image(path, img):
         cv2.imwrite(path, img)
 
 
+def _copy_if_distinct(source, destination):
+    """Copy source over destination only when they are different files.
+
+    A blank or unreadable scan used to fall through to shutil.copy(final, final)
+    and raise SameFileError: '...' and '...' are the same file. When the paths
+    already match there is nothing to copy - the file is in place.
+    """
+    if not destination:
+        return source
+    same = os.path.normcase(os.path.abspath(source)) == os.path.normcase(os.path.abspath(destination))
+    if not same:
+        shutil.copy2(source, destination)
+    return destination
+
+
 def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
     print(f"Auto-cropping: {image_path}")
     img = cv2.imread(image_path)
     if img is None:
-        if output_path:
-            shutil.copy(image_path, output_path)
-            return output_path
-        return image_path
+        print(f"Could not read {image_path}; passing it through unchanged.")
+        return _copy_if_distinct(image_path, output_path)
 
     h_img, w_img = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -995,10 +1127,7 @@ def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
 
     if not contours:
         print("No contours found.")
-        if output_path:
-            shutil.copy(image_path, output_path)
-            return output_path
-        return image_path
+        return _copy_if_distinct(image_path, output_path)
 
     # 6. Filter and Sort
     valid_contours = []
@@ -1022,10 +1151,7 @@ def auto_crop_image(image_path, output_path=None, padding=5, media_type="auto"):
     
     if not valid_contours:
         print("No valid contours after filtering (all too small or too big).")
-        if output_path:
-            shutil.copy(image_path, output_path)
-            return output_path
-        return image_path
+        return _copy_if_distinct(image_path, output_path)
         
     # Take the largest valid contour
     best_cnt = valid_contours[0][1]
@@ -1447,11 +1573,37 @@ async def view_image(path: str):
     }
     return FileResponse(path, headers=headers)
 
+def _next_number(target_dir, group_name):
+    """Next free number in this group: highest existing + 1.
+
+    The server assigns the number rather than trusting the client's counter. The
+    client counter restarts at 0 on load and only syncs when a group is resumed
+    explicitly, so it used to overwrite ScanGroup_2.jpg while the folder already
+    held 5..16 - and because the path was reused, the gallery kept showing the
+    old thumbnail for the new image.
+    """
+    highest = 0
+    try:
+        prefix = f"{group_name}_"
+        with os.scandir(target_dir) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                name, ext = os.path.splitext(entry.name)
+                if ext.lower() not in IMAGE_EXTS or not name.startswith(prefix):
+                    continue
+                tail = name[len(prefix):]
+                if tail.isdigit():
+                    highest = max(highest, int(tail))
+    except OSError as e:
+        logging.error(f"Could not read {target_dir} to find the next number: {e}")
+    return highest + 1
+
 @app.post("/trigger-scan")
+
 def trigger_scan(data: dict = Body(...)):
     group_name = data.get("group_name", "scan")
-    scan_counter = data.get("scan_counter", 0)
-    file_number = scan_counter + 1
+    scan_counter = data.get("scan_counter", 0)  # kept for compatibility; the server assigns the number
     save_location = data.get("save_location")
     auto_delete_original = data.get("auto_delete_original", False)
     dpi = data.get("dpi", 300)  # Default DPI value
@@ -1546,6 +1698,7 @@ def trigger_scan(data: dict = Body(...)):
                 if save_location and os.path.isdir(save_location):
                     target_dir = save_location
 
+                file_number = _next_number(target_dir, safe_group_name)
                 final_filename = f"{safe_group_name}_{file_number}.jpg"
                 final_path = os.path.join(target_dir, final_filename)
                 
@@ -1564,6 +1717,10 @@ def trigger_scan(data: dict = Body(...)):
                 if os.path.exists(temp_path):
                     # Copy the raw scan to the final path so processing only affects the destination file
                     shutil.copy2(temp_path, final_path)
+                    _ROTATION_STATE.pop(_rotation_key(final_path), None)
+                    _ROTATION_HISTORY.pop(_rotation_key(final_path), None)
+                    _ROTATION_REDO.pop(_rotation_key(final_path), None)
+                    _get_rotation_state(final_path, create=True)
                     scan_success = True
                 
         except Exception as wia_error:
@@ -1593,7 +1750,7 @@ def trigger_scan(data: dict = Body(...)):
                 except Exception as e:
                     logging.error(f"CD/45 Front: straighten raised ({e}) - scan continues")
             elif media_type != 'cd':
-                perform_auto_deskew(final_path, padding=crop_padding)
+                perform_auto_deskew(final_path, padding=crop_padding, original_path=temp_path)
             # The original temp_path is intentionally NOT deskewed to preserve the raw scan.
 
             # Process Auto-Crop
@@ -1621,6 +1778,7 @@ def trigger_scan(data: dict = Body(...)):
             # Return URL relative to mount
             response = {
                 "status": "success", 
+                "number": file_number,
                 "cropped": f"/view-image?path={urllib.parse.quote(cropped_path)}",
                 "cropped_path": cropped_path,
                 "original_deleted": original_deleted,
@@ -1686,8 +1844,7 @@ async def set_scanner(data: dict = Body(...)):
 def import_file(data: dict = Body(...)):
     source_path = data.get("source_path")
     group_name = data.get("group_name", "scan")
-    scan_counter = data.get("scan_counter", 0)
-    file_number = scan_counter + 1
+    scan_counter = data.get("scan_counter", 0)  # kept for compatibility; the server assigns the number
     save_location = data.get("save_location")
     auto_delete_original = data.get("auto_delete_original", False)
     crop_padding = data.get("crop_padding", 5)
@@ -1710,6 +1867,7 @@ def import_file(data: dict = Body(...)):
         if save_location and os.path.isdir(save_location):
             target_dir = save_location
 
+        file_number = _next_number(target_dir, safe_group_name)
         final_filename = f"{safe_group_name}_{file_number}.jpg"
         final_path = os.path.join(target_dir, final_filename)
         
@@ -1721,6 +1879,10 @@ def import_file(data: dict = Body(...)):
         
         # Copy the raw import to the final path so processing only affects the destination file
         shutil.copy2(temp_path, final_path)
+        _ROTATION_STATE.pop(_rotation_key(final_path), None)
+        _ROTATION_HISTORY.pop(_rotation_key(final_path), None)
+        _ROTATION_REDO.pop(_rotation_key(final_path), None)
+        _get_rotation_state(final_path, create=True)
 
         # "CD/45 Front" (tape in config) straightens its text first; other non-CD
         # media get the plain auto-deskew. CDs are not deskewed.
@@ -1730,7 +1892,7 @@ def import_file(data: dict = Body(...)):
             except Exception as e:
                 logging.error(f"CD/45 Front: straighten raised ({e}) - import continues")
         elif media_type != 'cd':
-            perform_auto_deskew(final_path, padding=crop_padding)
+            perform_auto_deskew(final_path, padding=crop_padding, original_path=temp_path)
         # The original temp_path is intentionally NOT deskewed to preserve the raw scan.
 
         # Process Auto-Crop
@@ -1757,6 +1919,7 @@ def import_file(data: dict = Body(...)):
         # Return URL relative to mount
         response = {
             "status": "success", 
+            "number": file_number,
             "cropped": f"/view-image?path={urllib.parse.quote(cropped_path)}",
             "cropped_path": cropped_path,
             "original_deleted": original_deleted,
@@ -1778,6 +1941,7 @@ def recrop(data: dict = Body(...)):
     cropped_path = data.get("cropped_path")
     padding = data.get("padding", 5)
     media_type = data.get("media_type", "auto")
+    pad_circle = bool(data.get("pad_circle", False))
 
     if not original_path or not os.path.exists(original_path):
         return {"status": "error", "message": "Original file not found to recrop from."}
@@ -1787,18 +1951,92 @@ def recrop(data: dict = Body(...)):
 
     try:
         save_config_setting("crop_padding", int(padding))
+        key = _rotation_key(cropped_path)
+        rotation = _get_rotation_state(cropped_path, create=True)
         create_backup(cropped_path)
-        # Re-run the auto-crop with the new padding, overwriting the old cropped file
-        new_cropped_path = auto_crop_image(original_path, output_path=cropped_path, padding=int(padding), media_type=media_type)
+        # Rebuild the crop from the pristine scan using the tracked rotations.
+        # Manual tilt is applied after the baseline crop so the next tilt change
+        # can still be absolute rather than cumulative.
+        crop_state = dict(
+            rotation,
+            full_view=False,
+            disc_base=bool(pad_circle and media_type in ("cd", "tape")),
+        )
+        disc_base = False
+        if pad_circle and media_type in ("cd", "tape"):
+            # Pad Circle uses the disc fit directly on the rotated full frame.
+            # Its crop is a centred square of 2r + 2*padding, so positive
+            # padding stays outside the rim instead of trimming disc artwork.
+            base_path = _tilt_base_path(cropped_path)
+            base_img = _full_rotation_image(
+                original_path, crop_state, include_manual=False)
+            _imwrite_image(base_path, base_img)
+            disc_crop, _ = _disc_crop(base_img, padding=int(padding))
+            if disc_crop is not None:
+                disc_base = True
+                if abs(float(rotation.get("manual_angle") or 0.0)) >= 0.05:
+                    _rotate_file_by(base_path, cropped_path,
+                                    float(rotation["manual_angle"]),
+                                    padding=int(padding), media_type=media_type)
+                else:
+                    _imwrite_image(cropped_path, disc_crop)
+            else:
+                logging.warning("Pad Circle: disc fit was implausible; falling back to contour crop")
+                _write_tilt_base_from_original(
+                    original_path, cropped_path,
+                    dict(crop_state, disc_base=False), padding=int(padding),
+                    media_type=media_type)
+                base_path = _tilt_base_path(cropped_path)
+                manual_angle = float(rotation.get("manual_angle") or 0.0)
+                if abs(manual_angle) >= 0.05:
+                    _rotate_file_by(base_path, cropped_path, manual_angle,
+                                    padding=int(padding), media_type=media_type)
+                else:
+                    _copy_if_distinct(base_path, cropped_path)
+        else:
+            base_path = _write_tilt_base_from_original(
+                original_path, cropped_path, crop_state, padding=int(padding),
+                media_type=media_type)
+            manual_angle = float(rotation.get("manual_angle") or 0.0)
+            if abs(manual_angle) >= 0.05:
+                _rotate_file_by(base_path, cropped_path, manual_angle,
+                                padding=int(padding), media_type=media_type)
+            else:
+                _copy_if_distinct(base_path, cropped_path)
+        new_cropped_path = cropped_path
+        rotation["full_view"] = False
+        rotation["padding"] = int(padding)
+        rotation["media_type"] = media_type
+        rotation["disc_base"] = disc_base
+        _ROTATION_STATE[key] = rotation
         _plain_forget(cropped_path)
 
         # Re-cropping rebuilds the file from the original, so the colour history
         # and the Default preset start over.
         _forget_adjustments(new_cropped_path)
         apply_default_adjustments(new_cropped_path)
+        # Keep the same Default preset on the absolute tilt base, otherwise the
+        # next slider movement would drop the colour adjustment.
+        preset = _adjust_presets()["default"]
+        if any(abs(v) > 0.01 for v in preset.values()):
+            base_img = cv2.imread(base_path)
+            if base_img is not None:
+                _imwrite_image(base_path, _adjusted_image(base_img, **preset))
+        _TILT_STATE[key] = {
+            "written_mtime": os.path.getmtime(cropped_path),
+            "angle": manual_angle,
+            "quarter": int(rotation.get("quarter") or 0),
+            "auto_angle": float(rotation.get("auto_angle") or 0.0),
+            "media_type": media_type,
+            "padding": int(padding),
+            "disc_base": disc_base,
+        }
 
         if new_cropped_path == cropped_path:
-             return {"status": "success", "message": "Image recropped successfully."}
+             return {
+                 "status": "success", "message": "Image recropped successfully.",
+                 "rotation_state": dict(rotation),
+             }
         else:
             return {"status": "error", "message": "Recrop process failed to produce the expected file."}
     except Exception as e:
@@ -1816,6 +2054,8 @@ def rotate_image(data: dict = Body(...)):
         return {"status": "error", "message": "Invalid rotation direction"}
 
     try:
+        key = _rotation_key(path)
+        rotation = _get_rotation_state(path, create=True)
         create_backup(path)
         img = cv2.imread(path)
         if img is None:
@@ -1829,11 +2069,47 @@ def rotate_image(data: dict = Body(...)):
         # Overwrite the existing file
         _geometry_changed(path)
         _imwrite_image(path, rotated_img)
-        
+
+        # A 90° turn is part of this file's own rotation: remember it so a
+        # rebuild (Full, Adjust Pad, Pad Circle) can put it back. A tilt that
+        # was set before this turn survives too. Centered rotations compose by
+        # adding their angles, so the manual tilt value does not change sign.
+        state = _TILT_STATE.get(key) or {}
+        quarter = int(rotation.get("quarter", state.get("quarter", 0)) or 0)
+        quarter = (quarter + (1 if direction == 'right' else -1)) % 4
+        rotation["quarter"] = quarter
+        _ROTATION_STATE[key] = rotation
+        tilt_angle = float(rotation.get("manual_angle", state.get("angle", 0.0)) or 0.0)
+        tilt_state = {
+            **state,
+            "quarter": quarter,
+            "angle": tilt_angle,
+            "auto_angle": float(rotation.get("auto_angle") or 0.0),
+            "written_mtime": os.path.getmtime(path),
+        }
+        _TILT_STATE[key] = tilt_state
+        # The tilt baseline must follow explicit 90-degree turns too.
+        base = _tilt_base_path(path)
+        if os.path.exists(base):
+            try:
+                base_img = cv2.imread(base)
+                if base_img is None:
+                    raise ValueError("Could not read base image")
+                base_img = cv2.rotate(
+                    base_img,
+                    cv2.ROTATE_90_CLOCKWISE if direction == 'right'
+                    else cv2.ROTATE_90_COUNTERCLOCKWISE)
+                _imwrite_image(base, base_img)
+            except Exception as e:
+                logging.error(f"Could not rotate the tilt base for {os.path.basename(path)}: {e}")
+
        # Add a cache-busting query parameter to the URL for the client
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         
-        return {"status": "success", "message": "Image rotated", "new_url": new_url}
+        return {
+            "status": "success", "message": "Image rotated", "new_url": new_url,
+            "rotation_state": dict(rotation),
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -2146,6 +2422,8 @@ def rotate_image_fine(data: dict = Body(...)):
         return {"status": "error", "message": "Invalid rotation direction"}
 
     try:
+        key = _rotation_key(path)
+        rotation = _get_rotation_state(path, create=True)
         create_backup(path)
         img = cv2.imread(path)
         if img is None:
@@ -2165,7 +2443,30 @@ def rotate_image_fine(data: dict = Body(...)):
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
 
         _geometry_changed(path)
-        return {"status": "success", "message": f"Image rotated {angle} degrees", "new_url": new_url}
+        signed_angle = -angle if direction == 'right' else angle
+        rotation["auto_angle"] = float(rotation.get("auto_angle") or 0.0) + signed_angle
+        _ROTATION_STATE[key] = rotation
+
+        base = _tilt_base_path(path)
+        if os.path.exists(base):
+            try:
+                base_img = cv2.imread(base)
+                if base_img is not None:
+                    base_bg = get_image_background_color(base_img)
+                    _imwrite_image(
+                        base,
+                        cv2.warpAffine(base_img, rotation_matrix, (w, h),
+                                       borderValue=base_bg))
+                    tilt_state = _TILT_STATE.get(key) or {}
+                    tilt_state["written_mtime"] = os.path.getmtime(path)
+                    _TILT_STATE[key] = tilt_state
+            except Exception as e:
+                logging.error(f"Could not rotate the tilt base for {os.path.basename(path)}: {e}")
+
+        return {
+            "status": "success", "message": f"Image rotated {angle} degrees",
+            "new_url": new_url, "rotation_state": dict(rotation),
+        }
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2220,34 +2521,114 @@ def deskew_image(data: dict = Body(...)):
             os.remove(temp_rotated_path)
 
         _geometry_changed(path)
+        # The fine rotate replaces whatever tilt was set: a later rebuild must
+        # not replay the old angle.
+        _TILT_STATE.pop(os.path.abspath(path), None)
+        base = _tilt_base_path(path)
+        if os.path.exists(base):
+            try:
+                os.remove(base)
+            except OSError:
+                pass
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         return {"status": "success", "message": "Image deskewed", "new_url": new_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 # --- Tilt: ABSOLUTE and immediate ------------------------------------------
-# Clicking < / > / << / >> sets a single angle measured from the untouched scan
-# (1 deg, 2 deg, 3 deg ...) instead of stacking another relative rotation on an
-# already-rotated file. A "tilt base" copy of the pixels is kept per file, so
-# repeated clicks never compound JPEG loss or drift off the original.
-_TILT_STATE = {}          # abspath -> {"written_mtime": float, "angle": float}
+# Clicking < / > / << / >> sets a single angle measured from the current
+# auto-aligned/quarter-turned base, rather than stacking JPEG rotations.
+_TILT_STATE = {}          # abspath -> current tilt base / angle metadata
 _TILT_LOCK = threading.Lock()   # one tilt at a time: never two writers on one file
 
 
 def _tilt_base_path(image_path):
     safe = re.sub(r'[^A-Za-z0-9_.-]', '_', os.path.abspath(image_path))
-    return os.path.join(TEMP_DIR, f"{safe}.tiltbase")
+    return os.path.join(TEMP_DIR, f"{safe}.tiltbase.jpg")
 
 
 def _tilt_base_is_current(image_path):
     """True while our base still matches what we last wrote to the file."""
     state = _TILT_STATE.get(os.path.abspath(image_path))
-    if not state or not os.path.exists(_tilt_base_path(image_path)):
+    if not state or "written_mtime" not in state or not os.path.exists(_tilt_base_path(image_path)):
         return False
     try:
         return abs(os.path.getmtime(image_path) - state["written_mtime"]) < 1e-6
     except OSError:
         return False
+
+
+def _full_rotation_image(original_path, state, include_manual=True):
+    """Rebuild an image's orientation from its untouched source pixels."""
+    img = cv2.imread(original_path)
+    if img is None:
+        raise ValueError("Could not read original image file")
+
+    quarter = int((state or {}).get("quarter") or 0) % 4
+    for _ in range(quarter):
+        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+    state = state or {}
+    angle = float(state.get("auto_angle") or 0.0)
+    if include_manual:
+        angle += float(state.get("manual_angle") or 0.0)
+    if abs(angle) >= 0.05:
+        img = _rotate_with_background(img, angle)
+    return img
+
+
+def _adjusted_with_history(img, history):
+    for values in history or []:
+        img = _adjusted_image(img, **values)
+    return img
+
+
+def _write_tilt_base_from_original(original_path, cropped_path, state,
+                                   padding=5, media_type="auto",
+                                   history=None):
+    """Rebuild the pre-manual-tilt crop (or full frame) as the absolute base."""
+    base_path = _tilt_base_path(cropped_path)
+    base_img = _full_rotation_image(original_path, state, include_manual=False)
+    keep_full_disc_base = (
+        bool((state or {}).get("disc_base"))
+        and media_type in ("cd", "tape")
+    )
+    if not (state or {}).get("full_view") and not keep_full_disc_base:
+        staged = os.path.join(TEMP_DIR, f"rotation_base_{time.time_ns()}.jpg")
+        try:
+            _imwrite_image(staged, base_img)
+            auto_crop_image(staged, output_path=base_path, padding=int(padding),
+                            media_type=media_type)
+        finally:
+            if os.path.exists(staged):
+                try:
+                    os.remove(staged)
+                except OSError:
+                    pass
+        base_img = cv2.imread(base_path)
+        if base_img is None:
+            raise ValueError("Could not read rebuilt crop base")
+
+    base_img = _adjusted_with_history(base_img, history)
+    _imwrite_image(base_path, base_img)
+    return base_path
+
+
+def _restore_tilt_base(base_path, image_path, state, padding=5,
+                       media_type="auto"):
+    """Restore the un-tilted base, using a circle fit for Pad Circle bases."""
+    if ((state or {}).get("disc_base") and not (state or {}).get("full_view")
+            and media_type in ("cd", "tape")):
+        base_img = cv2.imread(base_path)
+        disc_crop, _ = _disc_crop(base_img, padding=int(padding)) if base_img is not None else (None, None)
+        if disc_crop is not None:
+            _imwrite_image(image_path, disc_crop)
+            return
+        logging.warning("Pad Circle: disc fit was implausible; falling back to contour crop")
+        auto_crop_image(base_path, output_path=image_path, padding=int(padding),
+                        media_type=media_type)
+        return
+    _replace_file_atomically(base_path, image_path)
 
 
 def _replace_file_atomically(source_path, dest_path):
@@ -2368,51 +2749,126 @@ def _rotate_file_by(src_path, dst_path, angle, padding=5, media_type="auto", cro
     return used_rect
 
 
+def _rotate_full_file_by(path, angle):
+    """Rotate the file by `angle` degrees with an expanded canvas - no crop.
+
+    Used when the whole scan must stay visible (Full): the rotated picture
+    keeps everything, with the background filling the new corners.
+    """
+    img = cv2.imread(path)
+    if img is None:
+        raise ValueError("Could not read image file")
+    (h, w) = img.shape[:2]
+    center = (w / 2.0, h / 2.0)
+    M = cv2.getRotationMatrix2D(center, float(angle), 1.0)
+    cos, sin = np.abs(M[0, 0]), np.abs(M[0, 1])
+    newW, newH = int((h * sin) + (w * cos)), int((h * cos) + (w * sin))
+    M[0, 2] += (newW / 2) - center[0]
+    M[1, 2] += (newH / 2) - center[1]
+    bg = get_image_background_color(img)
+    rotated = cv2.warpAffine(img, M, (newW, newH), borderValue=bg)
+    _imwrite_image(path, rotated)
+
+
 @app.post("/tilt-image")
 def tilt_image(data: dict = Body(...)):
-    """Set the absolute tilt of a file, always starting from the tilting base."""
+    """Set the absolute manual tilt from the un-tilted rotation state."""
     path = data.get("path")
     angle = float(data.get("angle") or 0.0)
     padding = data.get("padding", 5)
-    skip_crop = data.get("skip_crop", False)
     media_type = data.get("media_type", "auto")
+    original_path = data.get("original_path")
 
     if not path or not os.path.exists(path):
         return {"status": "error", "message": "File not found"}
 
-    key = os.path.abspath(path)
+    key = _rotation_key(path)
+    rotation = _get_rotation_state(path, create=True)
+    full_view = bool(rotation.get("full_view") or data.get("skip_crop"))
+    rotation["full_view"] = full_view
+    rotation["media_type"] = media_type
+    rotation["padding"] = int(padding)
     base = _tilt_base_path(path)
 
     try:
-        # Serialised: the page can send follow-up requests in quick succession,
-        # and two writers on one file is what corrupted the heap.
         with _TILT_LOCK:
+            base_is_current = _tilt_base_is_current(path)
+            if not base_is_current and abs(angle) >= 0.05:
+                create_backup(path)
+
+            history = list(_ADJUST_HISTORY.get(key) or [])
+            if not base_is_current and original_path and os.path.exists(original_path):
+                _write_tilt_base_from_original(
+                    original_path, path, rotation, padding=padding,
+                    media_type=media_type, history=history)
+            elif not base_is_current:
+                shutil.copy2(path, base)
+
             if abs(angle) < 0.05:
-                # Back to zero: put the base back and forget the session.
-                if _tilt_base_is_current(path):
-                    _replace_file_atomically(base, path)
-                    os.remove(base)
-                    _TILT_STATE.pop(key, None)
+                if os.path.exists(base):
+                    _restore_tilt_base(base, path, rotation, padding, media_type)
+                rotation["manual_angle"] = 0.0
+            elif full_view:
+                _copy_if_distinct(base, path)
+                _rotate_full_file_by(path, angle)
+                rotation["manual_angle"] = angle
             else:
-                if not _tilt_base_is_current(path):
-                    # First click, or something else edited the file since the
-                    # last tilt - freeze what is on disk now, and keep one
-                    # backup so a single Undo returns the pre-tilt scan.
-                    create_backup(path)
-                    shutil.copy2(path, base)
-                    _TILT_STATE[key] = {"written_mtime": os.path.getmtime(path), "angle": 0.0}
-                rect = _rotate_file_by(base, path, angle, padding=padding, media_type=media_type)
-                _TILT_STATE[key]["written_mtime"] = os.path.getmtime(path)
-                _TILT_STATE[key]["angle"] = angle
-                _TILT_STATE[key]["media_type"] = media_type
-                _TILT_STATE[key]["crop_rect"] = rect
+                _rotate_file_by(base, path, angle, padding=padding,
+                                media_type=media_type)
+                rotation["manual_angle"] = angle
+
+            _ROTATION_STATE[key] = rotation
+            _TILT_STATE[key] = {
+                "written_mtime": os.path.getmtime(path),
+                "angle": float(rotation.get("manual_angle") or 0.0),
+                "quarter": int(rotation.get("quarter") or 0),
+                "auto_angle": float(rotation.get("auto_angle") or 0.0),
+                "media_type": media_type,
+                "padding": int(padding),
+                "disc_base": bool(rotation.get("disc_base", False)),
+            }
 
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         logging.info(f"Tilt: {os.path.basename(path)} set to {angle:+.1f} deg")
-        return {"status": "success", "angle": angle, "new_url": new_url}
+        return {
+            "status": "success", "angle": angle, "new_url": new_url,
+            "rotation_state": dict(rotation),
+        }
     except Exception as e:
         logging.error(f"tilt-image failed: {e}")
         return {"status": "error", "message": str(e)}
+
+
+def _reapply_tilt(path, padding=None, media_type=None, skip_crop=False):
+    """Apply the tracked rotation to a newly cropped image."""
+    key = _rotation_key(path)
+    state = _get_rotation_state(path)
+    if not state:
+        return
+    quarter = int(state.get("quarter") or 0) % 4
+    angle = float(state.get("auto_angle") or 0.0) + float(state.get("manual_angle") or 0.0)
+    if quarter == 0 and abs(angle) < 0.05:
+        return
+    try:
+        img = cv2.imread(path)
+        if img is None:
+            return
+        for _ in range(quarter):
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        if abs(angle) >= 0.05:
+            img = _rotate_with_background(img, angle)
+        _imwrite_image(path, img)
+        state["full_view"] = False
+        _ROTATION_STATE[key] = state
+        _TILT_STATE.pop(key, None)
+        base = _tilt_base_path(path)
+        if os.path.exists(base):
+            try:
+                os.remove(base)
+            except OSError:
+                pass
+    except Exception as e:
+        logging.error(f"Rotation replay failed for {os.path.basename(path)}: {e}")
 
 
 # --- CD/45 Front: make the printed text level --------------------------------
@@ -2652,6 +3108,10 @@ def straighten_front_image(path, padding=5):
 
         create_backup(path)
         _imwrite_image(path, _rotate_with_background(img, skew))
+        rotation = _get_rotation_state(path, create=True)
+        rotation["auto_angle"] = float(rotation.get("auto_angle") or 0.0) + float(skew)
+        rotation["manual_angle"] = 0.0
+        _ROTATION_STATE[_rotation_key(path)] = rotation
         message = f"Levelled {abs(skew):.1f}deg"
         logging.info(f"CD/45 Front: {message} (total {skew:.2f})")
         return True, message
@@ -2660,20 +3120,88 @@ def straighten_front_image(path, padding=5):
         return False, str(e)
 
 
-def perform_auto_deskew(path, padding=5):
+def perform_auto_deskew(path, padding=5, original_path=None):
     """
     Analyzes the image at 'path' for skew, rotates it if necessary,
     and overwrites 'path' with the corrected version.
     Creates a backup before modifying to allow Undo.
     """
     if not path or not os.path.exists(path):
-        return False, "File not found"
+        return False, "File not found", 0.0
 
     try:
+        key = _rotation_key(path)
+        state = _get_rotation_state(path, create=True)
         create_backup(path)
+
+        # Auto-Align replaces a manual tilt, but keeps explicit quarter turns.
+        # Restore the pre-tilt base first so the detected correction does not
+        # accidentally include the user's previous manual tilt.
+        tilt_state = _TILT_STATE.get(key) or {}
+        manual_angle = float(state.get("manual_angle") or tilt_state.get("angle") or 0.0)
+        previous_state = dict(state)
+        base = _tilt_base_path(path)
+        manual_was_reset = False
+        if abs(manual_angle) >= 0.05:
+            if _tilt_base_is_current(path):
+                _restore_tilt_base(
+                    base, path, state, padding=padding,
+                    media_type=state.get("media_type", "auto"))
+            elif original_path and os.path.exists(original_path):
+                _write_tilt_base_from_original(
+                    original_path, path,
+                    dict(state, manual_angle=0.0),
+                    padding=padding,
+                    media_type=state.get("media_type", "auto"),
+                    history=list(_ADJUST_HISTORY.get(key) or []),
+                )
+                _restore_tilt_base(
+                    base, path, state, padding=padding,
+                    media_type=state.get("media_type", "auto"))
+            manual_was_reset = os.path.exists(base)
+            state["manual_angle"] = 0.0 if manual_was_reset else manual_angle
+        if not manual_was_reset and os.path.exists(base):
+            try:
+                os.remove(base)
+            except OSError:
+                pass
+        _TILT_STATE[key] = {
+            "written_mtime": os.path.getmtime(path),
+            "angle": float(state.get("manual_angle") or 0.0),
+            "quarter": int(state.get("quarter") or 0),
+            "auto_angle": float(state.get("auto_angle") or 0.0),
+            "media_type": state.get("media_type", "auto"),
+            "padding": int(state.get("padding", 5)),
+        }
+
+        def restore_manual_tilt():
+            if not manual_was_reset or not os.path.exists(base):
+                return
+            try:
+                if previous_state.get("full_view"):
+                    _replace_file_atomically(base, path)
+                    _rotate_full_file_by(path, manual_angle)
+                else:
+                    _rotate_file_by(
+                        base, path, manual_angle, padding=padding,
+                        media_type=previous_state.get("media_type", "auto"))
+                previous_state["manual_angle"] = manual_angle
+                _ROTATION_STATE[key] = previous_state
+                _TILT_STATE[key] = {
+                    "written_mtime": os.path.getmtime(path),
+                    "angle": manual_angle,
+                    "quarter": int(previous_state.get("quarter") or 0),
+                    "auto_angle": float(previous_state.get("auto_angle") or 0.0),
+                    "media_type": previous_state.get("media_type", "auto"),
+                    "padding": int(previous_state.get("padding", 5)),
+                }
+            except Exception:
+                logging.exception("Could not restore manual tilt after Auto-Align failed")
+
         img = cv2.imread(path)
         if img is None:
-            return False, "Could not read image"
+            restore_manual_tilt()
+            return False, "Could not read image", 0.0
 
         # Preprocessing
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -2689,7 +3217,8 @@ def perform_auto_deskew(path, padding=5):
         
         contours, _ = cv2.findContours(connected, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
-             return False, "No content detected."
+            restore_manual_tilt()
+            return False, "No content detected.", 0.0
 
         # Find largest contour
         c = max(contours, key=cv2.contourArea)
@@ -2705,7 +3234,12 @@ def perform_auto_deskew(path, padding=5):
             angle += 90
             
         if abs(angle) < 0.2:
-             return True, "Already aligned."
+            if manual_was_reset and os.path.exists(base):
+                try:
+                    os.remove(base)
+                except OSError:
+                    pass
+            return True, "Already aligned.", 0.0
 
         (h, w) = img.shape[:2]
         center = (w // 2, h // 2)
@@ -2723,26 +3257,51 @@ def perform_auto_deskew(path, padding=5):
 
         # Overwrite the file at 'path' with the rotated (but not yet cropped) version.
         _imwrite_image(path, rotated_img)
-        
-        return True, f"Auto-aligned ({angle:.2f}°)"
+        if manual_was_reset and os.path.exists(base):
+            try:
+                os.remove(base)
+            except OSError:
+                pass
+
+        state["auto_angle"] = float(state.get("auto_angle") or 0.0) + float(angle)
+        state["manual_angle"] = 0.0
+        _ROTATION_STATE[key] = state
+        _TILT_STATE[key] = {
+            "quarter": int(state.get("quarter") or 0),
+            "auto_angle": float(state.get("auto_angle") or 0.0),
+            "disc_base": bool(state.get("disc_base", False)),
+        }
+
+        return True, f"Auto-aligned ({angle:.2f}°)", float(angle)
 
     except Exception as e:
+        try:
+            if "restore_manual_tilt" in locals():
+                restore_manual_tilt()
+        except Exception:
+            pass
         logging.error(f"Auto-deskew error: {e}")
-        return False, str(e)
+        return False, str(e), 0.0
 
 @app.post("/auto-deskew")
 def auto_deskew(data: dict = Body(...)):
     path = data.get("path")
     padding = data.get("padding", 5)
+    original_path = data.get("original_path")
     if not path or not os.path.exists(path):
         return {"status": "error", "message": "File not found"}
 
-    success, message = perform_auto_deskew(path, padding)
+    success, message, applied_angle = perform_auto_deskew(
+        path, padding, original_path=original_path)
     
     _geometry_changed(path)
     if success or message == "Already aligned.":
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
-        return {"status": "success", "message": message, "new_url": new_url}
+        return {
+            "status": "success", "message": message, "new_url": new_url,
+            "rotation_state": dict(_get_rotation_state(path, create=True)),
+            "applied_angle": applied_angle,
+        }
     else:
         return {"status": "error", "message": message}
 
@@ -2779,6 +3338,9 @@ def manual_crop(data: dict = Body(...)):
         cropped_img = img[y:y+h, x:x+w]
         _geometry_changed(path)
         _imwrite_image(path, cropped_img) # Overwrite the existing file
+        state = _get_rotation_state(path)
+        if state is not None:
+            state["full_view"] = False
         return {"status": "success", "message": "Image cropped successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2788,8 +3350,7 @@ def manual_crop_as_new(data: dict = Body(...)):
     path = data.get("path") # This is the original image path
     crop_data = data.get("crop_data") 
     group_name = data.get("group_name", "scan")
-    scan_counter = data.get("scan_counter", 0)
-    file_number = scan_counter + 1
+    scan_counter = data.get("scan_counter", 0)  # kept for compatibility; the server assigns the number
     save_location = data.get("save_location")
 
     if not path or not os.path.exists(path):
@@ -2807,6 +3368,7 @@ def manual_crop_as_new(data: dict = Body(...)):
         safe_group_name = "".join(c for c in group_name if c.isalnum() or c in ('-', '_')).rstrip()
         if not safe_group_name: safe_group_name = "scan"
 
+        file_number = _next_number(target_dir, safe_group_name)
         new_filename = f"{safe_group_name}_{file_number}.jpg"
         new_filepath = os.path.join(target_dir, new_filename)
 
@@ -2825,7 +3387,7 @@ def manual_crop_as_new(data: dict = Body(...)):
         cropped_img = img[y:y+h, x:x+w]
         _imwrite_image(new_filepath, cropped_img)
 
-        return { "status": "success", "message": "New cropped image created.", "cropped_path": new_filepath, "cropped_url": f"/view-image?path={urllib.parse.quote(new_filepath)}" }
+        return { "status": "success", "number": file_number, "message": "New cropped image created.", "cropped_path": new_filepath, "cropped_url": f"/view-image?path={urllib.parse.quote(new_filepath)}" }
     except Exception as e: 
         return {"status": "error", "message": str(e)}
 
@@ -2857,6 +3419,12 @@ def manual_crop_replace(data: dict = Body(...)):
         cropped_img = img[y:y+h, x:x+w]
         _geometry_changed(target_path)
         _imwrite_image(target_path, cropped_img)
+        state = _get_rotation_state(target_path)
+        if state is not None:
+            state["full_view"] = False
+        # The crop came from the raw original, which never carries the tilt:
+        # put the user's rotation back on the rebuilt file.
+        _reapply_tilt(target_path)
 
         return {"status": "success", "message": "Image cropped and replaced successfully"}
     except Exception as e:
@@ -2910,19 +3478,74 @@ def detect_bounds(data: dict = Body(...)):
 def revert_crop(data: dict = Body(...)):
     original_path = data.get("original_path")
     cropped_path = data.get("cropped_path")
+    pristine = bool(data.get("pristine", False))
 
-    if not original_path or not os.path.exists(original_path):
+    if pristine and (not original_path or not os.path.exists(original_path)):
         return {"status": "error", "message": "Original file not found."}
     
     if not cropped_path:
         return {"status": "error", "message": "Target path not specified."}
 
     try:
+        key = _rotation_key(cropped_path)
+        rotation = _get_rotation_state(cropped_path, create=True)
+        history = list(_ADJUST_HISTORY.get(key) or [])
         create_backup(cropped_path)
-        shutil.copy(original_path, cropped_path)
         _plain_forget(cropped_path)
         _forget_adjustments(cropped_path)
-        return {"status": "success", "message": "Crop reverted to original."}
+        if pristine:
+            # Copy Original is the explicit hard reset: no rotation, tilt,
+            # alignment, or colour adjustments survive it.
+            _copy_if_distinct(original_path, cropped_path)
+            _ROTATION_STATE[key] = {
+                "quarter": 0, "auto_angle": 0.0, "manual_angle": 0.0,
+                "full_view": True, "disc_base": False,
+                "media_type": "auto", "padding": 5,
+            }
+            _TILT_STATE.pop(key, None)
+            base = _tilt_base_path(cropped_path)
+            if os.path.exists(base):
+                try:
+                    os.remove(base)
+                except OSError:
+                    pass
+        else:
+            if not original_path or not os.path.exists(original_path):
+                return {"status": "error", "message": "Original image is not available for Full."}
+            # Full rebuilds the entire scan from pristine pixels and replays
+            # every tracked rotation. The Original file itself remains pristine.
+            base_img = _full_rotation_image(original_path, rotation, include_manual=False)
+            full_img = _full_rotation_image(original_path, rotation, include_manual=True)
+            _imwrite_image(cropped_path, full_img)
+            # Full is a zoom-out, nothing else: preserve the existing colour
+            # edits and keep a colour-free full-frame snapshot for Remove All.
+            _plain_snapshot(cropped_path)
+            if history:
+                img = cv2.imread(cropped_path)
+                if img is None:
+                    raise ValueError("Could not read image file")
+                img = _adjusted_with_history(img, history)
+                _imwrite_image(cropped_path, img)
+                _ADJUST_HISTORY[key] = history
+                base_img = _adjusted_with_history(base_img, history)
+            base = _tilt_base_path(cropped_path)
+            _imwrite_image(base, base_img)
+            rotation["full_view"] = True
+            rotation["disc_base"] = False
+            _ROTATION_STATE[key] = rotation
+            _TILT_STATE[key] = {
+                "written_mtime": os.path.getmtime(cropped_path),
+                "angle": float(rotation.get("manual_angle") or 0.0),
+                "quarter": int(rotation.get("quarter") or 0),
+                "auto_angle": float(rotation.get("auto_angle") or 0.0),
+                "media_type": rotation.get("media_type", "auto"),
+                "padding": int(rotation.get("padding", 5)),
+                "disc_base": False,
+            }
+        return {
+            "status": "success", "message": "Crop reverted to original.",
+            "rotation_state": dict(_get_rotation_state(cropped_path, create=True)),
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -3245,8 +3868,9 @@ def get_group_images(group_name: str, path: str = None):
         print(f"Error scanning for group images: {e}")
         return {"images": []}
 
-    # Sort images by number, descending to show newest first in the gallery
-    images.sort(key=lambda x: x['number'], reverse=True)
+    # Sort images by number, ascending: the gallery fills 1, 2, 3 ... left to
+    # right, top to bottom, and a new scan continues at the end.
+    images.sort(key=lambda x: x['number'])
     
     return {"images": images}
 
@@ -3271,7 +3895,15 @@ def undo_action(data: dict = Body(...)):
         shutil.move(primary_backup_path, path)
         _plain_forget(path)
         logging.info(f"Restored {path} from {primary_backup_path}")
-        _forget_adjustments(path)      # restored pixels: the colour history is stale
+        rotation = _restore_rotation_state_after_undo(path)
+        adjustments = _restore_adjustment_history_after_undo(path)
+        _TILT_STATE.pop(_rotation_key(path), None)
+        tilt_base = _tilt_base_path(path)
+        if os.path.exists(tilt_base):
+            try:
+                os.remove(tilt_base)
+            except OSError:
+                pass
 
         # Now, shift the remaining backups up to fill the gap.
         # Now, shift the remaining backups down to fill the gap.
@@ -3288,7 +3920,10 @@ def undo_action(data: dict = Body(...)):
         
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
         
-        return {"status": "success", "message": "Last action undone.", "new_url": new_url}
+        return {
+            "status": "success", "message": "Last action undone.", "new_url": new_url,
+            "rotation_state": rotation, "adjustments": adjustments,
+        }
     except Exception as e:
         logging.error(f"Undo failed for {path}: {e}")
         return {"status": "error", "message": str(e)}
@@ -3305,13 +3940,33 @@ def redo_action(data: dict = Body(...)):
 
     try:
         # To redo, we must back up the current state (which is the result of an undo) back into history
+        key = _rotation_key(path)
+        had_rotation_redo = key in _ROTATION_REDO
+        rotation_redo = _ROTATION_REDO.get(key)
+        had_adjustment_redo = key in _ADJUST_HISTORY_REDO
+        adjustment_redo = _ADJUST_HISTORY_REDO.get(key)
         create_backup(path)
+        if had_rotation_redo:
+            _ROTATION_REDO[key] = rotation_redo
+        if had_adjustment_redo:
+            _ADJUST_HISTORY_REDO[key] = adjustment_redo
         shutil.move(redo_path, path)
         _plain_forget(path)
-        _forget_adjustments(path)      # restored pixels: the colour history is stale
+        rotation = _restore_rotation_state_after_redo(path)
+        adjustments = _restore_adjustment_history_after_redo(path)
+        _TILT_STATE.pop(_rotation_key(path), None)
+        tilt_base = _tilt_base_path(path)
+        if os.path.exists(tilt_base):
+            try:
+                os.remove(tilt_base)
+            except OSError:
+                pass
         
         new_url = f"/view-image?path={urllib.parse.quote(path)}&v={time.time_ns()}"
-        return {"status": "success", "message": "Redo successful.", "new_url": new_url}
+        return {
+            "status": "success", "message": "Redo successful.", "new_url": new_url,
+            "rotation_state": rotation, "adjustments": adjustments,
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

@@ -1,17 +1,12 @@
 {
     "lp": [
         {
-            "title": "Cellophane (Light Tearing)",
-            "text": "light Cellophane tearing"
-        },
-        {
-            "title": "Corner Bending",
-            "text": "Corner bending",
-            "media_type": "lp"
-        },
-        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing"
         },
         {
             "title": "Cellophane (Small Tears)",
@@ -27,8 +22,8 @@
             "text": "Cellophane tearing"
         },
         {
-            "title": "Corner (Exposed Light)",
-            "text": "light wear to exposed Corner",
+            "title": "Corner Bending",
+            "text": "Corner bending",
             "media_type": "lp"
         },
         {
@@ -82,6 +77,16 @@
         {
             "title": "Corner Denting (Light)",
             "text": "light Corner denting"
+        },
+        {
+            "title": "Corner Whitening",
+            "text": "Corner whitening",
+            "media_type": "lp"
+        },
+        {
+            "title": "Corner Whitening (Light)",
+            "text": "light Corner whitening",
+            "media_type": "lp"
         },
         {
             "title": "Corner-Wear",
@@ -296,20 +301,16 @@
     ],
     "cd": [
         {
-            "title": "Booklet (Whitening)",
-            "text": "edge whitening to Booklet"
-        },
-        {
-            "title": "Edge Whitening (Booklet)",
-            "text": "Edge whitening to Booklet"
-        },
-        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
         {
             "title": "Booklet (Light Play)",
             "text": "light play to Booklet"
+        },
+        {
+            "title": "Booklet (Whitening)",
+            "text": "edge whitening to Booklet"
         },
         {
             "title": "Booklet Wear",
@@ -439,6 +440,10 @@
         {
             "title": "Drill-Hole (Jewel Case)",
             "text": "drill-hole through Jewel Case"
+        },
+        {
+            "title": "Edge Whitening (Booklet)",
+            "text": "Edge whitening to Booklet"
         },
         {
             "title": "Edge Whitening (Digipak)",
@@ -698,16 +703,16 @@
     ],
     "cassette": [
         {
+            "title": "Barcode (Mark)",
+            "text": "mark through Barcode"
+        },
+        {
             "title": "Cellophane (Light Tearing)",
             "text": "light Cellophane tearing"
         },
         {
             "title": "Cellophane (Small Tears)",
             "text": "small tears in Cellophane"
-        },
-        {
-            "title": "Barcode (Mark)",
-            "text": "mark through Barcode"
         },
         {
             "title": "Cellophane (Substantial Tearing)",
@@ -899,21 +904,6 @@
             "media_type": "cd"
         },
         {
-            "title": "Cracking Shell (Light)",
-            "text": "light cracking to Shell",
-            "media_type": "cassette"
-        },
-        {
-            "title": "Cracks (Hub Stress)",
-            "text": "stress cracks to Hub",
-            "media_type": "cd"
-        },
-        {
-            "title": "Label (Discoloration)",
-            "text": "Label discoloration",
-            "media_type": "lp"
-        },
-        {
             "title": "Cracking (Hub)",
             "text": "cracking to Hub",
             "media_type": "cd"
@@ -927,6 +917,16 @@
             "title": "Cracking Shell",
             "text": "cracking to Shell",
             "media_type": "cassette"
+        },
+        {
+            "title": "Cracking Shell (Light)",
+            "text": "light cracking to Shell",
+            "media_type": "cassette"
+        },
+        {
+            "title": "Cracks (Hub Stress)",
+            "text": "stress cracks to Hub",
+            "media_type": "cd"
         },
         {
             "title": "Dimpling",
@@ -976,6 +976,11 @@
         {
             "title": "Indentation",
             "text": "indentations to Disc",
+            "media_type": "lp"
+        },
+        {
+            "title": "Label (Discoloration)",
+            "text": "Label discoloration",
             "media_type": "lp"
         },
         {
@@ -1039,6 +1044,16 @@
             "media_type": "lp"
         },
         {
+            "title": "Scratch Track #",
+            "text": "scratch to Track #",
+            "media_type": "lp"
+        },
+        {
+            "title": "Scratch Track # (Small)",
+            "text": "small scratch to Track #",
+            "media_type": "lp"
+        },
+        {
             "title": "Scratching",
             "text": "scratching to Disc",
             "media_type": "lp"
@@ -1094,6 +1109,11 @@
             "media_type": "cassette"
         },
         {
+            "title": "Scuff",
+            "text": "scuffing to Disc",
+            "media_type": "lp"
+        },
+        {
             "title": "Scuff (Heavy)",
             "text": "heavy scuffing to Disc",
             "media_type": "lp"
@@ -1104,8 +1124,8 @@
             "media_type": "lp"
         },
         {
-            "title": "Scuff (Paper)",
-            "text": "paper scuffing to Disc",
+            "title": "Scuff (Light)",
+            "text": "light scuffing to Disc",
             "media_type": "lp"
         },
         {
@@ -1216,20 +1236,16 @@
     ],
     "boxSleeve": [
         {
-            "title": "Booklet (Whitening)",
-            "text": "edge whitening to Booklet"
-        },
-        {
-            "title": "Cellophane (Light Tearing)",
-            "text": "light Cellophane tearing"
-        },
-        {
             "title": "Barcode (Mark)",
             "text": "mark through Barcode"
         },
         {
             "title": "Booklet (Light Play)",
             "text": "light play to Booklet"
+        },
+        {
+            "title": "Booklet (Whitening)",
+            "text": "edge whitening to Booklet"
         },
         {
             "title": "Booklet Wear",
@@ -1242,6 +1258,10 @@
         {
             "title": "Booklet Wear (Light)",
             "text": "light wear to Booklet"
+        },
+        {
+            "title": "Cellophane (Light Tearing)",
+            "text": "light Cellophane tearing"
         },
         {
             "title": "Cellophane (Small Tears)",
@@ -1458,6 +1478,10 @@
         {
             "title": "Tearing Box (Substantial)",
             "text": "substantial tearing to Box"
+        },
+        {
+            "title": "Water Damage (Art)",
+            "text": "tearing to Artwork"
         },
         {
             "title": "Water Damage Box",
