@@ -1,3 +1,14 @@
+### v1.21.35.0 - 2026-11-23
+-- --- Media Formats now picking up changes--
+
+### v1.21.34.0 - 2026-11-23
+-- Description: a vinyl entry in another size no longer inflates the LP count and is rebuilt after the LPs - Total Rubbish! reads "9xLP Vinyl + 7\"" instead of "LP 7" 10xLP Vinyl".
+-- SKU: non-box multi-format releases now use the medium with the most units, with all-singular vinyl or LP/10"/12"/Picture Disc forcing VINYL and S following only the winning format - Blues Master Works (r6345054) is VINYL, 10" Vinyl + CD is VINYL, 4xCD + 7" Single is CD.
+-- SKU: quantity-prefixed entries are counted in the format portion - Pirate Radio 1979-2005 (4xCD + DVD) is CD, not DVD.
+-- Description: the Weight/Speed selection is kept on mixed-media releases - Blues Master Works (r6345054) reads "180g 2xLP Vinyl + CD" instead of losing the 180g.
+-- Description: a medium listed in several single-disc entries now keeps the total count - Hypnotic Eye (r8345075) reads "2xLP Vinyl" instead of "LP Vinyl".
+-- Description: "Single" no longer matches inside "Single Sided", so a 2xLP with one etched side keeps "Single Sided" but drops the bogus "Single".
+
 ### v1.21.33.6 - 2026-11-20
 -- WysiScan: Full now preserves Auto-Align (including CD/45 Front), incremental tilt, 90°/45° rotations, Undo/Redo, and applied colour changes while showing the full scan; Original remains pristine.
 -- WysiScan: Auto-Align affects Cropped only and clears manual tilt. Adjust Pad rebuilds from Original using the tracked rotation state.

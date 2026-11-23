@@ -1857,12 +1857,42 @@ async def scrape_discogs(url: str = Form(...)):
             def _discogs_format_parts(fmt_list):
                 parts = []
                 seen = set()
-                for f in fmt_list or []:
-                    name = (f.get('name') or '').strip()
+                # Discogs shows the total across entries ("2 × Vinyl" for two
+                # single-disc entries), so sum the count per medium name before
+                # de-duplicating. Release 8345075 lists two Vinyl entries of qty
+                # 1 each and used to lose the count entirely, so the description
+                # read "LP Vinyl" instead of "2xLP Vinyl".
+                def _name_of(entry):
+                    return (entry.get('name') or '').strip()
+
+                def _qty_of(entry):
                     try:
-                        qty = int(f.get('qty') or 1)
+                        return max(int(entry.get('qty') or 1), 1)
                     except (TypeError, ValueError):
-                        qty = 1
+                        return 1
+
+                # Group by medium AND vinyl variant: 9xLP + 7" are two
+                # different formats and must not sum into 10xLP. Repeated
+                # identical entries (two LP qty 1) still total up.
+                def _variant_key(entry):
+                    name = _name_of(entry).lower()
+                    if name == 'vinyl':
+                        descs = [str(x).strip().lower() for x in (entry.get('descriptions') or [])]
+                        size = next((d for d in descs if re.fullmatch(r'\d{1,2}"', d)), '')
+                        if not size and 'lp' in descs:
+                            size = 'lp'
+                        return name + '|' + size
+                    return name
+
+                totals = {}
+                for f in fmt_list or []:
+                    key = _variant_key(f)
+                    if key:
+                        totals[key] = totals.get(key, 0) + _qty_of(f)
+
+                for f in fmt_list or []:
+                    name = _name_of(f)
+                    qty = totals.get(_variant_key(f), 1)
                     items = [f"{qty}x{name}" if (name and qty > 1) else name]
                     items += [str(x).strip() for x in (f.get('descriptions') or [])]
                     text = (f.get('text') or '').strip()

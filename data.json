@@ -131,7 +131,8 @@
         "DVD-Video",
         "Blu-ray Audio",
         "CDV",
-        "DVDr"
+        "DVDr",
+        "CDr"
     ],
     "Sleeve Packaging": [
         "Box Set",

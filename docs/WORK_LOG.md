@@ -2732,6 +2732,79 @@ and then **reverted** — see the last bullet.
 - Pad Circle is explicitly distinguished from Adjust Pad: CD Matrix/CD/45 Front use `_disc_crop` on the full transformed source with a centred `2r + 2×padding` square, falling back to contour crop only when the circle fit is implausible. This keeps positive padding outside the disc rim.
 - **Undo:** restore the previous `/revert-crop`, `/auto-deskew`, tilt/rotate handlers, and their UI state handling; remove the rotation-state history helpers.
 
+### 136. Repeated media entries keep their count; "Single" vs "Single Sided" (2026-11-23)
+**Files:** `main.py`, `app.js`, `changelog.txt`
+- Symptom (release 8345075, Tom Petty And The Heartbreakers - Hypnotic Eye): the description read
+  `... Single Sided 2014 UK Europe & USA LP Vinyl Single Gatefold ...` instead of
+  `... Single Sided 2014 UK Europe & USA 2xLP Vinyl Gatefold ...`.
+- Cause 1 (count): the release has **two** `Vinyl` entries of `qty 1` each, not one entry with `qty 2`.
+  `_discogs_format_parts()` only wrote `2xVinyl` when a single entry's qty was above 1, so the
+  Format line carried no `\d+x` at all and `processFormatData()` had no quantity to prepend.
+  The box-set rebuild (entry 97) already summed repeats, but repeated entries of the *same*
+  medium deliberately stayed on the old path (`hasMultipleMedia()` comment) - that is why the
+  earlier fix did not cover this release.
+- Fix 1: `_discogs_format_parts()` now sums `qty` per medium name (case-insensitive) before
+  de-duplicating, matching Discogs' own "2 x Vinyl" display (the page writes 2 x Vinyl). The Format line becomes
+  `2xVinyl, LP, Gatefold, Single Sided`, so the existing `(\d+x)` logic produces `2xLP Vinyl`.
+- Fix 1b (works without a rebuild): `processFormatData()` also recovers the total from `lastFormats`
+  (the `[FORMATS]` block in `f0t_last.txt`) when the Format line carries no `\d+x`. It only fires
+  when every entry is one medium, that medium appears in the Format line, and the summed qty is
+  above 1. This is what makes the fix live in the installed exe, whose compiled `main.py` does not
+  yet contain Fix 1.
+- Cause 2 ("Single"): the Edition select correctly matched `Single Sided` (it describes the disc and
+  must stay), but the Post FM select matched `Single` *inside* the phrase `Single Sided`, so a
+  non-single release read `... LP Vinyl Single ...`.
+- Fix 2: the option-match regex gained a `(?!\s*sided)` lookahead, so `Single` never matches inside
+  `Single Sided`. `Single Sided` itself still matches, and a real standalone `Single` (or
+  `Maxi-Single`, handled by the existing guard) is unchanged.
+- **Not touched:** the box-set/mixed-media rebuild, the format-line order, and `WalmartSheet/`
+  (protected; description rules are not mirrored into it).
+- **Undo:** drop the summed `totals` block in `_discogs_format_parts()` (back to per-entry `qty`)
+  and remove `(?!\s*sided)` from the option regex.
+
+### 137. Weight/Speed lost on mixed-media releases (2026-11-23)
+**Files:** `app.js`, `changelog.txt`
+- Symptom (release 6345054, Jimmy Reed - Blues Master Works): the description read
+  `... 2013 UK Import 2xLP Vinyl + CD ...` instead of `... 2013 UK Import 180g 2xLP Vinyl + CD ...`
+  although `180g` was identified and selected in the Weight/Speed menu.
+- Cause: `180g` is `formats[0].text`, not a description, so `buildBoxSetMediaString()` never sees it
+  (it only carries name/descriptions/modifiers). The only branch that appended `weightSpeed` was the
+  single-medium `else` path; the formats-array rebuild used for Box Set / mixed media ignored it.
+- Fix: `finalFormatString = [weightSpeed, formatsMedia].filter(Boolean).join(' ');` - the selected
+  Weight/Speed leads the rebuilt media string.
+- **Not touched:** `WalmartSheet/`, the format line, and the complex ` + ` branch (the raw line
+  already carries the weight there).
+- **Undo:** `finalFormatString = formatsMedia;`
+
+### 138. SKU format tie-breakers for multi-format releases (2026-11-23)
+**Files:** `app.js`, `changelog.txt`
+- Symptom (release 6345054, Jimmy Reed - Blues Master Works): `2xVinyl, LP, Compilation, 180g, CD` produced `CD` in the SKU instead of `VINYL`.
+- Cause: `inferSkuCode()` only counted mixed media when the line contained ` + `; the scraped Discogs Format line is comma separated, so the count branch was skipped and the core-format fallback returned `CD` before ever checking vinyl.
+- Fix: `inferSkuCode()` now splits the format line on commas/`+`/`;` and counts units per medium before the legacy fallbacks:
+  - most units wins, ties keep the first medium in the line;
+  - `LP`, `10"`/`12"` or larger, and `Picture Disc` force `VINYL` regardless of the other counts;
+  - `7"` does not trigger the vinyl override;
+  - when every format is singular (one unit each), any vinyl wins regardless of size (`10" Vinyl + CD` -> `VINYL`);
+  - `S` is appended only when the winning medium's own segment carries `Single`/`Maxi-Single` (4xCD + 7" Single -> `CD`; 12" Single -> `VINYLS`; CD, Single -> `CDS`).
+- Box Set detection stays first, so `MEDIABOX`/`VINYLBOX`/etc. and their rules are unchanged.
+- Note: each segment has its quantity prefix stripped before matching, because `\bcd\b` cannot match `4xCD` (the `x` is a word character); without that, Pirate Radio 1979-2005 fell through to the legacy DVD check.
+- **Not touched:** `WalmartSheet/`, the Format line, and the description rules.
+- **Undo:** remove the non-box multi-format block in `inferSkuCode()` (back to the ` + `-only mixed-media branch).
+
+### 139. Different vinyl sizes counted as one medium (2026-11-23)
+**Files:** `main.py`, `app.js`, `changelog.txt`
+- Symptom (Monty Python - Monty Python's Total Rubbish!): the description read
+  `... LP 7" 10xLP Vinyl ...` instead of `... 9xLP Vinyl + 7" ...`.
+- Cause 1: `hasMultipleMedia()`/`isBoxSetFormats()` only looked at medium names. Both entries are `Vinyl`, so the
+  discard/rebuild path was skipped even though one is `LP` qty 9 and the other is `7"` qty 1; the single-medium path
+  then recovered a quantity by summing **every** vinyl entry (9 + 1 = 10x).
+- Cause 2: `_discogs_format_parts()` summed quantities by medium name only, so the Format line itself said `10xVinyl`.
+- Fix: vinyl is now keyed by its variant (`lp`, `7"`, `10"`, `12"`, or none) in three places - `hasMultipleMedia()`
+  (so the two variants take the rebuild), the `lastFormats` quantity recovery (only entries matching the size in the
+  Format line are summed), and `_discogs_format_parts()`. The rebuild then emits `9xLP Vinyl + 7"`.
+- **Not touched:** `WalmartSheet/`, the SKU rules, and the Format line order.
+- **Undo:** drop the vinyl size key from all three helpers (back to medium name only).
+
 ---
 
 ## Notes / gotchas

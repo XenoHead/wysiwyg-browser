@@ -10440,5 +10440,44 @@
       "source": "cli",
       "timestamp": "2026-11-18T21:40:25.568Z"
     }
+  },
+  {
+    "id": "6a139786-34bd-4ace-aa5b-f5121886b3c9",
+    "question": "Why does 2xLP (two Vinyl entries) read as LP Vinyl and why did Single Sided add Single?",
+    "answer": "Format line now sums qty per medium name (Discogs' 2 x Vinyl) so 2xVinyl reaches the builder; Single no longer matches inside Single Sided via a (?!sided) lookahead, while Single Sided itself still selects as the disc description.",
+    "timestamp": "2026-11-23T15:49:39.980Z",
+    "tags": [
+      "description media-format",
+      "why"
+    ],
+    "files": [],
+    "status": "active",
+    "priority": "medium",
+    "relationships": {
+      "supersedes": [],
+      "supersededBy": [],
+      "relatedTo": [],
+      "causes": [],
+      "causedBy": []
+    },
+    "metadata": {
+      "source": "cli",
+      "status": "active"
+    },
+    "commitHashes": [],
+    "history": [
+      {
+        "timestamp": "2026-11-23T15:49:39.980Z",
+        "action": "created"
+      }
+    ],
+    "provenance": {
+      "author": {
+        "name": "XenoHead",
+        "email": "194586298+XenoHead@users.noreply.github.com"
+      },
+      "source": "cli",
+      "timestamp": "2026-11-23T15:49:39.976Z"
+    }
   }
 ]

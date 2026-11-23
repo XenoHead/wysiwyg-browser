@@ -1,13 +1,12 @@
 [F0T]
-Pearl Lagoon Vinyl
+
 [F0T MAPS]
-Pearl Lagoon Vinyl
 [FORMATS]
-[{"name":"Vinyl","qty":"1","descriptions":["12\"","45 RPM","Limited Edition","Mixtape","Reissue"],"text":"Pearl Lagoon Vinyl"}]
+[{"name":"CD","qty":"1","descriptions":["Album","Stereo"]}]
 [NOTES]
-title: PinkPantheress - To Hell With It
-formats[0].name: Vinyl
-formats[0].descriptions: 12", 45 RPM, Limited Edition, Mixtape, Reissue
-vinyl entries: 1
-country: USA, Canada & Europe
-released: Oct 16, 2026
+title: Richard Smallwood with Vision - Journey: Live In New York
+formats[0].name: CD
+formats[0].descriptions: Album, Stereo
+vinyl entries: 0
+country: US
+released: 

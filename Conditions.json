@@ -27,6 +27,10 @@
             "media_type": "lp"
         },
         {
+            "title": "Corner Bending (Light)",
+            "text": "light Corner bending"
+        },
+        {
             "title": "Corner Bending (Mild)",
             "text": "mild Corner bending",
             "media_type": "lp"
@@ -75,8 +79,24 @@
             "text": "Corner denting"
         },
         {
+            "title": "Corner Denting (Heavy)",
+            "text": "heavy Corner denting"
+        },
+        {
             "title": "Corner Denting (Light)",
             "text": "light Corner denting"
+        },
+        {
+            "title": "Corner Denting (Mild)",
+            "text": "mild Corner denting"
+        },
+        {
+            "title": "Corner Denting (Moderate)",
+            "text": "moderate Corner denting"
+        },
+        {
+            "title": "Corner Denting (Substantial)",
+            "text": "substantial Corner denting"
         },
         {
             "title": "Corner Whitening",
@@ -84,9 +104,21 @@
             "media_type": "lp"
         },
         {
+            "title": "Corner Whitening (Heavy)",
+            "text": "heavy Corner whitening"
+        },
+        {
             "title": "Corner Whitening (Light)",
             "text": "light Corner whitening",
             "media_type": "lp"
+        },
+        {
+            "title": "Corner Whitening (Mild)",
+            "text": "mild Corner whitening"
+        },
+        {
+            "title": "Corner Whitening (Substantial)",
+            "text": "substantial Corner whitening"
         },
         {
             "title": "Corner-Wear",
@@ -177,6 +209,10 @@
             "text": "( final sale - can't verify matrix/pressing/label variant due to seal )"
         },
         {
+            "title": "Hole-Punch (Barcode)",
+            "text": "hole-punch through Barcode"
+        },
+        {
             "title": "Hole-Punch (Sleeve)",
             "text": "hole-punch through Sleeve"
         },
@@ -209,8 +245,16 @@
             "text": "shelf-wear"
         },
         {
+            "title": "Shelf-Wear (Heavy)",
+            "text": "heavy shelf-wear"
+        },
+        {
             "title": "Shelf-Wear (Light)",
             "text": "light shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Mild)",
+            "text": "mild shelf-wear"
         },
         {
             "title": "Shelf-Wear (Moderate)",
@@ -219,14 +263,6 @@
         {
             "title": "Shelf-Wear (Overall)",
             "text": "overall shelf-wear"
-        },
-        {
-            "title": "Shelf-Wear Box",
-            "text": "shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Light)",
-            "text": "light shelf-wear to Box"
         },
         {
             "title": "Spindle-wear",
@@ -341,8 +377,44 @@
             "text": "Cellophane tearing"
         },
         {
+            "title": "Corner Bending",
+            "text": "Corner bending"
+        },
+        {
+            "title": "Corner Bending (Light)",
+            "text": "light Corner bending"
+        },
+        {
+            "title": "Corner Bending (Mild)",
+            "text": "mild Corner bending"
+        },
+        {
+            "title": "Corner Bending (Moderate)",
+            "text": "moderate Corner bending"
+        },
+        {
+            "title": "Corner Bending (Substantial)",
+            "text": "substantial Corner bending"
+        },
+        {
             "title": "Corner Creasing",
             "text": "Corner creasing"
+        },
+        {
+            "title": "Corner Creasing (Heavy)",
+            "text": "heavy Corner creasing"
+        },
+        {
+            "title": "Corner Creasing (Light)",
+            "text": "light Corner creasing"
+        },
+        {
+            "title": "Corner Creasing (Mild)",
+            "text": "mild Corner creasing"
+        },
+        {
+            "title": "Corner Creasing (Substantial)",
+            "text": "substantial Corner creasing"
         },
         {
             "title": "Corner Dent (Small)",
@@ -353,16 +425,64 @@
             "text": "Corner denting"
         },
         {
+            "title": "Corner Denting (Heavy)",
+            "text": "heavy Corner denting"
+        },
+        {
             "title": "Corner Denting (Light)",
             "text": "light Corner denting"
+        },
+        {
+            "title": "Corner Denting (Mild)",
+            "text": "mild Corner denting"
+        },
+        {
+            "title": "Corner Denting (Moderate)",
+            "text": "moderate Corner denting"
+        },
+        {
+            "title": "Corner Denting (Substantial)",
+            "text": "substantial Corner denting"
+        },
+        {
+            "title": "Corner Whitening",
+            "text": "Corner whitening"
+        },
+        {
+            "title": "Corner Whitening (Heavy)",
+            "text": "heavy Corner whitening"
+        },
+        {
+            "title": "Corner Whitening (Light)",
+            "text": "light Corner whitening"
+        },
+        {
+            "title": "Corner Whitening (Mild)",
+            "text": "mild Corner whitening"
+        },
+        {
+            "title": "Corner Whitening (Substantial)",
+            "text": "substantial Corner whitening"
         },
         {
             "title": "Corner-Wear",
             "text": "Corner-wear"
         },
         {
+            "title": "Corner-Wear (Heavy)",
+            "text": "heavy Corner-wear"
+        },
+        {
             "title": "Corner-Wear (Light)",
             "text": "light Corner-wear"
+        },
+        {
+            "title": "Corner-Wear (Moderate)",
+            "text": "moderate Corner-wear"
+        },
+        {
+            "title": "Corner-Wear (Substantial)",
+            "text": "substantial Corner-wear"
         },
         {
             "title": "Cracking",
@@ -440,6 +560,11 @@
         {
             "title": "Drill-Hole (Jewel Case)",
             "text": "drill-hole through Jewel Case"
+        },
+        {
+            "title": "Drill-Hole (Spine)",
+            "text": "drill-hole through Spine",
+            "media_type": "cd"
         },
         {
             "title": "Edge Whitening (Booklet)",
@@ -523,30 +648,6 @@
         {
             "title": "Shelf-Wear (Overall)",
             "text": "overall shelf-wear"
-        },
-        {
-            "title": "Shelf-Wear Box",
-            "text": "shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Heavy)",
-            "text": "heavy shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Light)",
-            "text": "light shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Mild)",
-            "text": "mild shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Moderate)",
-            "text": "moderate shelf-wear to Box"
-        },
-        {
-            "title": "Shelf-Wear Box (Overall)",
-            "text": "overall shelf-wear to Box"
         },
         {
             "title": "Shelf-Wear O-Card",
@@ -1280,20 +1381,88 @@
             "text": "Corner creasing to Box"
         },
         {
+            "title": "Corner Creasing Box (Heavy)",
+            "text": "heavy Corner creasing to Box"
+        },
+        {
+            "title": "Corner Creasing Box (Light)",
+            "text": "light Corner creasing to Box"
+        },
+        {
+            "title": "Corner Creasing Box (Mild)",
+            "text": "mild Corner creasing to Box"
+        },
+        {
+            "title": "Corner Creasing Box (Substantial)",
+            "text": "substantial Corner creasing to Box"
+        },
+        {
             "title": "Corner Dent Box (Small)",
             "text": "Corner denting to Box"
+        },
+        {
+            "title": "Corner Dent Box (Small)",
+            "text": "small Corner dent to Box"
+        },
+        {
+            "title": "Corner Denting Box (Heavy)",
+            "text": "heavy Corner denting to Box"
         },
         {
             "title": "Corner Denting Box (Light)",
             "text": "light Corner denting to Box"
         },
         {
-            "title": "Corner-Wear",
+            "title": "Corner Denting Box (Mild)",
+            "text": "mild Corner denting to Box"
+        },
+        {
+            "title": "Corner Denting Box (Moderate)",
+            "text": "moderate Corner denting to Box"
+        },
+        {
+            "title": "Corner Denting Box (Substantial)",
+            "text": "substantial Corner denting to Box"
+        },
+        {
+            "title": "Corner Whitening Box",
+            "text": "Corner whitening to Box"
+        },
+        {
+            "title": "Corner Whitening Box (Heavy)",
+            "text": "heavy Corner whitening to Box"
+        },
+        {
+            "title": "Corner Whitening Box (Light)",
+            "text": "light Corner whitening to Box"
+        },
+        {
+            "title": "Corner Whitening Box (Mild)",
+            "text": "mild Corner whitening to Box"
+        },
+        {
+            "title": "Corner Whitening Box (Substantial)",
+            "text": "substantial Corner whitening to Box"
+        },
+        {
+            "title": "Corner-Wear Box",
             "text": "Corner-wear to Box"
         },
         {
-            "title": "Corner-Wear (Light)",
+            "title": "Corner-Wear Box (Heavy)",
+            "text": "heavy Corner-wear to Box"
+        },
+        {
+            "title": "Corner-Wear Box (Light)",
             "text": "light Corner-wear to Box"
+        },
+        {
+            "title": "Corner-Wear Box (Moderate)",
+            "text": "moderate Corner-wear to Box"
+        },
+        {
+            "title": "Corner-Wear Box (Substantial)",
+            "text": "substantial Corner-wear to Box"
         },
         {
             "title": "Creasing (Edge)",
@@ -1364,8 +1533,20 @@
             "text": "shelf-wear"
         },
         {
+            "title": "Shelf-Wear (Heavy)",
+            "text": "heavy shelf-wear"
+        },
+        {
             "title": "Shelf-Wear (Light)",
             "text": "light shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Mild)",
+            "text": "mild shelf-wear"
+        },
+        {
+            "title": "Shelf-Wear (Moderate)",
+            "text": "moderate shelf-wear"
         },
         {
             "title": "Shelf-Wear (Overall)",
@@ -1478,10 +1659,6 @@
         {
             "title": "Tearing Box (Substantial)",
             "text": "substantial tearing to Box"
-        },
-        {
-            "title": "Water Damage (Art)",
-            "text": "tearing to Artwork"
         },
         {
             "title": "Water Damage Box",

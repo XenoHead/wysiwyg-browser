@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // options to exist before it can put the saved conditions back into them.
     const dropdownsReady = initializeDropdowns();
 
+    // The [FORMATS] block from the last scrape is what lets the media quantity be
+    // rebuilt on repeated entries ("2xLP Vinyl") even when this tab has not run a
+    // scrape yet (page refreshed, then Auto Generate on the existing paste).
+    // Fire-and-forget; prepareColourAssets() re-fetches it on every scrape.
+    loadF0T();
+
     // A page refresh - F5, the Refresh button or the drawer's Refresh - counts as
     // Reset All. Chromium re-applies the old form state just AFTER DOMContentLoaded,
     // so clearing here would simply be undone: wait for the load event (with a
@@ -2221,6 +2227,14 @@ function hasMultipleMedia(formats) {
     formats.forEach(f => {
         const name = String((f && f.name) || '').trim().toLowerCase();
         if (!name || name === 'all media' || name === 'box set') return;
+        // A different vinyl variant is a different medium for the rebuild:
+        // 9xLP + 7" must be grouped as two blocks, not summed into 10xLP.
+        if (name === 'vinyl') {
+            const descs = (f.descriptions || []).map(d => String(d || '').trim().toLowerCase());
+            const size = descs.find(d => /^\d{1,2}"$/.test(d)) || (descs.includes('lp') ? 'lp' : '');
+            names.add('vinyl|' + size);
+            return;
+        }
         names.add(name);
     });
     return names.size > 1;
@@ -2457,7 +2471,9 @@ function parsePastedData(input) {
                     Array.from(sel.options).forEach(opt => {
                         // Use regex for word boundary check to prevent "Repress" selecting "EP"
                         const val = opt.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        if (opt.value && new RegExp("(^|\\W|\\d+x)" + val + "(\\W|$)", "i").test(fLower)) opt.selected = true;
+                        // "Single" must not match inside "Single Sided" - that
+                        // describes the disc, it is not a Single release.
+                        if (opt.value && new RegExp("(^|\\W|\\d+x)" + val + "(?!\\s*sided)(\\W|$)", "i").test(fLower)) opt.selected = true;
                     });
 
                     // Fix for Maxi-Single triggering Single
@@ -2522,7 +2538,13 @@ function parsePastedData(input) {
     updateDynamicColors();
 }
 
-function generateListingData() {
+async function generateListingData() {
+    // On a fresh page the formats array may not have been fetched yet (it comes
+    // from /api/f0t). Wait for it so repeated medium entries keep their total
+    // ("2xLP Vinyl") even when the Format line itself has no quantity.
+    if (!lastFormats.length) {
+        try { await loadF0T(); } catch (e) { }
+    }
     // 1. Gather Inputs
     const inputs = {
         mediaCond: getVal('conditionOfMedia') || "",
@@ -2685,6 +2707,30 @@ function processFormatData(inputs) {
 
     const qtyMatch = formatLineRaw.match(/(\d+x)/i);
     let quantityPrefix = qtyMatch ? qtyMatch[0] : "";
+    // Discogs totals a medium that is split across several entries (two Vinyl
+    // entries of qty 1 show as "2 x Vinyl") but only writes "2xVinyl" when a
+    // single entry carries the quantity. Recover the total from the formats
+    // array the server saved, so 2xLP is not lost on repeated entries.
+    if (!quantityPrefix && Array.isArray(lastFormats) && lastFormats.length) {
+        const names = [...new Set(lastFormats
+            .map(f => String((f && f.name) || '').trim().toLowerCase())
+            .filter(n => n && n !== 'all media' && n !== 'box set'))];
+        const lineLower = formatLineRaw.toLowerCase();
+        if (names.length === 1 && lineLower.includes(names[0])) {
+            // Only sum entries of the same variant: a 9xLP plus a 7" is not
+            // 10xLP, so match the size written in the Format line.
+            const sizeInLine = (lineLower.match(/\b\d{1,2}"/) || [])[0];
+            const relevant = names[0] === 'vinyl'
+                ? lastFormats.filter(f => {
+                    const descs = (f.descriptions || []).map(d => String(d || '').trim().toLowerCase());
+                    const size = descs.find(d => /^\d{1,2}"$/.test(d));
+                    return sizeInLine ? size === sizeInLine : !size;
+                })
+                : lastFormats;
+            const total = relevant.reduce((sum, f) => sum + (parseInt(f.qty, 10) || 1), 0);
+            if (total > 1) quantityPrefix = total + 'x';
+        }
+    }
 
     const sizeMatch = formatLineRaw.match(/(\d{1,2}"|\bLP\b|\d+xLP|\bEP\b|\d+xEP|\bAlbum\b)/i);
     if (sizeMatch) {
@@ -2766,7 +2812,9 @@ function processFormatData(inputs) {
     // below, unchanged.
     const formatsMedia = buildBoxSetMediaString(lastFormats, colorVal);
     if (formatsMedia) {
-        finalFormatString = formatsMedia;
+        // Weight/speed ("180g") is selected from the menu but has no home in
+        // the formats-array rebuild, so it leads the media string.
+        finalFormatString = [weightSpeed, formatsMedia].filter(Boolean).join(' ');
     } else if (formatLineRaw.includes(" + ")) {
         let complex = formatLineRaw;
 
@@ -3576,6 +3624,92 @@ function inferSkuCode(rawLine, mediaFormat, sleevePkg) {
         if (combined.includes("cd")) return "CDBOX";
         if (/\bcassette(s)?\b/i.test(combined) || /\bmc\b/i.test(combined)) return "CASSBOX";
         return "VINYLBOX";
+    }
+
+    // 2. NON-BOX MULTI-FORMAT (Highest Unit Count Wins + Vinyl Override)
+    // Discogs separates the format entries with " + " on the page, but the
+    // scraped Format line is comma separated ("2xVinyl, LP, Compilation, 180g,
+    // CD"), so count the mediums from the segments instead of assuming "+".
+    const qtyFromSegment = (seg) => {
+        const m = seg.match(/(\d+)\s*[x×]/i);
+        return m ? parseInt(m[1], 10) : 1;
+    };
+    const kindDefs = [
+        { code: "VINYL", test: /\bvinyl\b/ },
+        { code: "CD", test: /\b(cd|sacd|cdr|hdcd|cd-r|vcd)\b/ },
+        { code: "DVD", test: /\bdvd\b/ },
+        { code: "BLURAY", test: /\b(blu-?ray|bd)\b/ },
+        { code: "CASS", test: /\b(cassette|cassettes|mc|tape|tapes)\b/ },
+        { code: "VHS", test: /\bvhs\b/ },
+        { code: "REEL", test: /\breel(?:-to-reel)?\b/ },
+        { code: "8TRACK", test: /\b8-track\b/ }
+    ];
+    // LP / sizes 7" and up / Picture Disc only describe the vinyl entry; the
+    // unit count still comes from the entry itself ("2xVinyl, LP" = 2 units).
+    const vinylDescriptor = /\bvinyl\b|\blp\b|\d+x\s*lp\b|\b(?:[7-9]|1[0-9])\s*["”″]|\b(?:7|10|12)[\s-]?inch(?:es)?\b|\bpicture\s*disc\b/;
+    const singleSegment = /\b(maxi[\s-]?single|single)\b(?!\s*sided)/;
+    const foundKinds = [];
+    let lastKind = null;
+    String(rawLine || "")
+        .split(/\s*(?:,|\+|;)\s*/)
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean)
+        .forEach(seg => {
+            // Strip the quantity so "4xCD" / "2xVinyl" match the medium names
+            // (the "x" is a word character, so \bcd\b never matches "4xcd").
+            const core = seg.replace(/^(\d+)\s*[x×]\s*/i, '');
+            const def = kindDefs.find(d => d.test.test(core));
+            if (def) {
+                let kind = foundKinds.find(k => k.code === def.code);
+                if (!kind) {
+                    kind = { code: def.code, count: 0, first: foundKinds.length, single: false };
+                    foundKinds.push(kind);
+                }
+                kind.count += qtyFromSegment(seg);
+                lastKind = kind;
+                if (singleSegment.test(core)) kind.single = true;
+                return;
+            }
+            if (vinylDescriptor.test(core)) {
+                let kind = foundKinds.find(k => k.code === "VINYL");
+                if (!kind) {
+                    kind = { code: "VINYL", count: 0, first: foundKinds.length, single: false };
+                    foundKinds.push(kind);
+                }
+                const q = seg.match(/(\d+)\s*[x×]/i);
+                if (q) kind.count += parseInt(q[1], 10);
+                lastKind = kind;
+                if (singleSegment.test(core)) kind.single = true;
+                return;
+            }
+            // A bare "Single" / "Maxi-Single" belongs to the medium before it.
+            if (lastKind && singleSegment.test(core)) lastKind.single = true;
+        });
+
+    const withSingleSuffix = (code, kind) => {
+        if (!kind || !kind.single) return code;
+        if (code === "CD") return "CDS";
+        if (code === "CASS") return "CASSS";
+        if (code === "VINYL") return "VINYLS";
+        return code;
+    };
+
+    if (foundKinds.length > 1) {
+        const vinylKind = foundKinds.find(k => k.code === "VINYL");
+        if (vinylKind && vinylKind.count === 0) vinylKind.count = 1;
+        // All formats singular (one unit each): any vinyl wins, whatever the
+        // size ("10\" Vinyl + CD" -> VINYL). Applies to the SKU format only.
+        if (vinylKind && foundKinds.every(k => k.count === 1)) {
+            return withSingleSuffix("VINYL", vinylKind);
+        }
+        const lineLower = String(rawLine || "").toLowerCase();
+        const vinylThreshold = /(?:^|[^a-z])lp(?:[^a-z]|$)/.test(lineLower)
+            || /\d+x\s*lp/.test(lineLower)
+            || /\b(?:1[0-9]|[2-9]\d)\s*(?:["”″]|inch(?:es)?)|\bpicture\s*disc\b/i.test(rawLine || "");
+        // LP, 10"/12"+ or Picture Disc forces VINYL regardless of the counts.
+        if (vinylKind && vinylThreshold) return withSingleSuffix("VINYL", vinylKind);
+        const winner = [...foundKinds].sort((a, b) => (b.count - a.count) || (a.first - b.first))[0];
+        return withSingleSuffix(winner.code, winner);
     }
 
     // 2. MIXED MEDIA (Highest Count Wins + First in List Tie-Breaker)
