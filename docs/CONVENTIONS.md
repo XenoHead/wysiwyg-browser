@@ -90,6 +90,11 @@ Rules:
   scanner_test.html, WysiScan.ico/.png, config.json). Main app uses `--onedir`
   (onefile trips Defender Bearfoos.A!ml). Do NOT unify these without asking.
 - All big changes must be written to `changelog.txt` under the current version header.
+- **Release push rule (mandatory):** after any `!build.bat` or `.iss` installer push, always copy the
+  contents of `dist_install\` **and** every file in `batch_installers\` to
+  `\\192.168.0.108\FYRShare\Tools\FYRTools\WYSIWYG` (root, overwrite). That share is the
+  distribution point, so it must hold the current `INSTALL_WYSIWYG.exe`, `run_me_Installer.bat`,
+  `kill-wysiwyg.ps1`, `close_local_chrome.ps1`, and `version.json` together.
 - Do NOT commit/push unless the user explicitly asks; user tests himself first.
 - Push only to `main` (never the local `Browser` branch).
 
